@@ -1,0 +1,1 @@
+transaction_id,account_id,transaction_datetime,transaction_type,direction,channel,amount,counterparty_type,transaction_branch_id,transaction_status,merchant_category,failure_reason
