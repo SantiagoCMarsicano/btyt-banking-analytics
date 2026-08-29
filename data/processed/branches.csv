@@ -1,4 +1,4 @@
-﻿branch_id,branch_name,branch_type,branch_size,status,opening_year,opening_reason,closing_year,closure_reason,parent_branch_id,department,locality,region,latitude,longitude
+branch_id,branch_name,branch_type,branch_size,status,opening_year,opening_reason,closing_year,closure_reason,parent_branch_id,department,locality,region,latitude,longitude
 001,Treinta y Tres,BRANCH,LARGE,OPEN,1969,FOUNDING,,,,Treinta y Tres,Treinta y Tres,EAST,,
 002,Vergara,AGENCY,SMALL,OPEN,1974,LOCAL_EXPANSION,,,001,Treinta y Tres,Vergara,EAST,,
 003,José Pedro Varela,BRANCH,MEDIUM,OPEN,1974,REGIONAL_EXPANSION,,,,Lavalleja,José Pedro Varela,EAST,,
