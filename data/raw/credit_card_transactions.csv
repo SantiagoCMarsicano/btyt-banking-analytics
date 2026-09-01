@@ -1,1 +1,0 @@
-card_transaction_id,card_id,transaction_datetime,transaction_type,amount,merchant_category,channel,installments,transaction_status,failure_reason

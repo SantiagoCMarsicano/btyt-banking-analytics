@@ -1,1 +1,0 @@
-loan_id,customer_id,product_id,branch_id,origination_year,currency,original_amount,term_months,rate_type,initial_interest_rate,loan_status,closing_year
