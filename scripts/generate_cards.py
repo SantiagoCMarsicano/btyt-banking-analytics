@@ -23,11 +23,6 @@ import pandas as pd
 # - 2021-2026 is modeled as explicit annual issuance / closure evolution.
 # - Hard banking integrity rules are validated.
 # - Behavioral shares emerge probabilistically; they are not hard quotas.
-#
-# V2 calibration after first audit:
-# - Lower baseline closure hazards (debit and credit).
-# - Smooth the 2021 inherited P009 catch-up for legacy accounts.
-# - Moderate late-period DIGITAL issuance while preserving product differences.
 # =============================================================================
 
 SEED = 20260827
@@ -39,12 +34,13 @@ DEVELOPMENT_MODE = True
 DEVELOPMENT_CUSTOMERS = 10_000
 
 ROOT = Path(__file__).resolve().parents[1]
-RAW_DIR = ROOT / "data" / "raw"
-PROCESSED_DIR = ROOT / "data" / "processed"
+MASTER_DIR = ROOT / "data" / "master"
+GENERATED_DIR = ROOT / "data" / "generated"
 
-CUSTOMERS_PATH = PROCESSED_DIR / "customers.csv"
-ACCOUNTS_PATH = PROCESSED_DIR / "accounts.csv"
-OUTPUT_PATH = PROCESSED_DIR / "cards.csv"
+CUSTOMERS_PATH = GENERATED_DIR / "customers.csv"
+ACCOUNTS_PATH = GENERATED_DIR / "accounts.csv"
+PRODUCTS_PATH = MASTER_DIR / "products.csv"
+OUTPUT_PATH = GENERATED_DIR / "cards.csv"
 
 CARD_PRODUCTS = ["P009", "P010", "P011"]
 DEBIT_PRODUCT = "P009"
@@ -112,13 +108,6 @@ def log_zscore(series):
     return zscore(np.log1p(s))
 
 
-def first_existing(*paths):
-    for p in paths:
-        if p.exists():
-            return p
-    raise FileNotFoundError("No input found among:\n" + "\n".join(map(str, paths)))
-
-
 def as_year(value):
     value = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
     return None if pd.isna(value) else int(value)
@@ -129,6 +118,18 @@ def as_year(value):
 # =============================================================================
 
 def load_inputs():
+    required_paths = {
+        "customers": CUSTOMERS_PATH,
+        "accounts": ACCOUNTS_PATH,
+        "products": PRODUCTS_PATH,
+    }
+    missing_paths = [path for path in required_paths.values() if not path.exists()]
+    if missing_paths:
+        raise FileNotFoundError(
+            "Missing canonical BTYT input file(s):\n"
+            + "\n".join(str(path) for path in missing_paths)
+        )
+
     customers = pd.read_csv(
         CUSTOMERS_PATH,
         dtype={"customer_id": str, "primary_branch_id": str},
@@ -147,12 +148,7 @@ def load_inputs():
         dtype={"account_id": str, "customer_id": str, "product_id": str, "branch_id": str},
     )
 
-    products_path = first_existing(
-        PROCESSED_DIR / "products.csv",
-        RAW_DIR / "products.csv",
-        RAW_DIR / "products(1).csv",
-    )
-    products = pd.read_csv(products_path, dtype={"product_id": str})
+    products = pd.read_csv(PRODUCTS_PATH, dtype={"product_id": str})
 
     return customers, accounts, products
 
@@ -474,11 +470,9 @@ class CardsGenerator:
         else:
             progress = np.clip((year - 2021) / 5.0, 0.0, 1.0)
             scores = {
-                # v2 calibration: cards remain more digital than accounts,
-                # but the 2021-2026 transition is less extreme than v1.
-                "BRANCH": 0.95 - 0.45 * progress,
-                "REMOTE_ASSISTED": 0.32 - 0.05 * progress,
-                "DIGITAL": 0.72 + 0.65 * progress,
+                "BRANCH": 0.90 - 0.60 * progress,
+                "REMOTE_ASSISTED": 0.30 - 0.10 * progress,
+                "DIGITAL": 0.80 + 0.90 * progress,
             }
 
         digital_z = float(row["_digital_z"])
@@ -999,21 +993,6 @@ class CardsGenerator:
             account_series = pd.Series(account._asdict())
             p_issue = self.debit_issue_probability(row, account_series, year)
 
-            # v2 calibration: avoid releasing the entire inherited stock of
-            # pre-2021 eligible accounts as a one-year 2021 catch-up wave.
-            # This affects only legacy accounts that were already open before
-            # the detailed observation window and still have no P009 relation.
-            if int(account.opening_year) <= 2020:
-                backlog_factor = {
-                    2021: 0.55,
-                    2022: 0.70,
-                    2023: 0.85,
-                    2024: 0.95,
-                    2025: 1.00,
-                    2026: 1.00,
-                }[year]
-                p_issue *= backlog_factor
-
             if self.rng.random() < p_issue:
                 card = self.add_card(
                     customer_id=customer_id,
@@ -1076,8 +1055,7 @@ class CardsGenerator:
         redundancy = max(0, active_debit - 1)
 
         score = (
-            # v2 calibration: slightly lower baseline debit closure hazard.
-            -3.85
+            -3.55
             + 0.34 * math.log1p(age)
             - 0.32 * float(row["_relationship_z"])
             + 0.42 * math.log1p(redundancy)
@@ -1091,8 +1069,7 @@ class CardsGenerator:
         redundancy = max(0, len(active_credit) - 1)
 
         score = (
-            # v2 calibration: slightly lower baseline credit-card closure hazard.
-            -3.45
+            -3.20
             + 0.48 * math.log1p(age)
             - 0.40 * float(row["_relationship_z"])
             - 0.55 * float(row["_credit_appetite_centered"])

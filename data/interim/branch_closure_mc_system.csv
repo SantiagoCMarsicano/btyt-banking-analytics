@@ -1,0 +1,2 @@
+worlds_simulated,audit_seed,bank_world_seed,mean_closures_per_world,worlds_with_zero_closures_pct,worlds_with_one_closure_pct,worlds_with_two_closures_pct,worlds_with_three_closures_pct,worlds_with_4plus_closures_pct
+10000,20260901,1146763347,1.0232,19.950000000000003,58.51,20.810000000000002,0.73,0.0

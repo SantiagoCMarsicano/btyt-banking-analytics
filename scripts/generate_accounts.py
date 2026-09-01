@@ -24,11 +24,13 @@ DEVELOPMENT_MODE = True
 DEVELOPMENT_CUSTOMERS = 10_000
 
 ROOT = Path(__file__).resolve().parents[1]
-RAW_DIR = ROOT / "data" / "raw"
-PROCESSED_DIR = ROOT / "data" / "processed"
+MASTER_DIR = ROOT / "data" / "master"
+GENERATED_DIR = ROOT / "data" / "generated"
 
-CUSTOMERS_PATH = PROCESSED_DIR / "customers.csv"
-OUTPUT_PATH = PROCESSED_DIR / "accounts.csv"
+CUSTOMERS_PATH = GENERATED_DIR / "customers.csv"
+PRODUCTS_PATH = MASTER_DIR / "products.csv"
+BRANCHES_PATH = GENERATED_DIR / "branches.csv"
+OUTPUT_PATH = GENERATED_DIR / "accounts.csv"
 
 ACCOUNT_PRODUCTS = ["P001", "P002", "P003", "P004", "P005", "P006", "P007", "P008"]
 
@@ -90,15 +92,23 @@ def log_zscore(series):
     return zscore(np.log1p(pd.to_numeric(series, errors="coerce").clip(lower=0)))
 
 
-def first_existing(*paths):
-    for p in paths:
-        if p.exists():
-            return p
-    raise FileNotFoundError("No input found among:\n" + "\n".join(map(str, paths)))
-
-
 def load_inputs():
-    customers = pd.read_csv(CUSTOMERS_PATH, dtype={"customer_id": str, "primary_branch_id": str})
+    required_paths = {
+        "customers": CUSTOMERS_PATH,
+        "products": PRODUCTS_PATH,
+        "branches": BRANCHES_PATH,
+    }
+    missing_paths = [path for path in required_paths.values() if not path.exists()]
+    if missing_paths:
+        raise FileNotFoundError(
+            "Missing canonical BTYT input file(s):\n"
+            + "\n".join(str(path) for path in missing_paths)
+        )
+
+    customers = pd.read_csv(
+        CUSTOMERS_PATH,
+        dtype={"customer_id": str, "primary_branch_id": str},
+    )
 
     # Reproducible development subset. The source customers.csv remains untouched.
     if DEVELOPMENT_MODE and len(customers) > DEVELOPMENT_CUSTOMERS:
@@ -108,12 +118,11 @@ def load_inputs():
             .reset_index(drop=True)
         )
 
-    products_path = first_existing(
-        PROCESSED_DIR / "products.csv", RAW_DIR / "products.csv", RAW_DIR / "products(1).csv"
+    products = pd.read_csv(PRODUCTS_PATH, dtype={"product_id": str})
+    branches = pd.read_csv(
+        BRANCHES_PATH,
+        dtype={"branch_id": str, "parent_branch_id": str},
     )
-    branches_path = first_existing(PROCESSED_DIR / "branches.csv", RAW_DIR / "branches.csv")
-    products = pd.read_csv(products_path, dtype={"product_id": str})
-    branches = pd.read_csv(branches_path, dtype={"branch_id": str, "parent_branch_id": str})
 
     customers["primary_branch_id"] = customers["primary_branch_id"].str.zfill(3)
     branches["branch_id"] = branches["branch_id"].str.zfill(3)
@@ -611,32 +620,41 @@ class AccountsGenerator:
         """
         Final extensive-margin calibration only.
 
-        Only customers whose master customer_status is exactly ACTIVE and who
-        have zero P001-P008 relationships receive an additional probabilistic
-        opportunity to open one account in 2026.
+        Customers who would otherwise finish 2026 with zero P001-P008 account
+        relationships receive one additional probabilistic opportunity to open
+        a single account in 2026.
+
+        This does not alter customers who already have any account relationship,
+        and it does not change the existing depth, closure, product, or channel
+        mechanics for the rest of the population.
         """
-        # Build the eligible pool directly from the same master field used by
-        # output validation. This avoids any ambiguity in row-level status checks.
-        eligible = self.customers.loc[
-            self.customers["customer_status"].eq("ACTIVE")
-            & self.customers["registration_year"].le(CURRENT_YEAR)
-        ].copy()
+        customers_by_id = self.customers.set_index("customer_id")
 
-        rescued = 0
-
-        for record in eligible.to_dict("records"):
-            row = SimpleNamespace(**record)
-            customer_id = row.customer_id
-
-            # Rescue means truly zero account relationships, not zero active accounts.
-            if len(self.portfolios.get(customer_id, [])) > 0:
+        for customer_id, row_series in customers_by_id.iterrows():
+            if self.portfolios.get(customer_id):
                 continue
 
-            # Probabilistic calibration: preserve a small legitimate zero-account tail.
-            if self.rng.random() >= 0.42:
+            row = SimpleNamespace(**row_series.to_dict(), customer_id=customer_id)
+
+            # Respect current customer lifecycle.
+            # A customer marked CLOSED in the 2026 customer master cannot finish
+            # the observation window with a newly created ACTIVE account.
+            if str(row.customer_status) == "CLOSED":
                 continue
 
-            product = self.choose_product(row, CURRENT_YEAR, [])
+            if int(row.registration_year) > CURRENT_YEAR:
+                continue
+
+            # High but non-deterministic final opportunity.
+            # Calibrated to move the global participation rate from ~92.5%
+            # toward approximately 95%, while preserving a small no-account tail.
+            p_rescue = 0.34
+
+            if self.rng.random() >= p_rescue:
+                continue
+
+            owned = []
+            product = self.choose_product(row, CURRENT_YEAR, owned)
             if product is None:
                 continue
 
@@ -652,9 +670,6 @@ class AccountsGenerator:
                 status="ACTIVE",
                 closing_year=np.nan,
             )
-            rescued += 1
-
-        print(f"Final zero-account rescues added: {rescued:,}")
 
     def dataframe(self):
         columns = [
@@ -738,7 +753,7 @@ def validate_output(accounts, customers, branches):
 
 def audit(accounts, customers):
     print("\n" + "=" * 76)
-    print("BTYT ACCOUNTS — DEVELOPMENT AUDIT (V6 FINAL ROBUST)")
+    print("BTYT ACCOUNTS — DEVELOPMENT AUDIT (V6 FINAL)")
     print("=" * 76)
     print(f"Customers: {len(customers):,}")
     print(f"Accounts:  {len(accounts):,}")
@@ -870,16 +885,6 @@ def main():
     generator.final_zero_account_rescue()
 
     accounts = generator.dataframe()
-
-    # Immediate lifecycle invariant before the full validation suite.
-    _cust_status = customers.set_index("customer_id")["customer_status"]
-    _mapped_status = accounts["customer_id"].map(_cust_status)
-    _bad = _mapped_status.eq("CLOSED") & accounts["account_status"].eq("ACTIVE")
-    if _bad.any():
-        raise AssertionError(
-            f"INTERNAL ERROR: {_bad.sum()} ACTIVE account(s) belong to CLOSED customers "
-            "after final calibration."
-        )
     validate_output(accounts, customers, branches)
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)

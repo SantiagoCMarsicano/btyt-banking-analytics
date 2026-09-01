@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 
 """
-BTYT — Loan Monthly Snapshot generator — V5 repayment calibration
-===================================================================
+BTYT — Loan Monthly Snapshot generator
+======================================
 
 Generates:
 
-    data/processed/loan_monthly_snapshot.csv
+    data/generated/loan_monthly_snapshot.csv
 
 Canonical grain:
     one row per loan per calendar month.
@@ -93,17 +93,17 @@ import pandas as pd
 # =============================================================================
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_PROCESSED = ROOT / "data" / "processed"
+DATA_GENERATED = ROOT / "data" / "generated"
 DATA_INTERIM = ROOT / "data" / "interim"
 
-LOANS_PATH = DATA_PROCESSED / "loans.csv"
+LOANS_PATH = DATA_GENERATED / "loans.csv"
 BRIDGE_PATH = DATA_INTERIM / "loan_lifecycle_bridge.csv"
-CUSTOMERS_PATH = DATA_PROCESSED / "customers.csv"
-ACCOUNTS_PATH = DATA_PROCESSED / "accounts.csv"
-BRANCHES_PATH = DATA_PROCESSED / "branches.csv"
+CUSTOMERS_PATH = DATA_GENERATED / "customers.csv"
+ACCOUNTS_PATH = DATA_GENERATED / "accounts.csv"
+BRANCHES_PATH = DATA_GENERATED / "branches.csv"
 
-OUTPUT_PATH = DATA_PROCESSED / "loan_monthly_snapshot.csv"
-TEMP_OUTPUT_PATH = DATA_PROCESSED / "loan_monthly_snapshot.tmp.csv"
+OUTPUT_PATH = DATA_GENERATED / "loan_monthly_snapshot.csv"
+TEMP_OUTPUT_PATH = DATA_GENERATED / "loan_monthly_snapshot.tmp.csv"
 
 SEED = 20260827
 SNAPSHOT_SEED = SEED + 22022
@@ -892,26 +892,14 @@ class SnapshotGenerator:
         orig_idx: int,
         start_idx: int,
         due_day: int,
-    ) -> Tuple[float, float, Deque[Obligation]]:
-        """
-        Return:
-            actual_principal_balance,
-            contractual_schedule_balance,
-            unresolved_obligations
-
-        The distinction between actual balance and contractual schedule balance
-        is essential. A missed installment remains in arrears, but it must NOT
-        be re-amortized again into all future scheduled installments.
-        """
-        original = float(loan.original_amount)
-        principal = original
-        schedule_balance = original
+    ) -> Tuple[float, Deque[Obligation]]:
+        principal = float(loan.original_amount)
         obligations: Deque[Obligation] = deque()
 
         if start_idx <= orig_idx:
-            return principal, schedule_balance, obligations
+            return principal, obligations
 
-        # Contractual due months strictly before the observation start.
+        # Number of contractual due months strictly before the observation start.
         elapsed_due = max(start_idx - (orig_idx + 1), 0)
         elapsed_due = min(elapsed_due, int(loan.term_months))
 
@@ -927,81 +915,40 @@ class SnapshotGenerator:
         missed = min(missed, elapsed_due)
         paid_due = max(elapsed_due - missed, 0)
 
-        # Actual principal reflects what was really paid before 2021.
         principal = amortized_balance_after(
-            principal=original,
+            principal=float(loan.original_amount),
             annual_rate_pct=float(loan.initial_interest_rate),
             total_months=int(loan.term_months),
             paid_months=paid_due,
-        )
-
-        # Contractual schedule balance reflects every installment that should
-        # already have fallen due, irrespective of whether the borrower paid it.
-        schedule_balance = amortized_balance_after(
-            principal=original,
-            annual_rate_pct=float(loan.initial_interest_rate),
-            total_months=int(loan.term_months),
-            paid_months=elapsed_due,
         )
 
         if missed <= 0 or principal <= EPS:
-            return principal, schedule_balance, obligations
+            return principal, obligations
 
-        # Compressed inherited arrears: reconstruct only the unresolved
-        # obligations immediately preceding 2021, not the entire pre-2021 life.
-        first_missed_idx = start_idx - missed
-        contract_balance = amortized_balance_after(
-            principal=original,
-            annual_rate_pct=float(loan.initial_interest_rate),
-            total_months=int(loan.term_months),
-            paid_months=paid_due,
+        # Compressed inherited arrears. We create only the unresolved obligations
+        # required to enter 2021 coherently; the full earlier payment history is
+        # deliberately not reconstructed.
+        approx_payment = annuity_payment(
+            float(loan.original_amount),
+            float(loan.initial_interest_rate),
+            int(loan.term_months),
         )
+        monthly_rate = float(loan.initial_interest_rate) / 1200.0
 
-        maturity_idx = orig_idx + int(loan.term_months)
+        first_missed_idx = start_idx - missed
+        running_principal = principal
 
         for mi in range(first_missed_idx, start_idx):
-            current_rate = rate_for_month(
-                product_id=str(loan.product_id),
-                currency=str(loan.currency),
-                rate_type=str(loan.rate_type),
-                initial_rate=float(loan.initial_interest_rate),
-                orig_idx=orig_idx,
-                current_idx=mi,
-            )
+            interest_due = max(running_principal * monthly_rate, 0.0)
+            principal_due = max(min(approx_payment - interest_due, running_principal), 0.0)
+            obligations.append([
+                due_date_for_month(mi, due_day),
+                float(interest_due),
+                float(principal_due),
+            ])
+            # Because these obligations are missed, principal is not reduced.
 
-            if mi <= maturity_idx and contract_balance > EPS:
-                remaining_months = max(maturity_idx - mi + 1, 1)
-                payment = annuity_payment(
-                    contract_balance,
-                    current_rate,
-                    remaining_months,
-                )
-                interest_due = max(
-                    contract_balance * current_rate / 1200.0,
-                    0.0,
-                )
-                principal_due = max(
-                    min(payment - interest_due, contract_balance),
-                    0.0,
-                )
-            else:
-                interest_due = 0.0
-                principal_due = 0.0
-
-            if interest_due + principal_due > EPS:
-                obligations.append([
-                    due_date_for_month(mi, due_day),
-                    float(interest_due),
-                    float(principal_due),
-                ])
-
-            # The contractual schedule advances even when the installment was
-            # not actually paid; the unpaid principal stays in actual principal
-            # and in the arrears ledger, but is not scheduled twice.
-            contract_balance = max(contract_balance - principal_due, 0.0)
-
-        schedule_balance = contract_balance
-        return principal, schedule_balance, obligations
+        return principal, obligations
 
     def _initial_revolving_state(
         self,
@@ -1043,66 +990,34 @@ class SnapshotGenerator:
     def _scheduled_installment(
         self,
         loan,
-        schedule_balance: float,
+        principal_balance: float,
         current_rate: float,
         orig_idx: int,
         current_idx: int,
-    ) -> Tuple[float, float, float, float]:
-        """
-        Build the CURRENT contractual installment from the contractual schedule
-        balance, not from the actual unpaid principal balance.
-
-        This prevents a missed principal installment from being both:
-          - retained in arrears, and
-          - re-amortized into future scheduled installments.
-
-        Returns:
-            scheduled_payment,
-            interest_due,
-            principal_due,
-            new_schedule_balance
-        """
-        schedule_balance = max(float(schedule_balance), 0.0)
-
-        if current_idx <= orig_idx or schedule_balance <= EPS:
-            return 0.0, 0.0, 0.0, schedule_balance
+    ) -> Tuple[float, float, float]:
+        if current_idx <= orig_idx or principal_balance <= EPS:
+            return 0.0, 0.0, 0.0
 
         maturity_idx = orig_idx + int(loan.term_months)
+        monthly_rate = current_rate / 1200.0
+        interest_due = max(principal_balance * monthly_rate, 0.0)
 
         if current_idx <= maturity_idx:
             remaining_months = max(maturity_idx - current_idx + 1, 1)
-            monthly_rate = current_rate / 1200.0
-            interest_due = max(schedule_balance * monthly_rate, 0.0)
-
             payment = annuity_payment(
-                schedule_balance,
+                principal_balance,
                 current_rate,
                 remaining_months,
             )
-            principal_due = max(
-                min(payment - interest_due, schedule_balance),
-                0.0,
-            )
+            principal_due = max(min(payment - interest_due, principal_balance), 0.0)
             scheduled = interest_due + principal_due
-            new_schedule_balance = max(
-                schedule_balance - principal_due,
-                0.0,
-            )
         else:
-            # After nominal maturity no NEW principal installment is created.
-            # Any unresolved principal is already represented by older unpaid
-            # obligations / actual principal exposure.
-            interest_due = 0.0
+            # Contract is already beyond nominal maturity but unresolved.
+            # Continue accruing contractual interest while old obligations remain.
             principal_due = 0.0
-            scheduled = 0.0
-            new_schedule_balance = schedule_balance
+            scheduled = interest_due
 
-        return (
-            float(scheduled),
-            float(interest_due),
-            float(principal_due),
-            float(new_schedule_balance),
-        )
+        return float(scheduled), float(interest_due), float(principal_due)
 
     def _revolving_drawdown(
         self,
@@ -1156,27 +1071,12 @@ class SnapshotGenerator:
         current_rate: float,
         orig_idx: int,
         current_idx: int,
-        obligations: Deque[Obligation],
     ) -> Tuple[float, float, float]:
         if current_idx <= orig_idx or principal_balance <= EPS:
             return 0.0, 0.0, 0.0
 
         interest_due = principal_balance * current_rate / 1200.0
-
-        # Avoid repeatedly scheduling the same revolving principal when prior
-        # minimum-principal obligations remain unpaid.
-        already_due_principal = float(
-            sum(max(float(ob[2]), 0.0) for ob in obligations)
-        )
-        principal_not_already_due = max(
-            principal_balance - already_due_principal,
-            0.0,
-        )
-        principal_due = min(
-            principal_balance * 0.02,
-            principal_not_already_due,
-        )
-
+        principal_due = min(principal_balance * 0.02, principal_balance)
         scheduled = interest_due + principal_due
         return float(scheduled), float(interest_due), float(principal_due)
 
@@ -1215,30 +1115,11 @@ class SnapshotGenerator:
         terminal_constraint: Optional[str],
         rng: np.random.Generator,
     ) -> Tuple[float, str]:
-        """
-        Generate actual cash received for the month.
-
-        V5 calibration principle
-        ------------------------
-        The contractual ledger, DPD logic and lifecycle reconciliation are left
-        untouched. Only ordinary repayment behavior is recalibrated so that:
-
-        * a borrower who is current is strongly persistent in CURRENT;
-        * one-off early delinquency remains possible but uncommon;
-        * existing arrears raise the chance of further difficulty;
-        * curing is materially easier than entering deep delinquency;
-        * severe terminal histories are still produced by the frozen lifecycle
-          constraints rather than by arbitrary master-status labels.
-
-        No portfolio delinquency percentage is targeted directly.
-        """
         total_due = max(scheduled_payment + arrears_before_current, 0.0)
 
-        # -------------------------------------------------------------
-        # Frozen lifecycle reconciliation constraints.
-        # These are intentionally unchanged from V4.
-        # -------------------------------------------------------------
         if terminal_constraint == "CLOSE_FULL":
+            # Exact payoff is handled by the caller; return a sentinel-sized
+            # amount covering all known obligations plus principal.
             unpaid_interest_buffer = max(arrears_before_current, 0.0)
             return (
                 max(total_due + principal_balance + unpaid_interest_buffer, 0.0),
@@ -1265,12 +1146,8 @@ class SnapshotGenerator:
         if scheduled_payment <= EPS and arrears_before_current <= EPS:
             return 0.0, "no_due"
 
-        # -------------------------------------------------------------
-        # Ordinary stochastic repayment behavior.
-        # -------------------------------------------------------------
         year, _ = idx_to_ym(current_idx)
         macro = MACRO_STRESS_BY_YEAR.get(year, 0.0)
-
         burden = self._payment_burden(
             loan,
             customer,
@@ -1279,117 +1156,65 @@ class SnapshotGenerator:
         )
 
         sector = str(customer.get("business_sector", ""))
-        sector_effect = (
-            stable_effect(f"SECTOR::{sector}", 0.07)
-            if sector
-            else 0.0
-        )
-        product_effect = PRODUCT_PAYMENT_RISK.get(
-            str(loan.product_id),
-            0.0,
-        )
+        sector_effect = stable_effect(f"SECTOR::{sector}", 0.07) if sector else 0.0
+        product_effect = PRODUCT_PAYMENT_RISK.get(str(loan.product_id), 0.0)
 
         arrears_pressure = min(
             arrears_before_current / max(scheduled_payment, 1.0),
             6.0,
         )
 
-        # Strong persistence for a borrower who enters the month current.
-        # Once arrears exist this protection disappears and the historical
-        # repayment state becomes an explicit source of risk.
-        current_state_protection = (
-            -0.70 if arrears_before_current <= EPS else 0.0
-        )
-
         risk = (
-            -6.15
-            + 1.45 * math.log1p(max(burden, 0.0) * 5.0)
-            + 0.90 * (0.5 - capacity)
-            - 0.38 * (relationship - 0.5)
-            + 0.48 * macro
-            + 0.48 * liquidity_shock
-            + 0.34 * arrears_pressure
-            + current_state_protection
+            -4.55
+            + 1.75 * math.log1p(max(burden, 0.0) * 5.0)
+            + 1.00 * (0.5 - capacity)
+            - 0.30 * (relationship - 0.5)
+            + 0.55 * macro
+            + 0.50 * liquidity_shock
+            + 0.22 * arrears_pressure
             + branch_effect
             + sector_effect
             + product_effect
         )
 
-        # Misses are rare in an otherwise healthy month. Partial payments are
-        # somewhat more common than complete misses, but remain minority events.
-        # Existing arrears naturally push both probabilities upward through
-        # arrears_pressure rather than through a hard-coded delinquency state.
-        p_miss = float(
-            np.clip(
-                sigmoid(risk),
-                0.0005,
-                0.16,
-            )
-        )
-
+        p_miss = float(np.clip(sigmoid(risk), 0.002, 0.30))
         p_partial = float(
-            np.clip(
-                0.30 * sigmoid(risk + 1.00),
-                0.0020,
-                0.14,
-            )
+            np.clip(0.52 * sigmoid(risk + 0.90), 0.006, 0.28)
         )
 
         u = rng.random()
 
         if u < p_miss:
-            # A complete miss is more likely than a token payment once the
-            # stochastic "miss" event has occurred.
-            if rng.random() < 0.80:
+            if rng.random() < 0.82:
                 return 0.0, "missed"
-            return (
-                scheduled_payment * rng.uniform(0.08, 0.30),
-                "partial",
-            )
+            return scheduled_payment * rng.uniform(0.05, 0.25), "partial"
 
         if u < p_miss + p_partial:
-            return (
-                scheduled_payment * rng.uniform(0.55, 0.95),
-                "partial",
-            )
+            return scheduled_payment * rng.uniform(0.45, 0.92), "partial"
 
-        # -------------------------------------------------------------
-        # Performing / curing month.
-        # -------------------------------------------------------------
+        # Performing month. If arrears exist, some borrowers cure partially or
+        # fully rather than merely paying the current installment.
         payment = scheduled_payment
         behavior = "full"
 
         if arrears_before_current > EPS:
-            # Recovery is deliberately easier than continued deterioration for
-            # non-terminal borrowers. Capacity, relationship depth and liquidity
-            # still matter, so cures are stochastic rather than mechanical.
-            cure_prob = float(
-                np.clip(
-                    sigmoid(
-                        0.65
-                        + 1.25 * capacity
-                        + 0.55 * relationship
-                        - 0.45 * max(burden - 0.25, 0.0)
-                        - 0.22 * liquidity_shock
-                        - 0.10 * min(arrears_pressure, 4.0)
-                    ),
-                    0.55,
-                    0.94,
-                )
-            )
-
+            cure_prob = float(np.clip(
+                sigmoid(
+                    -0.30
+                    + 1.15 * capacity
+                    + 0.45 * relationship
+                    - 0.55 * max(burden - 0.25, 0.0)
+                    - 0.25 * liquidity_shock
+                ),
+                0.18,
+                0.80,
+            ))
             if rng.random() < cure_prob:
-                # Most curing episodes fully clear old arrears; a minority
-                # improve materially but retain a small unresolved amount.
-                if rng.random() < 0.78:
-                    cure_fraction = 1.00
-                else:
-                    cure_fraction = rng.uniform(0.60, 0.95)
-
+                cure_fraction = rng.uniform(0.35, 1.00)
                 payment += arrears_before_current * cure_fraction
                 behavior = "cure_payment"
 
-        # Small occasional voluntary overpayment for installment products.
+        # Small occasional voluntary overpayment.
         if (
             arrears_before_current <= EPS
             and str(loan.product_id) != "P016"
@@ -1497,13 +1322,8 @@ class SnapshotGenerator:
                 rng,
                 due_day,
             )
-            schedule_balance = None
         else:
-            (
-                principal_balance,
-                schedule_balance,
-                obligations,
-            ) = self._initial_installment_state(
+            principal_balance, obligations = self._initial_installment_state(
                 loan,
                 bridge_row,
                 orig_idx,
@@ -1577,17 +1397,11 @@ class SnapshotGenerator:
                     current_rate,
                     orig_idx,
                     month_idx,
-                    obligations,
                 )
             else:
-                (
-                    scheduled,
-                    interest_due,
-                    principal_due,
-                    schedule_balance,
-                ) = self._scheduled_installment(
+                scheduled, interest_due, principal_due = self._scheduled_installment(
                     loan,
-                    schedule_balance,
+                    principal_balance,
                     current_rate,
                     orig_idx,
                     month_idx,
@@ -1599,41 +1413,6 @@ class SnapshotGenerator:
                     float(interest_due),
                     float(principal_due),
                 ])
-
-            # A rare edge case can occur when the stochastic path has already
-            # exhausted the normal contractual schedule while the frozen
-            # lifecycle bridge says the contract must remain unresolved and
-            # reach DPD_90_PLUS at cutoff. The old residual-preservation guard
-            # kept a tiny principal exposure alive but, because it had no due
-            # date attached to it, DPD incorrectly remained zero forever.
-            #
-            # At the beginning of the terminal default window, attach any such
-            # unscheduled residual principal to an exact contractual due date.
-            # From here onward the normal FIFO obligation ledger determines
-            # arrears and DPD; DPD itself is still never assigned directly.
-            if (
-                event in OPEN_DEFAULT_EVENTS
-                and (end_idx - month_idx) == 4
-                and principal_balance > EPS
-                and not any(
-                    obligation_total(ob) > EPS
-                    and ob[0] <= month_end
-                    for ob in obligations
-                )
-            ):
-                anchor_principal = min(
-                    principal_balance,
-                    max(
-                        float(loan.original_amount) * 0.000001,
-                        0.01,
-                    ),
-                )
-                if anchor_principal > EPS:
-                    obligations.append([
-                        due_date_for_month(month_idx, due_day),
-                        0.0,
-                        float(anchor_principal),
-                    ])
 
             # ---------------------------------------------------------
             # Actual customer payment.
@@ -1667,19 +1446,6 @@ class SnapshotGenerator:
                 cash_requested,
             )
 
-            if (
-                str(loan.product_id) != "P016"
-                and schedule_balance is not None
-                and extra_principal > EPS
-            ):
-                # Voluntary principal prepayment changes future contractual
-                # exposure; ordinary payment of scheduled principal does not,
-                # because schedule_balance was already advanced when due.
-                schedule_balance = max(
-                    schedule_balance - extra_principal,
-                    0.0,
-                )
-
             # ---------------------------------------------------------
             # Terminal accounting events after payment allocation.
             # ---------------------------------------------------------
@@ -1687,15 +1453,11 @@ class SnapshotGenerator:
                 # Write-off occurs at the end of the final resolution month.
                 principal_balance = 0.0
                 obligations.clear()
-                if schedule_balance is not None:
-                    schedule_balance = 0.0
 
             if constraint == "CLOSE_FULL":
                 # Numerical guard for exact settlement.
                 principal_balance = 0.0
                 obligations.clear()
-                if schedule_balance is not None:
-                    schedule_balance = 0.0
 
             unpaid_interest = unpaid_interest_total(obligations)
             outstanding = principal_balance + unpaid_interest
@@ -1730,98 +1492,19 @@ class SnapshotGenerator:
                         )
                         payment_behavior = "terminal_cure"
 
-                elif event in OPEN_EARLY_EVENTS:
-                    # OPEN_EARLY_AT_CUTOFF means the loan finishes the observed
-                    # window with a genuinely EARLY delinquency episode:
-                    # older arrears must first be cured, while only a fraction
-                    # of the CURRENT month's contractual obligation remains
-                    # unpaid. This is much stronger than merely forcing a
-                    # positive DPD, because it prevents an old severe arrears
-                    # episode from being mislabeled as "early".
-                    current_due = due_date_for_month(month_idx, due_day)
-
-                    # In the exceptional case where the contract has no normal
-                    # installment in the cutoff month (e.g. origination month),
-                    # create a small contractual stub obligation so the bridge
-                    # state remains temporally meaningful. This affects only
-                    # OPEN_EARLY_AT_CUTOFF contracts and becomes the scheduled
-                    # obligation reported for that month.
-                    current_month_obligations = [
-                        ob for ob in obligations if ob[0] == current_due
-                    ]
-
-                    if not current_month_obligations and principal_balance > EPS:
-                        if str(loan.product_id) == "P016":
-                            stub_interest = principal_balance * current_rate / 1200.0
-                            stub_principal = min(
-                                principal_balance * 0.02,
-                                principal_balance,
-                            )
-                        else:
-                            remaining_months = max(
-                                int(loan.term_months)
-                                - max(month_idx - orig_idx, 0),
-                                1,
-                            )
-                            stub_payment = annuity_payment(
-                                principal_balance,
-                                current_rate,
-                                remaining_months,
-                            )
-                            stub_interest = principal_balance * current_rate / 1200.0
-                            stub_principal = min(
-                                max(stub_payment - stub_interest, 0.0),
-                                principal_balance,
-                            )
-
-                        stub_total = stub_interest + stub_principal
-                        if stub_total > EPS:
-                            obligations.append([
-                                current_due,
-                                float(stub_interest),
-                                float(stub_principal),
-                            ])
-                            scheduled = max(scheduled, float(stub_total))
-
-                    # Leave only a modest fraction of the most recent
-                    # obligation unpaid. FIFO payment clears every older
-                    # obligation first, which yields exact DPD in the 1-30 band.
-                    total_due_now = sum(
-                        obligation_total(ob)
-                        for ob in obligations
-                        if ob[0] <= month_end
-                    )
-
-                    current_due_total = sum(
-                        obligation_total(ob)
-                        for ob in obligations
-                        if ob[0] == current_due
-                    )
-
-                    if current_due_total > EPS:
-                        target_unpaid = max(
-                            min(current_due_total * 0.25, current_due_total),
-                            min(1.0, current_due_total),
-                        )
-                        cure_cash = max(total_due_now - target_unpaid, 0.0)
-
-                        principal_balance, extra_used, _ = allocate_payment(
-                            obligations,
-                            principal_balance,
-                            cure_cash,
-                        )
-                        actual_used += extra_used
-                        payment_behavior = "terminal_early_partial"
-
-                    unpaid_interest = unpaid_interest_total(obligations)
-                    outstanding = principal_balance + unpaid_interest
-                    arrears = total_arrears(obligations, month_end)
-                    oldest_due = oldest_unpaid_due(obligations, month_end)
-                    dpd = (
-                        max((month_end - oldest_due).days, 0)
-                        if oldest_due is not None
-                        else 0
-                    )
+                elif event in OPEN_EARLY_EVENTS and dpd == 0 and scheduled > EPS:
+                    # Ensure one unresolved current-month obligation survives.
+                    forced_unpaid = min(max(scheduled * 0.25, 1.0), principal_balance)
+                    if forced_unpaid > EPS:
+                        obligations.append([
+                            due_date_for_month(month_idx, due_day),
+                            0.0,
+                            forced_unpaid,
+                        ])
+                        outstanding = principal_balance + unpaid_interest_total(obligations)
+                        arrears = total_arrears(obligations, month_end)
+                        oldest_due = oldest_unpaid_due(obligations, month_end)
+                        dpd = max((month_end - oldest_due).days, 0)
 
             # ---------------------------------------------------------
             # Online validation before writing.
@@ -1838,10 +1521,10 @@ class SnapshotGenerator:
                 self.audit.validation_errors.append(
                     f"{loan.loan_id} {idx_to_str(month_idx)} nonpositive rate"
                 )
-            if arrears > outstanding + max(1.0, 0.001 * outstanding):
-                # Overdue principal is already part of principal_balance and
-                # overdue interest is part of unpaid_interest, so arrears cannot
-                # materially exceed total outstanding exposure.
+            if arrears > outstanding + max(scheduled, 1.0) * 2.0 + 1.0:
+                # Arrears includes overdue principal that is also already inside
+                # principal_balance, so it need not be <= outstanding exactly.
+                # This guard catches only clearly impossible explosions.
                 self.audit.validation_errors.append(
                     f"{loan.loan_id} {idx_to_str(month_idx)} implausible arrears/exposure"
                 )
@@ -1888,7 +1571,7 @@ class SnapshotGenerator:
             }
 
     def generate(self) -> LoanAudit:
-        DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
+        DATA_GENERATED.mkdir(parents=True, exist_ok=True)
 
         if TEMP_OUTPUT_PATH.exists():
             TEMP_OUTPUT_PATH.unlink()

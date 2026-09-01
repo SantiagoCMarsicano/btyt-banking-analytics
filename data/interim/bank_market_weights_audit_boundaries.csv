@@ -1,0 +1,13 @@
+bank_id,bank_name,lower_bound,upper_bound,lower_hit_pct,upper_hit_pct,any_boundary_hit_pct
+B008,Banque Heritage Uruguay,0.005,0.04,0.0,0.0335,0.0335
+B003,Bandes,0.005,0.035,0.0,0.0213,0.0213
+B005,Banco Nación,0.01,0.05,0.0,0.0119,0.0119
+B000,BTYT,0.025,0.08,0.0,0.0118,0.0118
+B009,Citibank Uruguay,0.015,0.07,0.0,0.011,0.011
+B010,BTG Pactual Uruguay,0.01,0.06,0.0,0.0082,0.0082
+B002,BHU,0.015,0.06,0.0,0.0047,0.0047
+B004,BBVA Uruguay,0.06,0.15,0.0,0.0011,0.0011
+B001,BROU,0.24,0.36,0.0,0.0009,0.0009
+B011,Scotiabank Uruguay,0.06,0.14,0.0,0.0007,0.0007
+B007,Santander Uruguay,0.1,0.21,0.0,0.0005,0.0005
+B006,Itaú Uruguay,0.1,0.21,0.0,0.0,0.0
