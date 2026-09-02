@@ -46,12 +46,15 @@ DEVELOPMENT_CUSTOMERS = 10_000
 ROOT = Path(__file__).resolve().parents[1]
 DATA_GENERATED = ROOT / "data" / "generated"
 DATA_MASTER = ROOT / "data" / "master"
+DATA_INTERIM = ROOT / "data" / "interim"
 
 CUSTOMERS_PATH = DATA_GENERATED / "customers.csv"
 ACCOUNTS_PATH = DATA_GENERATED / "accounts.csv"
 BRANCHES_PATH = DATA_GENERATED / "branches.csv"
 PRODUCTS_PATH = DATA_MASTER / "products.csv"
+BRANCH_STATE_PATH = DATA_INTERIM / "branch_yearly_state.csv"
 OUTPUT_PATH = DATA_GENERATED / "loans.csv"
+BRIDGE_PATH = DATA_INTERIM / "loan_lifecycle_bridge.csv"
 
 
 LOAN_COLUMNS = [
@@ -228,6 +231,7 @@ def load_inputs():
         "accounts": ACCOUNTS_PATH,
         "branches": BRANCHES_PATH,
         "products": PRODUCTS_PATH,
+        "branch_yearly_state": BRANCH_STATE_PATH,
     }
     missing_paths = [path for path in required_paths.values() if not path.exists()]
     if missing_paths:
@@ -238,6 +242,7 @@ def load_inputs():
 
     branches = pd.read_csv(BRANCHES_PATH, dtype={"branch_id": str})
     products = pd.read_csv(PRODUCTS_PATH, dtype={"product_id": str})
+    branch_state = pd.read_csv(BRANCH_STATE_PATH, dtype={"branch_id": str})
 
     if DEVELOPMENT_MODE and len(customers) > DEVELOPMENT_CUSTOMERS:
         customers = (
@@ -253,11 +258,12 @@ def load_inputs():
     customers["primary_branch_id"] = customers["primary_branch_id"].astype(str).str.zfill(3)
     accounts["branch_id"] = accounts["branch_id"].astype(str).str.zfill(3)
     branches["branch_id"] = branches["branch_id"].astype(str).str.zfill(3)
+    branch_state["branch_id"] = branch_state["branch_id"].astype(str).str.zfill(3)
 
-    return customers, accounts, branches, products
+    return customers, accounts, branches, products, branch_state
 
 
-def validate_inputs(customers, accounts, branches, products):
+def validate_inputs(customers, accounts, branches, products, branch_state):
     required_customers = {
         "customer_id", "customer_type", "primary_branch_id", "registration_year",
         "customer_status", "closing_year", "monthly_income", "employment_status",
@@ -290,24 +296,111 @@ def validate_inputs(customers, accounts, branches, products):
             f"products.csv does not contain required lending products: {sorted(missing_products)}"
         )
 
+    state_required = {
+        "branch_id",
+        "year",
+        "credit_pressure",
+        "customer_pressure",
+    }
+    missing_state = state_required - set(branch_state.columns)
+    if missing_state:
+        raise ValueError(
+            f"branch_yearly_state.csv missing columns: {sorted(missing_state)}"
+        )
+
+    if branch_state.duplicated(["branch_id", "year"]).any():
+        raise ValueError("Duplicate branch_id/year in branch_yearly_state.csv.")
+
+    branch_state["year"] = pd.to_numeric(branch_state["year"], errors="coerce")
+    if branch_state["year"].isna().any():
+        raise ValueError("Invalid year in branch_yearly_state.csv.")
+
+    unknown_state_branches = (
+        set(branch_state["branch_id"]) - set(branches["branch_id"])
+    )
+    if unknown_state_branches:
+        raise ValueError(
+            "branch_yearly_state.csv contains unknown branch_id values: "
+            f"{sorted(unknown_state_branches)[:10]}"
+        )
+
+    for col in ["credit_pressure", "customer_pressure"]:
+        if pd.to_numeric(branch_state[col], errors="coerce").isna().any():
+            raise ValueError(
+                f"Invalid numeric values in branch state column: {col}"
+            )
+
 
 # =============================================================================
 # Generator
 # =============================================================================
 
 class LoanGenerator:
-    def __init__(self, customers, accounts, branches, products):
+    def __init__(self, customers, accounts, branches, products, branch_state):
         self.customers = customers.copy()
         self.accounts = accounts.copy()
         self.branches = branches.copy()
         self.products = products.copy()
+        self.branch_state = branch_state.copy()
 
         self.rng = np.random.default_rng(LOAN_SEED)
+        self.history_rng = np.random.default_rng(LOAN_SEED + 1)
         self.rows = []
+        self.bridge_rows = []
         self.next_loan_number = 1
 
         self.branch_lookup = self.branches.set_index("branch_id").to_dict("index")
+        self._prepare_branch_state()
         self._prepare_customer_signals()
+
+    # ---------------------------------------------------------------------
+    # Shared branch-state bridge
+    # ---------------------------------------------------------------------
+
+    def _prepare_branch_state(self):
+        """
+        Build the 2021-2026 branch-state lookup used by the lending DGP.
+
+        Loans intentionally consume only credit pressure and customer pressure
+        at the master-table stage. Operational pressure and local shocks are
+        reserved for the monthly snapshot where their timing can affect
+        arrears and deterioration explicitly.
+        """
+        state = self.branch_state.copy()
+        state["year"] = pd.to_numeric(state["year"], errors="raise").astype(int)
+
+        for col in ["credit_pressure", "customer_pressure"]:
+            state[col] = pd.to_numeric(state[col], errors="raise").astype(float)
+
+        self.branch_state_lookup = {
+            (str(row.branch_id).zfill(3), int(row.year)): {
+                "credit_pressure": float(row.credit_pressure),
+                "customer_pressure": float(row.customer_pressure),
+            }
+            for row in state.itertuples(index=False)
+        }
+
+    def _get_branch_state(self, branch_id: str, year: int) -> dict:
+        neutral = {
+            "credit_pressure": 0.0,
+            "customer_pressure": 0.0,
+        }
+
+        if year < OBSERVATION_START_YEAR:
+            return neutral
+
+        return self.branch_state_lookup.get(
+            (str(branch_id).zfill(3), int(year)),
+            neutral,
+        )
+
+    def _customer_local_state(self, row, year: int) -> dict:
+        """
+        Use the customer's primary branch as the local credit environment
+        before an actual origination branch has been selected.
+        """
+        primary = str(row["primary_branch_id"]).zfill(3)
+        return self._get_branch_state(primary, year)
 
     # ---------------------------------------------------------------------
     # Customer signals
@@ -489,7 +582,21 @@ class LoanGenerator:
 
     def _annual_product_probability(self, row, product: LoanProduct, year: int) -> float:
         utility = self._product_utility(row, product, year)
-        # annual probability is intentionally moderate
+
+        if year >= OBSERVATION_START_YEAR:
+            state = self._customer_local_state(row, year)
+
+            # Credit pressure is a local supply/origination condition, not a
+            # hidden borrower-risk score. Customer pressure adds only a small
+            # relationship/acquisition effect.
+            utility -= 0.22 * np.clip(
+                state["credit_pressure"], -2.5, 2.5
+            )
+            utility -= 0.06 * np.clip(
+                state["customer_pressure"], -2.5, 2.5
+            )
+
+        # Annual probability is intentionally moderate.
         return float(np.clip(sigmoid(utility) * 0.34, 0.002, 0.33))
 
     # ---------------------------------------------------------------------
@@ -546,6 +653,22 @@ class LoanGenerator:
         # Digital affinity weakens geographic concentration.
         if row["_digital_affinity"] > 0.65:
             weights = np.power(weights, 0.78)
+
+        if year >= OBSERVATION_START_YEAR:
+            credit_pressure = np.array(
+                [
+                    self._get_branch_state(branch_id, year)["credit_pressure"]
+                    for branch_id in eligible["branch_id"]
+                ],
+                dtype=float,
+            )
+
+            # Higher credit pressure modestly reduces the branch's origination
+            # attractiveness while preserving geography, size, and product
+            # specialization as the dominant branch-selection drivers.
+            weights *= np.exp(
+                -0.16 * np.clip(credit_pressure, -2.5, 2.5)
+            )
 
         weights *= self.rng.lognormal(mean=0.0, sigma=0.18, size=len(weights))
         weights /= weights.sum()
@@ -859,6 +982,204 @@ class LoanGenerator:
         self.next_loan_number += 1
         return loan_id
 
+    def _build_bridge_row(
+        self,
+        loan_id: str,
+        origination_year: int,
+        loan_status: str,
+        closing_year: Optional[int],
+        term_months: int,
+        product_id: str,
+    ) -> dict:
+        """
+        Build the hidden monthly lifecycle bridge without consuming the production
+        loan RNG stream.
+
+        The frozen loans.csv remains authoritative. Bridge fields refine annual
+        master information into deterministic monthly metadata required by the
+        snapshot engine; they never feed back into contract generation.
+        """
+        lifecycle_seed = int(
+            (LOAN_SEED + int(loan_id[1:]) * 1_000_003) % (2**32 - 1)
+        )
+        bridge_rng = np.random.default_rng(lifecycle_seed)
+
+        status = str(loan_status)
+        close_year = (
+            int(closing_year)
+            if pd.notna(closing_year)
+            else None
+        )
+
+        # Hidden monthly chronology must be capable of producing the frozen
+        # annual lifecycle classification from real unpaid obligations.
+        #
+        # Same-year defaults need at least four full monthly steps between
+        # origination and recognition. Same-year restructures need at least
+        # two. This changes only hidden bridge timing; loans.csv is untouched.
+        if status == "DEFAULTED" and close_year == origination_year:
+            origination_month = int(bridge_rng.integers(1, 8))
+        elif status == "RESTRUCTURED" and close_year == origination_year:
+            origination_month = int(bridge_rng.integers(1, 11))
+        elif origination_year == CURRENT_YEAR and status == "DEFAULTED":
+            origination_month = int(bridge_rng.integers(1, 9))
+        elif origination_year == CURRENT_YEAR and status == "RESTRUCTURED":
+            origination_month = int(bridge_rng.integers(1, 11))
+        else:
+            origination_month = int(bridge_rng.integers(1, 13))
+
+        origination_idx = origination_year * 12 + (origination_month - 1)
+        resolution_month = ""
+        terminal_event = ""
+        inherited_state = "CURRENT"
+
+        if origination_year < OBSERVATION_START_YEAR:
+            inherited_draw = bridge_rng.random()
+
+            # A loan already originated before the detailed observation window
+            # and recognized as DEFAULTED during 2021 must enter January 2021
+            # with enough inherited delinquency history to make that annual
+            # lifecycle classification chronologically possible.
+            #
+            # Without this seam rule, an early-2021 default can enter the
+            # monthly window with only one inherited missed installment, leaving
+            # too little observable calendar time to exceed 90 DPD.
+            if (
+                status == "DEFAULTED"
+                and close_year == OBSERVATION_START_YEAR
+            ):
+                inherited_state = "SEVERE_DELINQUENCY"
+            elif status in {"DEFAULTED", "WRITTEN_OFF"}:
+                inherited_state = (
+                    "SEVERE_DELINQUENCY"
+                    if inherited_draw < 0.72
+                    else "EARLY_DELINQUENCY"
+                )
+            elif status == "RESTRUCTURED":
+                inherited_state = (
+                    "EARLY_DELINQUENCY"
+                    if inherited_draw < 0.62
+                    else "CURRENT"
+                )
+            else:
+                inherited_state = (
+                    "EARLY_DELINQUENCY"
+                    if inherited_draw < 0.08
+                    else "CURRENT"
+                )
+
+        if status == "PAID_OFF":
+            close_year = int(closing_year) if pd.notna(closing_year) else CURRENT_YEAR
+            close_month = int(bridge_rng.integers(1, 13))
+            resolution_idx = close_year * 12 + (close_month - 1)
+            resolution_idx = max(resolution_idx, origination_idx)
+            resolution_year, resolution_m0 = divmod(resolution_idx, 12)
+            resolution_month = f"{resolution_year:04d}-{resolution_m0 + 1:02d}"
+
+            nominal_maturity_idx = origination_idx + int(term_months)
+            if product_id == "P016":
+                terminal_event = "FACILITY_EXPIRY"
+            elif resolution_idx + 2 < nominal_maturity_idx:
+                terminal_event = "EARLY_PREPAYMENT"
+            else:
+                terminal_event = "SCHEDULED_MATURITY"
+
+        elif status == "WRITTEN_OFF":
+            close_year = int(closing_year) if pd.notna(closing_year) else CURRENT_YEAR
+            close_month = int(bridge_rng.integers(1, 13))
+            resolution_idx = max(
+                close_year * 12 + (close_month - 1),
+                origination_idx,
+            )
+            resolution_year, resolution_m0 = divmod(resolution_idx, 12)
+            resolution_month = f"{resolution_year:04d}-{resolution_m0 + 1:02d}"
+            terminal_event = "WRITE_OFF"
+
+        elif status == "RESTRUCTURED":
+            if pd.notna(closing_year):
+                close_year = int(closing_year)
+
+                if close_year == origination_year:
+                    min_close_month = min(origination_month + 2, 12)
+                    close_month = int(
+                        bridge_rng.integers(min_close_month, 13)
+                    )
+                else:
+                    close_month = int(bridge_rng.integers(1, 13))
+
+                resolution_idx = max(
+                    close_year * 12 + (close_month - 1),
+                    origination_idx,
+                )
+                resolution_year, resolution_m0 = divmod(resolution_idx, 12)
+                resolution_month = f"{resolution_year:04d}-{resolution_m0 + 1:02d}"
+                terminal_event = "RESTRUCTURE_AFTER_DEFAULT"
+            else:
+                terminal_event = "OPEN_SEVERE_AT_CUTOFF"
+
+        elif status == "DEFAULTED":
+            if pd.notna(closing_year):
+                close_year = int(closing_year)
+
+                if close_year == origination_year:
+                    # Installment loans generally create their first contractual
+                    # due date one month after origination. A five-month gap
+                    # between origination and default recognition therefore gives
+                    # the oldest genuinely unpaid installment enough calendar age
+                    # to exceed 90 DPD even with a late due day.
+                    min_close_month = min(origination_month + 5, 12)
+                    close_month = int(
+                        bridge_rng.integers(min_close_month, 13)
+                    )
+                else:
+                    # Cross-year defaults must also allow enough real calendar
+                    # time for the oldest unpaid obligation to age beyond 90 DPD.
+                    #
+                    # Example:
+                    #   origination 2025-11 -> recognition no earlier than 2026-02
+                    #   origination 2025-12 -> recognition no earlier than 2026-03
+                    #
+                    # DPD is still derived from actual unpaid obligations and due
+                    # dates; it is never assigned directly.
+                    close_year_start_idx = close_year * 12
+                    minimum_resolution_idx = max(
+                        close_year_start_idx,
+                        origination_idx + 3,
+                    )
+                    min_close_month = (
+                        minimum_resolution_idx - close_year_start_idx + 1
+                    )
+                    min_close_month = int(
+                        np.clip(min_close_month, 1, 12)
+                    )
+                    close_month = int(
+                        bridge_rng.integers(min_close_month, 13)
+                    )
+
+                resolution_idx = max(
+                    close_year * 12 + (close_month - 1),
+                    origination_idx,
+                )
+                resolution_year, resolution_m0 = divmod(resolution_idx, 12)
+                resolution_month = f"{resolution_year:04d}-{resolution_m0 + 1:02d}"
+                terminal_event = "SEVERE_RECOGNIZED_AT_CUTOFF"
+            else:
+                terminal_event = "OPEN_DEFAULT_AT_CUTOFF"
+
+        else:
+            terminal_event = "OPEN_CURRENT_AT_CUTOFF"
+
+        return {
+            "loan_id": loan_id,
+            "origination_month_internal": (
+                f"{origination_year:04d}-{origination_month:02d}"
+            ),
+            "lifecycle_seed": lifecycle_seed,
+            "resolution_month_internal": resolution_month,
+            "terminal_event_internal": terminal_event,
+            "pre2021_inherited_state": inherited_state,
+        }
+
     def _generate_contract(self, row, product: LoanProduct, year: int):
         branch_id = self._choose_branch(row, product.product_id, year)
         currency = self._choose_currency(row, product)
@@ -879,8 +1200,10 @@ class LoanGenerator:
             initial_rate=initial_rate,
         )
 
+        loan_id = self._new_loan_id()
+
         self.rows.append({
-            "loan_id": self._new_loan_id(),
+            "loan_id": loan_id,
             "customer_id": row["customer_id"],
             "product_id": product.product_id,
             "branch_id": branch_id,
@@ -893,6 +1216,17 @@ class LoanGenerator:
             "loan_status": status,
             "closing_year": closing_year,
         })
+
+        self.bridge_rows.append(
+            self._build_bridge_row(
+                loan_id=loan_id,
+                origination_year=int(year),
+                loan_status=status,
+                closing_year=closing_year,
+                term_months=int(term),
+                product_id=product.product_id,
+            )
+        )
 
     def generate(self) -> pd.DataFrame:
         """
@@ -917,57 +1251,97 @@ class LoanGenerator:
             ]
 
             # -------------------------
-            # Pre-2021 compressed state
+            # Pre-2021 historical hazard
             # -------------------------
-            pre_start = max(registration_year, min(p.launch_year for p in eligible_products))
-            pre_end = min(OBSERVATION_START_YEAR - 1, customer_closing_year)
+            pre_start = max(
+                registration_year,
+                min(p.launch_year for p in eligible_products),
+            )
+            pre_end = min(
+                OBSERVATION_START_YEAR - 1,
+                customer_closing_year,
+            )
 
             if pre_start <= pre_end:
-                # Number of historical lending opportunities, intentionally compact.
-                tenure_pre = pre_end - pre_start + 1
-                base_lambda = (
-                    0.55
-                    + 0.80 * row["_loan_demand"]
-                    + 0.40 * row["_relationship"]
-                    + 0.025 * tenure_pre
-                )
-                if row["customer_type"] == "BUSINESS":
-                    base_lambda += 0.25
+                # V4.1.4 replaces the compressed count-plus-year allocator with
+                # an annual origination hazard. Exposure is therefore handled
+                # naturally: a customer registered in 2019 is exposed only to
+                # 2019 and 2020, while a long-tenure customer is exposed to every
+                # eligible historical year.
+                #
+                # Historical RNG is independent from the explicit 2021-2026 RNG
+                # stream so historical calibration changes cannot mechanically
+                # move the observed-period series.
+                main_rng = self.rng
+                self.rng = self.history_rng
 
-                n_pre = int(self.rng.negative_binomial(2, 2 / (2 + base_lambda)))
-                n_pre = int(np.clip(n_pre, 0, 8))
+                try:
+                    for year in range(pre_start, pre_end + 1):
+                        valid_products = [
+                            p
+                            for p in eligible_products
+                            if p.launch_year <= year
+                        ]
+                        if not valid_products:
+                            continue
 
-                for _ in range(n_pre):
-                    valid_products = [
-                        p for p in eligible_products
-                        if p.launch_year <= pre_end
-                    ]
-                    if not valid_products:
-                        break
+                        years_in_relationship = year - registration_year + 1
 
-                    year_low = max(
-                        registration_year,
-                        min(p.launch_year for p in valid_products),
-                    )
-                    years = np.arange(year_low, pre_end + 1)
+                        # Smooth annual historical hazard.
+                        #
+                        # Calendar growth is deliberately mild because the
+                        # expanding customer base already creates substantial
+                        # aggregate growth. Relationship seasoning increases
+                        # origination probability early in the relationship and
+                        # then saturates.
+                        hazard_utility = (
+                            -1.92
+                            + 0.58 * row["_loan_demand"]
+                            + 0.28 * row["_relationship"]
+                            + 0.018 * (year - 2020)
+                            + 0.10
+                            * np.log1p(
+                                min(max(years_in_relationship, 1), 12)
+                            )
+                        )
 
-                    # Favor more recent historical years without making it deterministic.
-                    weights = np.exp(0.055 * (years - years.max()))
-                    weights *= self.rng.lognormal(0, 0.18, len(years))
-                    weights /= weights.sum()
-                    year = int(self.rng.choice(years, p=weights))
+                        if row["customer_type"] == "BUSINESS":
+                            hazard_utility += 0.10
 
-                    valid_products = [p for p in valid_products if p.launch_year <= year]
-                    utilities = np.array([
-                        self._product_utility(row, p, year)
-                        for p in valid_products
-                    ])
-                    product = valid_products[int(self.rng.choice(
-                        len(valid_products),
-                        p=softmax(utilities)
-                    ))]
+                        annual_hazard = float(
+                            np.clip(
+                                sigmoid(hazard_utility) * 0.92,
+                                0.003,
+                                0.240,
+                            )
+                        )
 
-                    self._generate_contract(row, product, year)
+                        if self.rng.random() >= annual_hazard:
+                            continue
+
+                        utilities = np.array(
+                            [
+                                self._product_utility(row, p, year)
+                                for p in valid_products
+                            ]
+                        )
+                        product = valid_products[
+                            int(
+                                self.rng.choice(
+                                    len(valid_products),
+                                    p=softmax(utilities),
+                                )
+                            )
+                        ]
+
+                        self._generate_contract(
+                            row,
+                            product,
+                            year,
+                        )
+
+                finally:
+                    self.rng = main_rng
 
             # -------------------------
             # 2021–2026 originations
@@ -1122,7 +1496,7 @@ def validate_output(loans, customers, branches):
 
 def audit(loans, customers):
     print("\n" + "=" * 72)
-    print("BTYT LOANS AUDIT")
+    print("BTYT LOANS AUDIT — V4.1.4 FINAL BRANCH-STATE INTEGRATED")
     print("=" * 72)
 
     print(f"\nCustomers in dev population: {len(customers):,}")
@@ -1193,32 +1567,235 @@ def audit(loans, customers):
         )
 
 
+def audit_history_observation_seam(loans):
+    """
+    Diagnostic for the compressed-history / explicit-observation boundary.
+
+    This is descriptive only. It makes the 2018-2022 transition visible so an
+    artificial 2020 endpoint spike cannot pass unnoticed.
+    """
+    seam = loans.loc[
+        loans["origination_year"].between(2018, 2022)
+    ].copy()
+
+    if seam.empty:
+        return
+
+    counts = (
+        seam["origination_year"]
+        .value_counts()
+        .sort_index()
+        .reindex(range(2018, 2023), fill_value=0)
+    )
+
+    print("\n" + "=" * 72)
+    print("HISTORY / OBSERVATION SEAM AUDIT — LOANS V4.1.4")
+    print("=" * 72)
+    print("\nOriginations 2018-2022:")
+    print(counts.to_string())
+
+    if counts.loc[2019] > 0 and counts.loc[2021] > 0:
+        print(
+            "\n2020 vs 2019: "
+            f"{(counts.loc[2020] / counts.loc[2019] - 1.0):+.1%}"
+        )
+        seam_change = counts.loc[2021] / counts.loc[2020] - 1.0
+
+        print(
+            "2021 vs 2020: "
+            f"{seam_change:+.1%}"
+        )
+
+        seam_pass = abs(seam_change) <= 0.25
+        print(
+            "Seam guardrail (absolute change <= 25%): "
+            f"{'PASS' if seam_pass else 'REVIEW'}"
+        )
+
+    print("\nProducts around the seam:")
+    print(
+        pd.crosstab(
+            seam["origination_year"],
+            seam["product_id"],
+        ).to_string()
+    )
+
+
+def audit_branch_state_integration(
+    loans,
+    customers,
+    branch_state,
+):
+    """
+    Report whether branch-state credit conditions are visible in 2021-2026
+    originations without treating them as deterministic risk labels.
+    """
+    observed = loans.loc[
+        loans["origination_year"].between(
+            OBSERVATION_START_YEAR,
+            CURRENT_YEAR,
+        )
+    ].copy()
+
+    if observed.empty:
+        return
+
+    state = branch_state.copy()
+    state["branch_id"] = state["branch_id"].astype(str).str.zfill(3)
+    state["year"] = pd.to_numeric(
+        state["year"],
+        errors="coerce",
+    ).astype("Int64")
+
+    merged = observed.merge(
+        state[
+            [
+                "branch_id",
+                "year",
+                "credit_pressure",
+                "customer_pressure",
+            ]
+        ],
+        left_on=["branch_id", "origination_year"],
+        right_on=["branch_id", "year"],
+        how="left",
+        validate="many_to_one",
+    )
+
+    print("\n" + "=" * 72)
+    print("BRANCH-STATE INTEGRATION AUDIT — LOANS V4.1.4")
+    print("=" * 72)
+    print(
+        "Observed originations linked to branch state: "
+        f"{merged['year'].notna().mean():.2%}"
+    )
+
+    print("\nMean branch state at origination by product:")
+    print(
+        merged.groupby("product_id")[
+            ["credit_pressure", "customer_pressure"]
+        ]
+        .mean()
+        .round(3)
+        .to_string()
+    )
+
+    print("\nMean branch state at origination by year:")
+    print(
+        merged.groupby("origination_year")[
+            ["credit_pressure", "customer_pressure"]
+        ]
+        .mean()
+        .round(3)
+        .to_string()
+    )
+
+    # Credit-pressure quartiles provide a simple directional check on the
+    # branch-selection effect. This is descriptive only and is not a hard
+    # validation rule because branch size and customer geography still matter.
+    branch_year = (
+        merged.groupby(
+            ["branch_id", "origination_year"],
+            as_index=False,
+        )
+        .agg(
+            originations=("loan_id", "size"),
+            credit_pressure=("credit_pressure", "first"),
+            customer_pressure=("customer_pressure", "first"),
+        )
+    )
+
+    if branch_year["credit_pressure"].notna().sum() >= 4:
+        branch_year["credit_pressure_quartile"] = pd.qcut(
+            branch_year["credit_pressure"],
+            4,
+            labels=["Q1_LOW", "Q2", "Q3", "Q4_HIGH"],
+            duplicates="drop",
+        )
+
+        print("\nOriginations by credit-pressure quartile:")
+        print(
+            branch_year.groupby(
+                "credit_pressure_quartile",
+                observed=False,
+            )["originations"]
+            .agg(["count", "mean", "median", "sum"])
+            .round(2)
+            .to_string()
+        )
+
+
 # =============================================================================
 # Main
 # =============================================================================
 
 def main():
     print("Loading inputs...")
-    customers, accounts, branches, products = load_inputs()
-    validate_inputs(customers, accounts, branches, products)
+    customers, accounts, branches, products, branch_state = load_inputs()
+    validate_inputs(
+        customers,
+        accounts,
+        branches,
+        products,
+        branch_state,
+    )
 
     print(f"Customers: {len(customers):,}")
     print(f"Accounts: {len(accounts):,}")
     print(f"Branches: {len(branches):,}")
 
-    generator = LoanGenerator(customers, accounts, branches, products)
+    generator = LoanGenerator(
+        customers,
+        accounts,
+        branches,
+        products,
+        branch_state,
+    )
 
     print("\nGenerating loans...")
     loans = generator.generate()
 
+    bridge = pd.DataFrame(
+        generator.bridge_rows,
+        columns=[
+            "loan_id",
+            "origination_month_internal",
+            "lifecycle_seed",
+            "resolution_month_internal",
+            "terminal_event_internal",
+            "pre2021_inherited_state",
+        ],
+    )
+
+    if len(bridge) != len(loans):
+        raise ValueError(
+            f"Bridge row count mismatch: loans={len(loans):,}, bridge={len(bridge):,}"
+        )
+    if bridge["loan_id"].duplicated().any():
+        raise ValueError("loan_lifecycle_bridge contains duplicate loan_id values.")
+    if set(bridge["loan_id"]) != set(loans["loan_id"]):
+        raise ValueError("loan_lifecycle_bridge loan_id set does not match loans.csv.")
+
     validate_output(loans, customers, branches)
     audit(loans, customers)
+    audit_history_observation_seam(loans)
+    audit_branch_state_integration(
+        loans,
+        customers,
+        branch_state,
+    )
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    DATA_INTERIM.mkdir(parents=True, exist_ok=True)
+
     loans.to_csv(OUTPUT_PATH, index=False)
+    bridge.to_csv(BRIDGE_PATH, index=False)
 
     print(f"\nSaved: {OUTPUT_PATH}")
     print(f"Shape: {loans.shape}")
+    print(f"Saved bridge: {BRIDGE_PATH}")
+    print(f"Bridge shape: {bridge.shape}")
+    print("Bridge/master synchronization: PASS")
 
 
 if __name__ == "__main__":

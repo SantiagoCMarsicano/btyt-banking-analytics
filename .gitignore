@@ -21,3 +21,8 @@ Thumbs.db
 
 # Environment variables / secrets
 .env
+
+
+# Large generated datasets
+data/generated/transactions.csv
+data/interim/internal_transfer_pairs.csv

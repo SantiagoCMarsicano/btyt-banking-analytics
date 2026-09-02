@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-BTYT — Loan Monthly Snapshot generator
+BTYT — Loan Monthly Snapshot generator V4.1 — Terminal Lifecycle Consistency
 ======================================
 
 Generates:
@@ -63,7 +63,14 @@ Important modeling principles:
    It is used as a lifecycle constraint so the detailed monthly history
    reconciles with the already-generated master contract status.
 
-10. No target delinquency/default percentages are imposed. Monthly distributions
+10. Operational pressure affects monthly payment friction moderately. Local shocks
+    are activated only in deterministic event months rather than contaminating an
+    entire branch-year.
+
+11. credit_pressure is intentionally excluded from monthly repayment risk because
+    it already shapes loan origination in the frozen Loans V4.0.3 master.
+
+12. No target delinquency/default percentages are imposed. Monthly distributions
     emerge from contract mechanics, customer heterogeneity and stochastic paths.
 
 The synthetic macro/reference series below are model inputs only. They are not
@@ -98,6 +105,7 @@ DATA_INTERIM = ROOT / "data" / "interim"
 
 LOANS_PATH = DATA_GENERATED / "loans.csv"
 BRIDGE_PATH = DATA_INTERIM / "loan_lifecycle_bridge.csv"
+BRANCH_STATE_PATH = DATA_INTERIM / "branch_yearly_state.csv"
 CUSTOMERS_PATH = DATA_GENERATED / "customers.csv"
 ACCOUNTS_PATH = DATA_GENERATED / "accounts.csv"
 BRANCHES_PATH = DATA_GENERATED / "branches.csv"
@@ -154,6 +162,14 @@ REQUIRED_BRIDGE_COLUMNS = {
     "pre2021_inherited_state",
 }
 
+REQUIRED_BRANCH_STATE_COLUMNS = {
+    "branch_id",
+    "year",
+    "operational_pressure",
+    "local_shock_flag",
+    "local_shock_magnitude",
+}
+
 
 # =============================================================================
 # Synthetic macro inputs
@@ -184,8 +200,8 @@ USD_RATE_ANCHORS = {
 FX_UYU_PER_USD_ANCHORS = {
     1993: 4.5, 1995: 6.5, 1998: 10.5, 2000: 12.1, 2002: 21.5,
     2004: 28.0, 2006: 24.0, 2008: 20.5, 2010: 20.0, 2012: 20.5,
-    2014: 23.5, 2016: 30.5, 2018: 30.7, 2020: 42.0, 2022: 41.0,
-    2024: 39.5, 2026: 42.0, 2027: 42.5,
+    2014: 23.5, 2016: 30.5, 2018: 30.7, 2020: 42.0, 2021: 40.8, 2022: 41.0,
+    2023:40.5, 2024: 39.5, 2025: 41.3, 2026: 42.0, 2027: 42.5,
 }
 
 MACRO_STRESS_BY_YEAR = {
@@ -456,24 +472,126 @@ def convert_payment_to_uyu_2026eq(
 # Input preparation
 # =============================================================================
 
+def build_lifecycle_bridge_from_master(loans: pd.DataFrame) -> pd.DataFrame:
+    """
+    Rebuild the internal lifecycle bridge deterministically from the frozen
+    loans master when the persisted bridge is missing or belongs to an older
+    loan world.
+
+    The bridge adds timing detail only. It does not change master statuses.
+    """
+    rows = []
+
+    for loan in loans.itertuples(index=False):
+        loan_id = str(loan.loan_id)
+        orig_year = int(loan.origination_year)
+
+        seed = (
+            SNAPSHOT_SEED
+            + stable_hash(f"BRIDGE::{loan_id}")
+        ) % (2**32 - 1)
+        rng = np.random.default_rng(seed)
+
+        orig_month = int(rng.integers(1, 13))
+        orig_idx = ym_to_idx(orig_year, orig_month)
+
+        status = str(loan.loan_status)
+        closing_year = (
+            int(loan.closing_year)
+            if pd.notna(loan.closing_year)
+            else None
+        )
+
+        resolution_idx = None
+        event = ""
+
+        if status == "PAID_OFF":
+            event = "PAID_OFF"
+        elif status == "WRITTEN_OFF":
+            event = "WRITTEN_OFF"
+        elif status == "RESTRUCTURED":
+            event = (
+                "RESTRUCTURED"
+                if closing_year is not None
+                else "OPEN_SEVERE_AT_CUTOFF"
+            )
+        elif status == "DEFAULTED":
+            event = (
+                "WRITE_OFF"
+                if closing_year is not None
+                else "OPEN_DEFAULT_AT_CUTOFF"
+            )
+        elif status == "ACTIVE":
+            event = "OPEN_CURRENT_AT_CUTOFF"
+        else:
+            raise ValueError(
+                f"Unsupported master loan_status while rebuilding bridge: {status}"
+            )
+
+        if closing_year is not None:
+            min_month = orig_month if closing_year == orig_year else 1
+            resolution_month = int(rng.integers(min_month, 13))
+            resolution_idx = ym_to_idx(closing_year, resolution_month)
+            resolution_idx = max(resolution_idx, orig_idx)
+
+        inherited = "CURRENT"
+        if orig_year < OBS_START_YEAR:
+            inherited_draw = rng.random()
+            if status in {"DEFAULTED", "WRITTEN_OFF"}:
+                inherited = (
+                    "SEVERE_ARREARS"
+                    if inherited_draw < 0.45
+                    else "EARLY_ARREARS"
+                )
+            elif status == "RESTRUCTURED":
+                inherited = (
+                    "EARLY_ARREARS"
+                    if inherited_draw < 0.55
+                    else "CURRENT"
+                )
+            elif inherited_draw < 0.055:
+                inherited = "EARLY_ARREARS"
+            elif inherited_draw < 0.070:
+                inherited = "SEVERE_ARREARS"
+
+        rows.append(
+            {
+                "loan_id": loan_id,
+                "origination_month_internal": idx_to_str(orig_idx),
+                "lifecycle_seed": int(seed),
+                "resolution_month_internal": (
+                    idx_to_str(resolution_idx)
+                    if resolution_idx is not None
+                    else ""
+                ),
+                "terminal_event_internal": event,
+                "pre2021_inherited_state": inherited,
+            }
+        )
+
+    return pd.DataFrame(rows, columns=sorted(REQUIRED_BRIDGE_COLUMNS))
+
+
 def load_inputs():
-    missing = [
-        p for p in [
-            LOANS_PATH,
-            BRIDGE_PATH,
-            CUSTOMERS_PATH,
-            ACCOUNTS_PATH,
-            BRANCHES_PATH,
-        ]
-        if not p.exists()
+    required = [
+        LOANS_PATH,
+        BRIDGE_PATH,
+        CUSTOMERS_PATH,
+        ACCOUNTS_PATH,
+        BRANCHES_PATH,
+        BRANCH_STATE_PATH,
     ]
+    missing = [p for p in required if not p.exists()]
     if missing:
         raise FileNotFoundError(
             "Missing required input file(s):\n"
             + "\n".join(f"  - {p}" for p in missing)
         )
 
-    loans = pd.read_csv(LOANS_PATH, dtype={"loan_id": str, "customer_id": str})
+    loans = pd.read_csv(
+        LOANS_PATH,
+        dtype={"loan_id": str, "customer_id": str, "branch_id": str},
+    )
     bridge = pd.read_csv(BRIDGE_PATH, dtype={"loan_id": str})
     customers = pd.read_csv(
         CUSTOMERS_PATH,
@@ -484,18 +602,39 @@ def load_inputs():
         dtype={"customer_id": str, "account_id": str},
     )
     branches = pd.read_csv(BRANCHES_PATH, dtype={"branch_id": str})
+    branch_state = pd.read_csv(BRANCH_STATE_PATH, dtype={"branch_id": str})
 
     missing_loan_cols = REQUIRED_LOAN_COLUMNS - set(loans.columns)
-    missing_bridge_cols = REQUIRED_BRIDGE_COLUMNS - set(bridge.columns)
     if missing_loan_cols:
-        raise ValueError(
-            f"loans.csv missing columns: {sorted(missing_loan_cols)}"
-        )
+        raise ValueError(f"loans.csv missing columns: {sorted(missing_loan_cols)}")
+
+    missing_bridge_cols = REQUIRED_BRIDGE_COLUMNS - set(bridge.columns)
     if missing_bridge_cols:
         raise ValueError(
             "loan_lifecycle_bridge.csv missing columns: "
             f"{sorted(missing_bridge_cols)}"
         )
+
+    missing_state_cols = REQUIRED_BRANCH_STATE_COLUMNS - set(branch_state.columns)
+    if missing_state_cols:
+        raise ValueError(
+            "branch_yearly_state.csv missing columns: "
+            f"{sorted(missing_state_cols)}"
+        )
+
+    loans["branch_id"] = loans["branch_id"].astype(str).str.zfill(3)
+    branches["branch_id"] = branches["branch_id"].astype(str).str.zfill(3)
+    branch_state["branch_id"] = branch_state["branch_id"].astype(str).str.zfill(3)
+    branch_state["year"] = pd.to_numeric(
+        branch_state["year"], errors="raise"
+    ).astype(int)
+
+    for col in [
+        "operational_pressure",
+        "local_shock_flag",
+        "local_shock_magnitude",
+    ]:
+        branch_state[col] = pd.to_numeric(branch_state[col], errors="raise")
 
     if loans["loan_id"].duplicated().any():
         raise ValueError("loans.csv contains duplicate loan_id values.")
@@ -503,17 +642,38 @@ def load_inputs():
         raise ValueError(
             "loan_lifecycle_bridge.csv contains duplicate loan_id values."
         )
+    if branch_state.duplicated(["branch_id", "year"]).any():
+        raise ValueError("Duplicate branch_id/year in branch_yearly_state.csv.")
 
-    if set(loans["loan_id"]) != set(bridge["loan_id"]):
-        only_loans = len(set(loans["loan_id"]) - set(bridge["loan_id"]))
-        only_bridge = len(set(bridge["loan_id"]) - set(loans["loan_id"]))
+    if len(bridge) != len(loans):
         raise ValueError(
-            "Master/bridge mismatch. "
-            f"Only in loans={only_loans}, only in bridge={only_bridge}"
+            "Master/bridge row-count mismatch: "
+            f"loans={len(loans):,}, bridge={len(bridge):,}."
+        )
+    if set(loans["loan_id"]) != set(bridge["loan_id"]):
+        raise ValueError(
+            "Master/bridge mismatch: loan_id sets are not identical. "
+            "Regenerate loans with the synchronized V4.0.3 lifecycle bridge "
+            "before running the monthly snapshot."
         )
 
-    return loans, bridge, customers, accounts, branches
+    expected_state_keys = {
+        (str(branch_id).zfill(3), year)
+        for branch_id in loans["branch_id"].dropna().unique()
+        for year in range(OBS_START_YEAR, CUTOFF_YEAR + 1)
+    }
+    actual_state_keys = set(zip(branch_state["branch_id"], branch_state["year"]))
+    missing_state_keys = sorted(expected_state_keys - actual_state_keys)
+    if missing_state_keys:
+        preview = ", ".join(
+            f"{branch_id}/{year}" for branch_id, year in missing_state_keys[:12]
+        )
+        raise ValueError(
+            "branch_yearly_state.csv does not cover every loan branch/year "
+            f"in the observation window. Missing examples: {preview}"
+        )
 
+    return loans, bridge, customers, accounts, branches, branch_state
 
 def zscore_log1p(series: pd.Series) -> pd.Series:
     s = pd.to_numeric(series, errors="coerce").fillna(0).clip(lower=0)
@@ -684,6 +844,7 @@ def allocate_payment(
     obligations: Deque[Obligation],
     principal_balance: float,
     cash: float,
+    principal_residual: float = 0.0,
 ) -> Tuple[float, float, float]:
     """
     Allocate cash FIFO against oldest obligations.
@@ -719,16 +880,37 @@ def allocate_payment(
 
         principal_remaining = max(float(ob[2]), 0.0)
         if principal_remaining > EPS:
-            paid = min(cash_available, principal_remaining)
+            principal_headroom = max(
+                principal_balance - max(principal_residual, 0.0),
+                0.0,
+            )
+            paid = min(
+                cash_available,
+                principal_remaining,
+                principal_headroom,
+            )
             ob[2] = principal_remaining - paid
             principal_balance = max(principal_balance - paid, 0.0)
             cash_available -= paid
 
+            # Once the contractual residual is reached, any remaining principal
+            # stays unresolved. Do not use cash for later obligations.
+            if (
+                principal_residual > EPS
+                and principal_balance <= principal_residual + EPS
+                and ob[2] > EPS
+            ):
+                break
+
     clean_obligations(obligations)
 
     extra_principal = 0.0
-    if cash_available > EPS and principal_balance > EPS:
-        extra_principal = min(cash_available, principal_balance)
+    principal_headroom = max(
+        principal_balance - max(principal_residual, 0.0),
+        0.0,
+    )
+    if cash_available > EPS and principal_headroom > EPS:
+        extra_principal = min(cash_available, principal_headroom)
         principal_balance -= extra_principal
         cash_available -= extra_principal
 
@@ -777,6 +959,26 @@ OPEN_CURRENT_EVENTS = {
 }
 
 
+
+def adverse_terminal_residual(loan, event: str) -> float:
+    """
+    Preserve a small real contractual exposure for loans whose frozen master
+    lifecycle is still adversely open at the 2026 cutoff.
+
+    This is not synthetic arrears and does not assign DPD directly. It only
+    prevents the monthly amortization engine from extinguishing the contract
+    before the bridge's terminal missed-payment path can occur.
+    """
+    if event not in (OPEN_DEFAULT_EVENTS | OPEN_SEVERE_EVENTS):
+        return 0.0
+
+    original_amount = max(float(loan.original_amount), 0.0)
+    if str(loan.product_id) == "P016":
+        return max(original_amount * 0.015, 10.0)
+
+    return max(original_amount * 0.005, 10.0)
+
+
 def terminal_mode(
     event: str,
     current_idx: int,
@@ -809,12 +1011,15 @@ def terminal_mode(
             return "PARTIAL_HARD"
 
     if event in OPEN_DEFAULT_EVENTS:
-        if 0 <= distance <= 4:
-            return "MISS_HARD"
+        # Six calendar positions (distance 5..0) ensure that the oldest
+        # genuinely unpaid monthly obligation can age beyond 90 DPD even when
+        # its contractual due day falls late in the first forced-miss month.
+        if 0 <= distance <= 5:
+            return "MISS_FORCED"
 
     if event in OPEN_SEVERE_EVENTS:
         if 0 <= distance <= 2:
-            return "MISS_HARD"
+            return "MISS_FORCED"
 
     if event in OPEN_EARLY_EVENTS and distance == 0:
         return "PARTIAL"
@@ -847,6 +1052,13 @@ class LoanAudit:
     delinquency_entry_count: int = 0
     validation_errors: List[str] = None
     final_records: Dict[str, dict] = None
+    branch_state_linked_months: int = 0
+    shock_active_months: int = 0
+    shock_adverse_payment_months: int = 0
+    nonshock_months: int = 0
+    nonshock_adverse_payment_months: int = 0
+    forced_default_path_months: int = 0
+    forced_severe_path_months: int = 0
 
     def __post_init__(self):
         self.status_counts = Counter()
@@ -865,16 +1077,63 @@ class SnapshotGenerator:
         bridge: pd.DataFrame,
         customer_features: Dict[str, dict],
         branch_features: Dict[str, dict],
+        branch_state: pd.DataFrame,
     ):
         self.loans = loans.copy()
         self.bridge = bridge.copy()
         self.customer_features = customer_features
         self.branch_features = branch_features
+        self.branch_state = branch_state.copy()
         self.audit = LoanAudit()
+
+        self.branch_state_lookup = {
+            (str(r.branch_id).zfill(3), int(r.year)): {
+                "operational_pressure": float(r.operational_pressure),
+                "local_shock_flag": int(r.local_shock_flag),
+                "local_shock_magnitude": float(r.local_shock_magnitude),
+            }
+            for r in self.branch_state.itertuples(index=False)
+        }
 
         self.bridge_lookup = {
             str(r.loan_id): r._asdict()
             for r in self.bridge.itertuples(index=False)
+        }
+
+    def _branch_state_for_month(
+        self,
+        branch_id: str,
+        month_idx: int,
+    ) -> dict:
+        year, month = idx_to_ym(month_idx)
+        key = (str(branch_id).zfill(3), int(year))
+        if key not in self.branch_state_lookup:
+            raise ValueError(
+                f"Missing branch-year state during snapshot simulation: {key}."
+            )
+        state = self.branch_state_lookup[key]
+
+        shock_active = False
+        if (
+            int(state["local_shock_flag"]) == 1
+            and float(state["local_shock_magnitude"]) > 0.0
+        ):
+            # A yearly local shock should not contaminate all twelve months.
+            # Its month is deterministic by branch/year and its duration expands
+            # only for unusually large shocks.
+            start_month = (
+                stable_hash(f"LOCAL_SHOCK::{branch_id}::{year}") % 12
+            ) + 1
+            duration = 1 + int(
+                float(state["local_shock_magnitude"]) >= 1.0
+            )
+            shock_active = (
+                start_month <= month < start_month + duration
+            )
+
+        return {
+            **state,
+            "shock_active": shock_active,
         }
 
     def _customer_capacity(self, customer_id: str) -> Tuple[float, float, dict]:
@@ -1032,6 +1291,7 @@ class SnapshotGenerator:
     ) -> float:
         if terminal_constraint in {
             "MISS_HARD",
+            "MISS_FORCED",
             "PARTIAL_HARD",
             "WRITE_OFF",
             "CLOSE_FULL",
@@ -1112,6 +1372,8 @@ class SnapshotGenerator:
         customer: dict,
         branch_effect: float,
         liquidity_shock: float,
+        operational_pressure: float,
+        local_shock_effect: float,
         terminal_constraint: Optional[str],
         rng: np.random.Generator,
     ) -> Tuple[float, str]:
@@ -1131,6 +1393,9 @@ class SnapshotGenerator:
 
         if terminal_constraint == "WRITE_OFF":
             return 0.0, "writeoff_no_payment"
+
+        if terminal_constraint == "MISS_FORCED":
+            return 0.0, "missed"
 
         if terminal_constraint == "MISS_HARD":
             if rng.random() < 0.82:
@@ -1171,6 +1436,8 @@ class SnapshotGenerator:
             - 0.30 * (relationship - 0.5)
             + 0.55 * macro
             + 0.50 * liquidity_shock
+            + 0.18 * operational_pressure
+            + 0.48 * local_shock_effect
             + 0.22 * arrears_pressure
             + branch_effect
             + sector_effect
@@ -1205,6 +1472,8 @@ class SnapshotGenerator:
                     + 0.45 * relationship
                     - 0.55 * max(burden - 0.25, 0.0)
                     - 0.25 * liquidity_shock
+                    - 0.10 * operational_pressure
+                    - 0.22 * local_shock_effect
                 ),
                 0.18,
                 0.80,
@@ -1331,6 +1600,15 @@ class SnapshotGenerator:
                 due_day,
             )
 
+        terminal_residual = adverse_terminal_residual(loan, event)
+        if terminal_residual > EPS:
+            principal_balance = max(
+                principal_balance,
+                terminal_residual,
+            )
+
+        terminal_residual_billed = False
+
         liquidity_shock = rng.normal(0.0, 0.30)
         previous_delinquency = None
         prior_rate = None
@@ -1346,6 +1624,35 @@ class SnapshotGenerator:
                 + rng.normal(0.0, 0.38)
             )
 
+            monthly_state = self._branch_state_for_month(
+                str(loan.branch_id),
+                month_idx,
+            )
+            operational_pressure = float(
+                np.clip(
+                    monthly_state["operational_pressure"],
+                    -2.5,
+                    2.5,
+                )
+            )
+            local_shock_effect = (
+                float(
+                    np.clip(
+                        monthly_state["local_shock_magnitude"],
+                        0.0,
+                        2.5,
+                    )
+                )
+                if monthly_state["shock_active"]
+                else 0.0
+            )
+
+            self.audit.branch_state_linked_months += 1
+            if monthly_state["shock_active"]:
+                self.audit.shock_active_months += 1
+            else:
+                self.audit.nonshock_months += 1
+
             current_rate = rate_for_month(
                 product_id=str(loan.product_id),
                 currency=str(loan.currency),
@@ -1360,6 +1667,12 @@ class SnapshotGenerator:
             prior_rate = current_rate
 
             constraint = terminal_mode(event, month_idx, end_idx)
+
+            if constraint == "MISS_FORCED":
+                if event in OPEN_DEFAULT_EVENTS:
+                    self.audit.forced_default_path_months += 1
+                elif event in OPEN_SEVERE_EVENTS:
+                    self.audit.forced_severe_path_months += 1
 
             # ---------------------------------------------------------
             # Revolving drawdown before current contractual obligation.
@@ -1398,6 +1711,16 @@ class SnapshotGenerator:
                     orig_idx,
                     month_idx,
                 )
+
+                unbilled_above_floor = max(
+                    principal_balance - terminal_residual,
+                    0.0,
+                )
+                principal_due = min(
+                    max(principal_due, 0.0),
+                    unbilled_above_floor,
+                )
+                scheduled = max(interest_due, 0.0) + principal_due
             else:
                 scheduled, interest_due, principal_due = self._scheduled_installment(
                     loan,
@@ -1406,6 +1729,49 @@ class SnapshotGenerator:
                     orig_idx,
                     month_idx,
                 )
+
+                # Principal already billed in older unpaid obligations is still
+                # included in principal_balance. Do not bill that same principal
+                # again in the current contractual installment.
+                already_due_principal = sum(
+                    max(float(ob[2]), 0.0)
+                    for ob in obligations
+                )
+                unbilled_principal = max(
+                    principal_balance
+                    - already_due_principal
+                    - terminal_residual,
+                    0.0,
+                )
+                principal_due = min(
+                    max(principal_due, 0.0),
+                    unbilled_principal,
+                )
+                scheduled = max(interest_due, 0.0) + principal_due
+
+            if (
+                constraint == "MISS_FORCED"
+                and not terminal_residual_billed
+                and terminal_residual > EPS
+            ):
+                already_due_principal = sum(
+                    max(float(ob[2]), 0.0)
+                    for ob in obligations
+                )
+                available_terminal_principal = max(
+                    principal_balance - already_due_principal,
+                    0.0,
+                )
+                terminal_due = min(
+                    terminal_residual,
+                    available_terminal_principal,
+                )
+
+                if terminal_due > principal_due + EPS:
+                    principal_due = terminal_due
+                    scheduled = max(interest_due, 0.0) + principal_due
+
+                terminal_residual_billed = True
 
             if scheduled > EPS:
                 obligations.append([
@@ -1428,6 +1794,8 @@ class SnapshotGenerator:
                 customer=customer,
                 branch_effect=branch_effect,
                 liquidity_shock=liquidity_shock,
+                operational_pressure=operational_pressure,
+                local_shock_effect=local_shock_effect,
                 terminal_constraint=constraint,
                 rng=rng,
             )
@@ -1440,10 +1808,23 @@ class SnapshotGenerator:
                     + principal_balance
                 )
 
+            adverse_payment = payment_behavior in {"missed", "partial"}
+            if monthly_state["shock_active"]:
+                if adverse_payment:
+                    self.audit.shock_adverse_payment_months += 1
+            else:
+                if adverse_payment:
+                    self.audit.nonshock_adverse_payment_months += 1
+
             principal_balance, actual_used, extra_principal = allocate_payment(
                 obligations,
                 principal_balance,
                 cash_requested,
+                principal_residual=(
+                    terminal_residual
+                    if constraint != "CLOSE_FULL"
+                    else 0.0
+                ),
             )
 
             # ---------------------------------------------------------
@@ -1521,10 +1902,10 @@ class SnapshotGenerator:
                 self.audit.validation_errors.append(
                     f"{loan.loan_id} {idx_to_str(month_idx)} nonpositive rate"
                 )
-            if arrears > outstanding + max(scheduled, 1.0) * 2.0 + 1.0:
-                # Arrears includes overdue principal that is also already inside
-                # principal_balance, so it need not be <= outstanding exactly.
-                # This guard catches only clearly impossible explosions.
+            if arrears > outstanding + 0.05:
+                # Arrears is a subset of total exposure: overdue principal is
+                # already inside principal_balance and overdue interest is inside
+                # unpaid_interest. It must therefore never exceed outstanding.
                 self.audit.validation_errors.append(
                     f"{loan.loan_id} {idx_to_str(month_idx)} implausible arrears/exposure"
                 )
@@ -1543,17 +1924,12 @@ class SnapshotGenerator:
                 previous_delinquency=previous_delinquency,
             )
 
-            # If principal is fully settled naturally before a bridge resolution
-            # event, preserve a tiny residual until the bridge resolution month.
-            # This avoids inventing an earlier contractual closure inconsistent
-            # with the already-generated master lifecycle.
-            if (
-                month_idx < end_idx
-                and principal_balance <= EPS
-                and event not in WRITEOFF_EVENTS
-            ):
-                residual = max(float(loan.original_amount) * 1e-6, 0.01)
-                principal_balance = residual
+            if month_idx < end_idx and principal_balance <= EPS:
+                if terminal_residual > EPS:
+                    principal_balance = terminal_residual
+                elif event not in WRITEOFF_EVENTS:
+                    residual = max(float(loan.original_amount) * 1e-6, 0.01)
+                    principal_balance = residual
 
         if represented:
             self.audit.represented_loans += 1
@@ -1682,7 +2058,7 @@ def print_audit(
 ):
     print()
     print("=" * 80)
-    print("BTYT LOAN MONTHLY SNAPSHOT AUDIT")
+    print("BTYT LOAN MONTHLY SNAPSHOT AUDIT — V4.1.1 CLEAN TERMINAL LIFECYCLE")
     print("=" * 80)
 
     expected_detail_loans = 0
@@ -1744,6 +2120,42 @@ def print_audit(
         f"{100*audit.max_p016_utilization:.2f}%"
     )
 
+    linkage_pct = 100.0 * audit.branch_state_linked_months / max(audit.rows, 1)
+    shock_adverse_pct = (
+        100.0 * audit.shock_adverse_payment_months
+        / max(audit.shock_active_months, 1)
+    )
+    nonshock_adverse_pct = (
+        100.0 * audit.nonshock_adverse_payment_months
+        / max(audit.nonshock_months, 1)
+    )
+
+    print("\nBranch-state integration:")
+    print(
+        "  Loan-months linked to branch-year state: "
+        f"{audit.branch_state_linked_months:,}/{audit.rows:,} "
+        f"({linkage_pct:.2f}%)"
+    )
+    print(f"  Local-shock active loan-months: {audit.shock_active_months:,}")
+    print(
+        "  Miss/partial rate in shock months: "
+        f"{shock_adverse_pct:.2f}%"
+    )
+    print(
+        "  Miss/partial rate outside shock months: "
+        f"{nonshock_adverse_pct:.2f}%"
+    )
+
+    print("\nTerminal lifecycle enforcement:")
+    print(
+        "  Forced default-path loan-months: "
+        f"{audit.forced_default_path_months:,}"
+    )
+    print(
+        "  Forced severe-path loan-months: "
+        f"{audit.forced_severe_path_months:,}"
+    )
+
     print("\nRate changes observed by contractual rate type:")
     for rt in ["FIXED", "MIXED", "VARIABLE"]:
         print(f"  {rt:8s}: {audit.rate_change_counts[rt]:,}")
@@ -1797,13 +2209,14 @@ def print_audit(
 
 def main():
     print("Loading inputs...")
-    loans, bridge, customers, accounts, branches = load_inputs()
+    loans, bridge, customers, accounts, branches, branch_state = load_inputs()
 
     print(f"Loans: {len(loans):,}")
     print(f"Bridge rows: {len(bridge):,}")
     print(f"Customers: {len(customers):,}")
     print(f"Accounts: {len(accounts):,}")
     print(f"Branches: {len(branches):,}")
+    print(f"Branch-year states: {len(branch_state):,}")
 
     print("\nPreparing customer/branch behavioral features...")
     customer_features = build_customer_features(customers, accounts)
@@ -1815,6 +2228,7 @@ def main():
         bridge=bridge,
         customer_features=customer_features,
         branch_features=branch_features,
+        branch_state=branch_state,
     )
     audit = generator.generate()
 

@@ -1,19 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""BTYT — Transactions + Account Balances generator — V2.3 bank-network integrated.
+"""BTYT — Transactions + Account Balances generator — V2.3.1 transfer-capacity smoke test.
 
 Ground-truth first: transactions are generated as event intents, processed
 chronologically through a non-overdraft ledger, and account_balances is derived
 from completed movements. Credit-card payments and data-quality degradation are
 intentionally deferred to later modules.
 
-V2.3 structural changes:
-- preserves all validated V2.2 behavioral, liquidity, internal-transfer, and ledger mechanics;
-- reads the canonical V4 bank-network outputs from data/generated;
-- assigns transfer_scope and counterparty_bank_id after counterparty_type is finalized;
-- uses annual domestic market weights plus realized bank affinities for domestic bank selection;
-- uses foreign world-selection weights plus realized affinities for international bank selection;
-- keeps internal BTYT transfers mapped to B000 and external institutions outside the BTYT ledger.
+V2.3.1 smoke-test changes:
+- preserves all validated V2.3 bank-network, behavioral, liquidity, and ledger mechanics;
+- adds amount-aware economic compatibility when pairing internal BTYT counterparties;
+- preserves rare large transfers without using a hard cap;
+- uses the canonical V2.3 production WORLD_SEED for controlled comparison;
+- writes only smoke-specific outputs so the 6.96M-row V2.3 candidate remains untouched.
 """
 from __future__ import annotations
 
@@ -44,13 +43,13 @@ BANK_WORLD_PATH = GENERATED / "bank_world_parameters.csv"
 BANK_MARKET_PATH = GENERATED / "bank_market_weights.csv"
 BANK_MACRO_PATH = GENERATED / "bank_macro_environment.csv"
 
-TX_OUT = GENERATED / "transactions.csv"
-BAL_OUT = GENERATED / "account_balances.csv"
-TRAITS_OUT = INTERIM / "customer_transaction_traits.csv"
-ROLES_OUT = INTERIM / "account_roles.csv"
-AUDIT_OUT = INTERIM / "transaction_generation_audit.csv"
-WORLD_OUT = INTERIM / "transaction_world_parameters.csv"
-INTERNAL_PAIRS_OUT = INTERIM / "internal_transfer_pairs.csv"
+TX_OUT = GENERATED / "transactions_smoke_v2_3_1.csv"
+BAL_OUT = GENERATED / "account_balances_smoke_v2_3_1.csv"
+TRAITS_OUT = INTERIM / "customer_transaction_traits_smoke_v2_3_1.csv"
+ROLES_OUT = INTERIM / "account_roles_smoke_v2_3_1.csv"
+AUDIT_OUT = INTERIM / "transaction_generation_audit_smoke_v2_3_1.csv"
+WORLD_OUT = INTERIM / "transaction_world_parameters_smoke_v2_3_1.csv"
+INTERNAL_PAIRS_OUT = INTERIM / "internal_transfer_pairs_smoke_v2_3_1.csv"
 
 # -----------------------------------------------------------------------------
 # WORLD SEED
@@ -58,16 +57,16 @@ INTERNAL_PAIRS_OUT = INTERIM / "internal_transfer_pairs.csv"
 # By default, every execution creates a new BTYT transaction world.
 # If you ever want to reproduce a particularly interesting world, replace
 # None with the printed WORLD_SEED from that run.
-REPRODUCE_WORLD_SEED = None
+REPRODUCE_WORLD_SEED = 1582593673
 WORLD_SEED = (
     int(REPRODUCE_WORLD_SEED)
     if REPRODUCE_WORLD_SEED is not None
     else secrets.randbits(32)
 )
 TRANSACTION_SEED = WORLD_SEED
-DEVELOPMENT_CUSTOMERS = 5_000
-SMOKE_TEST = True 
-SMOKE_TEST_CUSTOMERS = 250
+DEVELOPMENT_CUSTOMERS = 10_000
+SMOKE_TEST = True
+SMOKE_TEST_CUSTOMERS = 500
 SAVE_INTERIM = True
 OBS_START = pd.Period("2021-01", freq="M")
 OBS_END = pd.Period("2026-12", freq="M")
@@ -846,8 +845,62 @@ def process_account(a,c,t,role,branches,debit_set,lidx):
 # INTERNAL BTYT TRANSFER NETWORK
 # -----------------------------------------------------------------------------
 
-def build_internal_account_pools(accounts, roles):
+def annual_capacity_uyu_from_customer(customer):
+    """Return an annual economic-capacity proxy used only for internal pairing."""
+    ctype = str(customer.get("customer_type", "INDIVIDUAL")).upper()
+    if ctype == "BUSINESS":
+        revenue = pd.to_numeric(
+            pd.Series([customer.get("annual_revenue", np.nan)]), errors="coerce"
+        ).iloc[0]
+        if pd.notna(revenue) and float(revenue) > 0:
+            return float(revenue)
+        return 12_000_000.0
+
+    income = pd.to_numeric(
+        pd.Series([customer.get("monthly_income", np.nan)]), errors="coerce"
+    ).iloc[0]
+    if pd.notna(income) and float(income) > 0:
+        return float(income) * 12.0
+    return 660_000.0
+
+
+def internal_capacity_weight(amount_uyu, annual_capacity_uyu, customer_type):
+    """Softly downweight economically implausible internal counterparties.
+
+    This is intentionally not a hard cap. Individuals can still receive or send
+    transfers larger than annual income, while business clients retain much
+    broader tails. The purpose is to prevent random internal matching from
+    routinely assigning corporate-scale transfers to ordinary retail clients.
+    """
+    capacity = max(float(annual_capacity_uyu), 1.0)
+    ratio = max(float(amount_uyu), 0.0) / capacity
+    ctype = str(customer_type).upper()
+
+    if ctype == "BUSINESS":
+        if ratio <= 1.50:
+            return 1.0
+        penalty = math.exp(-0.35 * (ratio - 1.50))
+        return max(1e-6, float(penalty))
+
+    if ratio <= 2.00:
+        return 1.0
+    if ratio <= 5.00:
+        return float(math.exp(-0.75 * (ratio - 2.00)))
+
+    penalty_at_five = math.exp(-0.75 * 3.00)
+    penalty = penalty_at_five * math.exp(-0.22 * (ratio - 5.00))
+    return max(1e-8, float(penalty))
+
+
+def build_internal_account_pools(accounts, roles, customers):
     role_map = roles.set_index("account_id")["account_role"].to_dict()
+    customer_meta = customers.set_index("customer_id", drop=False)
+    customer_type = customer_meta["customer_type"].astype(str).str.upper().to_dict()
+    customer_capacity = {
+        str(cid): annual_capacity_uyu_from_customer(row)
+        for cid, row in customer_meta.iterrows()
+    }
+
     pools = {}
     for period in pd.period_range(OBS_START, OBS_END, freq="M"):
         active = accounts[
@@ -865,32 +918,59 @@ def build_internal_account_pools(accounts, roles):
             "SAVINGS": 0.8,
             "USD_RESERVE": 0.8,
         }).fillna(0.7)
+        active["customer_type"] = active["customer_id"].astype(str).map(customer_type).fillna("INDIVIDUAL")
+        active["annual_capacity_uyu"] = active["customer_id"].astype(str).map(customer_capacity).fillna(660_000.0)
+
         for currency, g in active.groupby("currency", sort=False):
             pools[(str(period), currency)] = {
                 "account_id": g["account_id"].astype(str).to_numpy(),
                 "customer_id": g["customer_id"].astype(str).to_numpy(),
                 "weight": g["weight"].astype(float).to_numpy(),
+                "customer_type": g["customer_type"].astype(str).to_numpy(),
+                "annual_capacity_uyu": g["annual_capacity_uyu"].astype(float).to_numpy(),
             }
     return pools
 
 
-def pick_internal_counterpart(r, pools, period, currency, own_account_id, own_customer_id):
+def pick_internal_counterpart(
+    r,
+    pools,
+    period,
+    currency,
+    amount,
+    own_account_id,
+    own_customer_id,
+):
     pool = pools.get((str(period), currency))
     if pool is None or len(pool["account_id"]) == 0:
         return None
+
     mask = (
         (pool["account_id"] != str(own_account_id))
         & (pool["customer_id"] != str(own_customer_id))
     )
     if not mask.any():
         return None
+
     ids = pool["account_id"][mask]
-    weights = pool["weight"][mask]
+    base_weights = pool["weight"][mask].astype(float)
+    types = pool["customer_type"][mask]
+    capacities = pool["annual_capacity_uyu"][mask].astype(float)
+    amount_uyu = float(amount) * (FX[int(period.year)] if currency == "USD" else 1.0)
+
+    compatibility = np.array([
+        internal_capacity_weight(amount_uyu, cap, ctype)
+        for cap, ctype in zip(capacities, types)
+    ], dtype=float)
+
+    weights = base_weights * compatibility
+    if not np.isfinite(weights).all() or weights.sum() <= 0:
+        weights = base_weights.copy()
     weights = weights / weights.sum()
     return str(r.choice(ids, p=weights))
 
 
-def replay_with_internal_transfers(tx, balance_skeleton, accounts, roles):
+def replay_with_internal_transfers(tx, balance_skeleton, accounts, roles, customers):
     """Replay the ledger and make every completed BTYT_CUSTOMER transfer atomic."""
     tx = tx.copy().reset_index(drop=True)
     tx["_base_event_id"] = np.arange(len(tx), dtype=np.int64)
@@ -899,7 +979,7 @@ def replay_with_internal_transfers(tx, balance_skeleton, accounts, roles):
     account_meta = accounts.set_index("account_id")[["customer_id", "product_id"]].copy()
     account_customer = account_meta["customer_id"].astype(str).to_dict()
     account_currency = account_meta["product_id"].map(CURRENCY).to_dict()
-    pools = build_internal_account_pools(accounts, roles)
+    pools = build_internal_account_pools(accounts, roles, customers)
 
     first_opening = (
         balance_skeleton.sort_values(["account_id", "year_month"])
@@ -927,7 +1007,7 @@ def replay_with_internal_transfers(tx, balance_skeleton, accounts, roles):
         base_id = int(row["_base_event_id"])
         r = rng_for("internal-counterpart", base_id, aid, dt.isoformat())
         counterpart = pick_internal_counterpart(
-            r, pools, period, currency, aid, cid
+            r, pools, period, currency, row["amount"], aid, cid
         )
         if counterpart is not None:
             internal_map[base_id] = counterpart
@@ -1251,7 +1331,7 @@ def report(tx,bals,validation):
 def main():
     global BANK_CONTEXT
     d=sample_population(load_data());BANK_CONTEXT=build_bank_context(d);a=lifecycle(d["accounts"]);roles=build_roles(a,d["customers"]);traits=build_traits(d["customers"],a);cmap=d["customers"].set_index("customer_id", drop=False);tmap=traits.set_index("customer_id", drop=False);rmap=roles.set_index("account_id")["account_role"].to_dict();debit=debit_links(d["cards"]);lidx=loan_index(d["loans"],d["loan_snapshot"],d["loan_bridge"],a,roles)
-    print("="*72);print("BTYT TRANSACTION ENGINE — V2.3 BANK-NETWORK INTEGRATED");print("="*72);print(f"Customers: {len(d['customers']):,}");print(f"Accounts: {len(a):,}");print(f"Loan-linked buckets: {len(lidx):,}");print(f"Smoke test: {SMOKE_TEST}");print(f"WORLD_SEED: {WORLD_SEED}");print(f"Bank network: {len(BANK_CONTEXT['domestic_ids'])} domestic external + {len(BANK_CONTEXT['foreign_ids'])} foreign counterparties");print(f"BANK_WORLD_SEED: {BANK_CONTEXT['bank_world_seed']}");print("World parameters:");[print(f"  {k:28s} {v:.4f}") for k,v in WORLD.items()];print()
+    print("="*72);print("BTYT TRANSACTION ENGINE — V2.3.1 TRANSFER-CAPACITY SMOKE TEST");print("="*72);print(f"Customers: {len(d['customers']):,}");print(f"Accounts: {len(a):,}");print(f"Loan-linked buckets: {len(lidx):,}");print(f"Smoke test: {SMOKE_TEST}");print(f"WORLD_SEED: {WORLD_SEED}");print(f"Bank network: {len(BANK_CONTEXT['domestic_ids'])} domestic external + {len(BANK_CONTEXT['foreign_ids'])} foreign counterparties");print(f"BANK_WORLD_SEED: {BANK_CONTEXT['bank_world_seed']}");print("World parameters:");[print(f"  {k:28s} {v:.4f}") for k,v in WORLD.items()];print()
     alltx=[];allb=[]
     for i,ar in enumerate(a.to_dict("records"),1):
         cid=str(ar["customer_id"]);tx,b=process_account(pd.Series(ar),cmap.loc[cid],tmap.loc[cid],rmap.get(ar["account_id"],"SECONDARY"),d["branches"],debit,lidx);alltx+=tx;allb+=b
@@ -1261,7 +1341,7 @@ def main():
     bals=pd.DataFrame(allb)[BAL_COLS]
 
     print("\nPairing and replaying internal BTYT transfers...")
-    tx,bals=replay_with_internal_transfers(tx,bals,a,roles)
+    tx,bals=replay_with_internal_transfers(tx,bals,a,roles,d["customers"])
 
     tx=tx.sort_values(["transaction_datetime","account_id"],kind="mergesort").reset_index(drop=True)
     tx["transaction_id"]=[f"T{i:010d}" for i in range(1,len(tx)+1)]

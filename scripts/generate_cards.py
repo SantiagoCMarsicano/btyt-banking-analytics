@@ -36,10 +36,12 @@ DEVELOPMENT_CUSTOMERS = 10_000
 ROOT = Path(__file__).resolve().parents[1]
 MASTER_DIR = ROOT / "data" / "master"
 GENERATED_DIR = ROOT / "data" / "generated"
+INTERIM_DIR = ROOT / "data" / "interim"
 
 CUSTOMERS_PATH = GENERATED_DIR / "customers.csv"
 ACCOUNTS_PATH = GENERATED_DIR / "accounts.csv"
 PRODUCTS_PATH = MASTER_DIR / "products.csv"
+BRANCH_STATE_PATH = INTERIM_DIR / "branch_yearly_state.csv"
 OUTPUT_PATH = GENERATED_DIR / "cards.csv"
 
 CARD_PRODUCTS = ["P009", "P010", "P011"]
@@ -122,6 +124,7 @@ def load_inputs():
         "customers": CUSTOMERS_PATH,
         "accounts": ACCOUNTS_PATH,
         "products": PRODUCTS_PATH,
+        "branch_yearly_state": BRANCH_STATE_PATH,
     }
     missing_paths = [path for path in required_paths.values() if not path.exists()]
     if missing_paths:
@@ -149,11 +152,13 @@ def load_inputs():
     )
 
     products = pd.read_csv(PRODUCTS_PATH, dtype={"product_id": str})
+    branch_state = pd.read_csv(BRANCH_STATE_PATH, dtype={"branch_id": str})
+    branch_state["branch_id"] = branch_state["branch_id"].str.zfill(3)
 
-    return customers, accounts, products
+    return customers, accounts, products, branch_state
 
 
-def validate_inputs(customers, accounts, products):
+def validate_inputs(customers, accounts, products, branch_state):
     required_customers = {
         "customer_id",
         "customer_type",
@@ -215,15 +220,36 @@ def validate_inputs(customers, accounts, products):
     ).all():
         raise ValueError("accounts.csv contains a non-account product.")
 
+    state_required = {
+        "branch_id", "year", "customer_pressure", "digital_substitution",
+    }
+    missing_state = state_required - set(branch_state.columns)
+    if missing_state:
+        raise ValueError(
+            f"branch_yearly_state.csv missing: {sorted(missing_state)}"
+        )
+
+    if branch_state.duplicated(["branch_id", "year"]).any():
+        raise ValueError("Duplicate branch_id/year in branch_yearly_state.csv.")
+
+    branch_state["year"] = pd.to_numeric(branch_state["year"], errors="coerce")
+    if branch_state["year"].isna().any():
+        raise ValueError("Invalid year in branch_yearly_state.csv.")
+
+    for col in ["customer_pressure", "digital_substitution"]:
+        if pd.to_numeric(branch_state[col], errors="coerce").isna().any():
+            raise ValueError(f"Invalid numeric values in branch state column: {col}")
+
 
 # =============================================================================
 # Generator
 # =============================================================================
 
 class CardsGenerator:
-    def __init__(self, customers, accounts):
+    def __init__(self, customers, accounts, branch_state):
         self.customers = customers.copy()
         self.accounts = accounts.copy()
+        self.branch_state = branch_state.copy()
 
         # Separate stream from accounts generation: cards remain reproducible
         # without pretending to have access to hidden account-generator latents.
@@ -235,6 +261,7 @@ class CardsGenerator:
         self.counter = 1
 
         self.prepare_inputs()
+        self.prepare_branch_state()
         self.prepare_signals()
         self.generate_card_side_latents()
 
@@ -258,6 +285,54 @@ class CardsGenerator:
 
         self.customers = self.customers.sort_values("customer_id").reset_index(drop=True)
         self.accounts = self.accounts.sort_values("account_id").reset_index(drop=True)
+
+    def prepare_branch_state(self):
+        """
+        Build the 2021-2026 branch-state lookup used by the card DGP.
+
+        Cards intentionally consume only customer pressure and digital
+        substitution. Credit pressure is not used because card appetite is not
+        intended to proxy credit risk.
+        """
+        state = self.branch_state.copy()
+        state["year"] = pd.to_numeric(state["year"], errors="raise").astype(int)
+        for col in ["customer_pressure", "digital_substitution"]:
+            state[col] = pd.to_numeric(state[col], errors="raise").astype(float)
+
+        self.branch_state_lookup = {
+            (str(row.branch_id).zfill(3), int(row.year)): {
+                "customer_pressure": float(row.customer_pressure),
+                "digital_substitution": float(row.digital_substitution),
+            }
+            for row in state.itertuples(index=False)
+        }
+
+    def get_branch_state(self, branch_id, year):
+        neutral = {
+            "customer_pressure": 0.0,
+            "digital_substitution": 0.0,
+        }
+        if year < OBSERVATION_START_YEAR or branch_id is None:
+            return neutral
+        return self.branch_state_lookup.get(
+            (str(branch_id).zfill(3), int(year)),
+            neutral,
+        )
+
+    def customer_branch_id(self, row):
+        return str(row["primary_branch_id"]).zfill(3)
+
+    def card_branch_id(self, row, product, linked_account_id=None):
+        """
+        Debit cards inherit the linked account branch. Credit cards use the
+        customer's primary relationship branch because they have no linked
+        account in the card master.
+        """
+        if product == DEBIT_PRODUCT and linked_account_id is not None:
+            return str(
+                self.account_lookup.loc[linked_account_id, "branch_id"]
+            ).zfill(3)
+        return self.customer_branch_id(row)
 
     def prepare_signals(self):
         c = self.customers
@@ -458,7 +533,7 @@ class CardsGenerator:
     # Channel
     # -------------------------------------------------------------------------
 
-    def choose_issue_channel(self, row, year, product):
+    def choose_issue_channel(self, row, year, product, branch_id=None):
         if year < 2005:
             scores = {"BRANCH": 3.00, "REMOTE_ASSISTED": -2.50, "DIGITAL": -6.00}
         elif year < 2012:
@@ -488,6 +563,15 @@ class CardsGenerator:
             scores["REMOTE_ASSISTED"] += 0.25
             scores["BRANCH"] += 0.08
             scores["DIGITAL"] -= 0.08
+
+        if year >= OBSERVATION_START_YEAR and branch_id is not None:
+            state = self.get_branch_state(branch_id, year)
+            substitution = np.clip(
+                state["digital_substitution"], -2.5, 2.5
+            )
+            scores["BRANCH"] -= 0.28 * substitution
+            scores["DIGITAL"] += 0.32 * substitution
+            scores["REMOTE_ASSISTED"] += 0.08 * substitution
 
         scores = {
             k: v + self.rng.normal(0, 0.12)
@@ -569,8 +653,18 @@ class CardsGenerator:
             + technology
             + lag_effect
             - saturation
-            + self.rng.normal(0, 0.55)
         )
+
+        if year >= OBSERVATION_START_YEAR:
+            state = self.get_branch_state(account["branch_id"], year)
+            score += 0.10 * np.clip(
+                state["digital_substitution"], -2.5, 2.5
+            )
+            score -= 0.08 * np.clip(
+                state["customer_pressure"], -2.5, 2.5
+            )
+
+        score += self.rng.normal(0, 0.55)
         return score
 
     def debit_issue_probability(self, row, account, year):
@@ -757,6 +851,14 @@ class CardsGenerator:
 
         if active_credit >= 1:
             score += 0.35 * float(row["_credit_appetite_centered"])
+
+        if year >= OBSERVATION_START_YEAR:
+            state = self.get_branch_state(
+                self.customer_branch_id(row), year
+            )
+            score -= 0.10 * np.clip(
+                state["customer_pressure"], -2.5, 2.5
+            )
 
         score += self.rng.normal(0, 0.75)
         return float(np.clip(sigmoid(score), 0.003, 0.90))
@@ -999,7 +1101,10 @@ class CardsGenerator:
                     product_id="P009",
                     linked_account_id=account.account_id,
                     issue_year=year,
-                    issue_channel=self.choose_issue_channel(row, year, "P009"),
+                    issue_channel=self.choose_issue_channel(
+                        row, year, "P009",
+                        branch_id=str(account.branch_id).zfill(3),
+                    ),
                 )
 
                 # Account or customer can close in same year after card issuance.
@@ -1034,7 +1139,10 @@ class CardsGenerator:
             product_id=product,
             linked_account_id=None,
             issue_year=year,
-            issue_channel=self.choose_issue_channel(row, year, product),
+            issue_channel=self.choose_issue_channel(
+                row, year, product,
+                branch_id=self.customer_branch_id(row),
+            ),
         )
 
         customer_close = as_year(row["closing_year"])
@@ -1059,8 +1167,16 @@ class CardsGenerator:
             + 0.34 * math.log1p(age)
             - 0.32 * float(row["_relationship_z"])
             + 0.42 * math.log1p(redundancy)
-            + self.rng.normal(0, 0.40)
         )
+
+        if year >= OBSERVATION_START_YEAR:
+            account = self.account_lookup.loc[card["linked_account_id"]]
+            state = self.get_branch_state(account["branch_id"], year)
+            score += 0.08 * np.clip(
+                state["customer_pressure"], -2.5, 2.5
+            )
+
+        score += self.rng.normal(0, 0.40)
         return float(np.clip(sigmoid(score), 0.004, 0.45))
 
     def credit_close_probability(self, row, card, year):
@@ -1085,6 +1201,14 @@ class CardsGenerator:
             )
             if has_premium:
                 score += 0.75
+
+        if year >= OBSERVATION_START_YEAR:
+            state = self.get_branch_state(
+                self.customer_branch_id(row), year
+            )
+            score += 0.08 * np.clip(
+                state["customer_pressure"], -2.5, 2.5
+            )
 
         score += self.rng.normal(0, 0.45)
         return float(np.clip(sigmoid(score), 0.005, 0.55))
@@ -1608,14 +1732,81 @@ def audit(cards, customers, accounts, generator):
     print(f"\nInherited card relationships entering 2021: {len(inherited):,}")
 
 
+
+def audit_branch_state_integration(cards, customers, accounts, branch_state):
+    """
+    Audit the intentionally narrow branch-state integration in Cards.
+    """
+    state = branch_state.copy()
+    state["branch_id"] = state["branch_id"].astype(str).str.zfill(3)
+    state["year"] = pd.to_numeric(state["year"], errors="coerce").astype("Int64")
+
+    observed = cards.loc[
+        cards["issue_year"].between(OBSERVATION_START_YEAR, CURRENT_YEAR)
+    ].copy()
+    if observed.empty:
+        return
+
+    account_branch = accounts.set_index("account_id")["branch_id"]
+    customer_branch = customers.set_index("customer_id")["primary_branch_id"]
+
+    observed["branch_id"] = np.where(
+        observed["product_id"].eq(DEBIT_PRODUCT),
+        observed["linked_account_id"].map(account_branch),
+        observed["customer_id"].map(customer_branch),
+    )
+    observed["branch_id"] = observed["branch_id"].astype(str).str.zfill(3)
+
+    merged = observed.merge(
+        state[
+            [
+                "branch_id", "year",
+                "customer_pressure", "digital_substitution",
+            ]
+        ],
+        left_on=["branch_id", "issue_year"],
+        right_on=["branch_id", "year"],
+        how="left",
+        validate="many_to_one",
+    )
+
+    print("\n" + "=" * 84)
+    print("BRANCH-STATE INTEGRATION AUDIT — CARDS")
+    print("=" * 84)
+    print(
+        f"Observed card issuance linked to branch state: "
+        f"{merged['year'].notna().mean():.2%}"
+    )
+
+    print("\nMean branch state at card issuance by channel:")
+    print(
+        merged.groupby("issue_channel")[
+            ["customer_pressure", "digital_substitution"]
+        ]
+        .mean()
+        .round(3)
+        .to_string()
+    )
+
+    print("\nMean branch state at card issuance by product:")
+    print(
+        merged.groupby("product_id")[
+            ["customer_pressure", "digital_substitution"]
+        ]
+        .mean()
+        .round(3)
+        .to_string()
+    )
+
+
 # =============================================================================
 # Main
 # =============================================================================
 
 def main():
     print("Loading BTYT inputs...")
-    customers, accounts, products = load_inputs()
-    validate_inputs(customers, accounts, products)
+    customers, accounts, products, branch_state = load_inputs()
+    validate_inputs(customers, accounts, products, branch_state)
 
     print(f"Customers loaded: {len(customers):,}")
     print(f"Accounts loaded:  {len(accounts):,}")
@@ -1624,7 +1815,7 @@ def main():
         f"Customer sample size: {DEVELOPMENT_CUSTOMERS:,}"
     )
 
-    generator = CardsGenerator(customers, accounts)
+    generator = CardsGenerator(customers, accounts, branch_state)
 
     print("\nGenerating compressed pre-2021 debit-card state...")
     generator.generate_pre_2021_debit()
@@ -1646,6 +1837,9 @@ def main():
     cards.to_csv(OUTPUT_PATH, index=False)
 
     audit(cards, customers, accounts, generator)
+    audit_branch_state_integration(
+        cards, customers, accounts, branch_state
+    )
 
     print(f"\nSaved: {OUTPUT_PATH}")
     print(f"Shape: {cards.shape}")

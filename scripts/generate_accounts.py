@@ -26,10 +26,12 @@ DEVELOPMENT_CUSTOMERS = 10_000
 ROOT = Path(__file__).resolve().parents[1]
 MASTER_DIR = ROOT / "data" / "master"
 GENERATED_DIR = ROOT / "data" / "generated"
+INTERIM_DIR = ROOT / "data" / "interim"
 
 CUSTOMERS_PATH = GENERATED_DIR / "customers.csv"
 PRODUCTS_PATH = MASTER_DIR / "products.csv"
 BRANCHES_PATH = GENERATED_DIR / "branches.csv"
+BRANCH_STATE_PATH = INTERIM_DIR / "branch_yearly_state.csv"
 OUTPUT_PATH = GENERATED_DIR / "accounts.csv"
 
 ACCOUNT_PRODUCTS = ["P001", "P002", "P003", "P004", "P005", "P006", "P007", "P008"]
@@ -97,6 +99,7 @@ def load_inputs():
         "customers": CUSTOMERS_PATH,
         "products": PRODUCTS_PATH,
         "branches": BRANCHES_PATH,
+        "branch_yearly_state": BRANCH_STATE_PATH,
     }
     missing_paths = [path for path in required_paths.values() if not path.exists()]
     if missing_paths:
@@ -123,13 +126,18 @@ def load_inputs():
         BRANCHES_PATH,
         dtype={"branch_id": str, "parent_branch_id": str},
     )
+    branch_state = pd.read_csv(
+        BRANCH_STATE_PATH,
+        dtype={"branch_id": str},
+    )
 
     customers["primary_branch_id"] = customers["primary_branch_id"].str.zfill(3)
     branches["branch_id"] = branches["branch_id"].str.zfill(3)
-    return customers, products, branches
+    branch_state["branch_id"] = branch_state["branch_id"].str.zfill(3)
+    return customers, products, branches, branch_state
 
 
-def validate_inputs(customers, products, branches):
+def validate_inputs(customers, products, branches, branch_state):
     required = {
         "customer_id", "customer_type", "birth_year", "residence_department",
         "residence_locality", "primary_branch_id", "registration_year",
@@ -148,17 +156,101 @@ def validate_inputs(customers, products, branches):
     if set(customers["primary_branch_id"].dropna()) - set(branches["branch_id"]):
         raise ValueError("Unknown primary_branch_id.")
 
+    state_required = {
+        "branch_id", "year", "customer_pressure", "deposit_pressure",
+        "digital_substitution", "closure_pressure",
+    }
+    missing_state = state_required - set(branch_state.columns)
+    if missing_state:
+        raise ValueError(
+            f"branch_yearly_state.csv missing: {sorted(missing_state)}"
+        )
+
+    if branch_state.duplicated(["branch_id", "year"]).any():
+        raise ValueError("Duplicate branch_id/year in branch_yearly_state.csv.")
+
+    branch_state["year"] = pd.to_numeric(branch_state["year"], errors="coerce")
+    if branch_state["year"].isna().any():
+        raise ValueError("Invalid year in branch_yearly_state.csv.")
+
+    unknown_state_branches = set(branch_state["branch_id"]) - set(branches["branch_id"])
+    if unknown_state_branches:
+        raise ValueError(
+            f"Unknown branch_id in branch_yearly_state.csv: "
+            f"{sorted(unknown_state_branches)[:10]}"
+        )
+
+    for col in [
+        "customer_pressure", "deposit_pressure",
+        "digital_substitution", "closure_pressure",
+    ]:
+        if pd.to_numeric(branch_state[col], errors="coerce").isna().any():
+            raise ValueError(f"Invalid numeric values in branch state column: {col}")
+
 
 class AccountsGenerator:
-    def __init__(self, customers, branches):
+    def __init__(self, customers, branches, branch_state):
         self.customers = customers.copy()
         self.branches = branches.copy()
+        self.branch_state = branch_state.copy()
         self.rng = np.random.default_rng(SEED)
         self.accounts = []
         self.portfolios = defaultdict(list)
         self.counter = 1
+        self.prepare_branch_state()
         self.prepare_signals()
         self.generate_latents()
+
+    def prepare_branch_state(self):
+        """
+        Build a compact lookup for the 2021-2026 latent branch state.
+
+        Higher pressure values are interpreted as weaker local conditions.
+        The state is consumed as a shared causal driver; it is not copied into
+        accounts.csv.
+        """
+        state = self.branch_state.copy()
+        state["year"] = pd.to_numeric(state["year"], errors="raise").astype(int)
+
+        for col in [
+            "customer_pressure", "deposit_pressure",
+            "digital_substitution", "closure_pressure",
+        ]:
+            state[col] = pd.to_numeric(state[col], errors="raise").astype(float)
+
+        self.branch_state_lookup = {
+            (str(row.branch_id).zfill(3), int(row.year)): {
+                "customer_pressure": float(row.customer_pressure),
+                "deposit_pressure": float(row.deposit_pressure),
+                "digital_substitution": float(row.digital_substitution),
+                "closure_pressure": float(row.closure_pressure),
+            }
+            for row in state.itertuples(index=False)
+        }
+
+    def get_branch_state(self, branch_id, year):
+        """
+        Return the latent state for a branch-year.
+
+        Pre-2021 history intentionally receives a neutral state because the
+        explanatory bridge starts in 2021.
+        """
+        neutral = {
+            "customer_pressure": 0.0,
+            "deposit_pressure": 0.0,
+            "digital_substitution": 0.0,
+            "closure_pressure": 0.0,
+        }
+        if year < OBSERVATION_START_YEAR:
+            return neutral
+        return self.branch_state_lookup.get((str(branch_id).zfill(3), int(year)), neutral)
+
+    def local_relationship_state(self, row, year):
+        """
+        Use the customer's primary branch as the local relationship environment
+        when the account branch has not yet been selected.
+        """
+        return self.get_branch_state(str(row.primary_branch_id).zfill(3), year)
 
     def prepare_signals(self):
         c = self.customers
@@ -277,7 +369,7 @@ class AccountsGenerator:
             and PRODUCT_META[p]["target"] in {"BOTH", row.customer_type}
         ]
 
-    def product_utility(self, row, product, year, owned):
+    def product_utility(self, row, product, year, owned, branch_id=None):
         u = BASE_UTILITY[row.customer_type].get(product, -10)
         usd = 2 * (float(row._usd) - .5)
         sav = 2 * (float(row._savings) - .5)
@@ -291,6 +383,14 @@ class AccountsGenerator:
             u += STRENGTH["STRONG"] * sav
             econ = float(row._revenue_z if row.customer_type == "BUSINESS" else row._income_z)
             u += STRENGTH["MODERATE"] * np.clip(econ, -2, 2) * .35
+
+        # Local deposit weakness reduces the attractiveness of deposit-oriented
+        # products without overriding the customer's own product preferences.
+        if branch_id is not None and year >= OBSERVATION_START_YEAR:
+            state = self.get_branch_state(branch_id, year)
+            deposit_pressure = np.clip(state["deposit_pressure"], -2.5, 2.5)
+            if product in {"P001", "P002", "P007", "P008"}:
+                u -= 0.18 * deposit_pressure
         if product in {"P003", "P004"}:
             u += STRENGTH["STRONG"] * trans
 
@@ -328,11 +428,14 @@ class AccountsGenerator:
 
         return u + self.rng.normal(0, .25)
 
-    def choose_product(self, row, year, owned):
+    def choose_product(self, row, year, owned, branch_id=None):
         products = self.eligible_products(row, year)
         if not products:
             return None
-        probs = softmax([self.product_utility(row, p, year, owned) for p in products])
+        probs = softmax([
+            self.product_utility(row, p, year, owned, branch_id=branch_id)
+            for p in products
+        ])
         return str(self.rng.choice(products, p=probs))
 
     def choose_historical_year(self, row, slot, product):
@@ -359,42 +462,40 @@ class AccountsGenerator:
 
     def choose_branch(self, row, year):
         mask = self.branches.apply(lambda b: self.branch_open(b, year), axis=1)
-        candidates = self.branches[mask]
+        candidates = self.branches[mask].copy()
         if candidates.empty:
             raise RuntimeError(f"No branch open in {year}.")
 
         primary = str(row.primary_branch_id).zfill(3)
-        primary_ok = primary in set(candidates["branch_id"])
-        same_dep = candidates[
-            candidates["department"].fillna("").str.upper()
-            == str(row.residence_department).upper()
-        ]
-        same_dep = same_dep[same_dep["branch_id"] != primary]
+        residence_department = str(row.residence_department).upper()
 
-        categories, weights = [], []
-        if primary_ok:
-            categories.append("PRIMARY"); weights.append(5.0)
-        if not same_dep.empty:
-            categories.append("SAME_DEPARTMENT"); weights.append(2.0)
-        categories.append("OTHER"); weights.append(.7)
+        # Preserve the original geographic preference structure while allowing
+        # weaker branch-years to attract slightly fewer new relationships.
+        scores = []
+        for b in candidates.itertuples(index=False):
+            branch_id = str(b.branch_id).zfill(3)
+            score = 0.70
 
-        weights = np.array(weights) / np.sum(weights)
-        category = self.rng.choice(categories, p=weights)
+            if branch_id == primary:
+                score = 5.00
+            elif str(getattr(b, "department", "")).upper() == residence_department:
+                score = 2.00
 
-        if category == "PRIMARY":
-            return primary
-        if category == "SAME_DEPARTMENT":
-            return str(self.rng.choice(same_dep["branch_id"]))
+            if year >= OBSERVATION_START_YEAR:
+                state = self.get_branch_state(branch_id, year)
+                local_pressure = (
+                    0.65 * state["customer_pressure"]
+                    + 0.35 * state["closure_pressure"]
+                )
+                score *= float(np.exp(-0.12 * np.clip(local_pressure, -2.5, 2.5)))
 
-        excluded = set(same_dep["branch_id"])
-        if primary_ok:
-            excluded.add(primary)
-        other = candidates[~candidates["branch_id"].isin(excluded)]
-        if other.empty:
-            other = candidates
-        return str(self.rng.choice(other["branch_id"]))
+            scores.append(max(score, 1e-6))
 
-    def choose_channel(self, row, year):
+        probs = np.asarray(scores, dtype=float)
+        probs /= probs.sum()
+        return str(self.rng.choice(candidates["branch_id"].to_numpy(), p=probs))
+
+    def choose_channel(self, row, year, branch_id=None):
         """
         Smooth channel adoption model.
 
@@ -413,6 +514,16 @@ class AccountsGenerator:
 
         digital_score += STRENGTH["STRONG"] * digital_affinity
         remote_score += STRENGTH["WEAK"] * digital_affinity
+
+        if branch_id is not None and year >= OBSERVATION_START_YEAR:
+            state = self.get_branch_state(branch_id, year)
+            substitution = np.clip(state["digital_substitution"], -2.5, 2.5)
+
+            # Local substitution shifts acquisition away from physical branches
+            # toward digital and, more mildly, remote-assisted channels.
+            branch_score -= 0.34 * substitution
+            digital_score += 0.34 * substitution
+            remote_score += 0.10 * substitution
 
         scores = {
             "BRANCH": branch_score,
@@ -550,6 +661,11 @@ class AccountsGenerator:
         if n_active == 0:
             score += .80
 
+        if year >= OBSERVATION_START_YEAR:
+            state = self.local_relationship_state(row, year)
+            score -= 0.24 * np.clip(state["customer_pressure"], -2.5, 2.5)
+            score -= 0.08 * np.clip(state["closure_pressure"], -2.5, 2.5)
+
         return float(np.clip(sigmoid(score + self.rng.normal(0, .35)), .01, .90))
 
     def annual_close_probability(self, row, account, year):
@@ -568,6 +684,12 @@ class AccountsGenerator:
             score += STRENGTH["WEAK"] * math.log1p(same - 1)
 
         score -= .25 * math.log(max(float(row._depth), 1e-6))
+
+        if year >= OBSERVATION_START_YEAR:
+            state = self.get_branch_state(account["branch_id"], year)
+            score += 0.18 * np.clip(state["customer_pressure"], -2.5, 2.5)
+            score += 0.10 * np.clip(state["closure_pressure"], -2.5, 2.5)
+
         return float(np.clip(sigmoid(score + self.rng.normal(0, .35)), .005, .65))
 
     def generate_observed_period(self):
@@ -581,23 +703,37 @@ class AccountsGenerator:
                     continue
 
                 if self.rng.random() < self.annual_open_probability(row, year):
-                    owned = [a["product_id"] for a in self.portfolios.get(row.customer_id, []) if a["opening_year"] <= year]
-                    product = self.choose_product(row, year, owned)
+                    owned = [
+                        a["product_id"]
+                        for a in self.portfolios.get(row.customer_id, [])
+                        if a["opening_year"] <= year
+                    ]
+                    branch = self.choose_branch(row, year)
+                    product = self.choose_product(row, year, owned, branch_id=branch)
                     if product:
                         self.add_account(
-                            row, product, self.choose_branch(row, year), year,
-                            self.choose_channel(row, year)
+                            row, product, branch, year,
+                            self.choose_channel(row, year, branch_id=branch)
                         )
 
                         second = .10 * float(row._depth)
                         second /= 1 + .20 * len(self.active_accounts(row.customer_id, year))
                         if self.rng.random() < min(second, .20):
-                            owned = [a["product_id"] for a in self.portfolios.get(row.customer_id, []) if a["opening_year"] <= year]
-                            product2 = self.choose_product(row, year, owned)
+                            owned = [
+                                a["product_id"]
+                                for a in self.portfolios.get(row.customer_id, [])
+                                if a["opening_year"] <= year
+                            ]
+                            branch2 = self.choose_branch(row, year)
+                            product2 = self.choose_product(
+                                row, year, owned, branch_id=branch2
+                            )
                             if product2:
                                 self.add_account(
-                                    row, product2, self.choose_branch(row, year), year,
-                                    self.choose_channel(row, year)
+                                    row, product2, branch2, year,
+                                    self.choose_channel(
+                                        row, year, branch_id=branch2
+                                    )
                                 )
 
                 # Closures are evaluated after openings.
@@ -654,12 +790,16 @@ class AccountsGenerator:
                 continue
 
             owned = []
-            product = self.choose_product(row, CURRENT_YEAR, owned)
+            branch = self.choose_branch(row, CURRENT_YEAR)
+            product = self.choose_product(
+                row, CURRENT_YEAR, owned, branch_id=branch
+            )
             if product is None:
                 continue
 
-            branch = self.choose_branch(row, CURRENT_YEAR)
-            channel = self.choose_channel(row, CURRENT_YEAR)
+            channel = self.choose_channel(
+                row, CURRENT_YEAR, branch_id=branch
+            )
 
             self.add_account(
                 row=row,
@@ -753,7 +893,7 @@ def validate_output(accounts, customers, branches):
 
 def audit(accounts, customers):
     print("\n" + "=" * 76)
-    print("BTYT ACCOUNTS — DEVELOPMENT AUDIT (V6 FINAL)")
+    print("BTYT ACCOUNTS — DEVELOPMENT AUDIT (V7 BRANCH-STATE INTEGRATED)")
     print("=" * 76)
     print(f"Customers: {len(customers):,}")
     print(f"Accounts:  {len(accounts):,}")
@@ -866,16 +1006,90 @@ def audit(accounts, customers):
     )
 
 
+def audit_branch_state_integration(accounts, branch_state):
+    """
+    Report whether the shared branch state is visibly connected to account
+    acquisition, attrition, and opening-channel behavior during 2021-2026.
+    """
+    observed = accounts.loc[
+        accounts["opening_year"].between(OBSERVATION_START_YEAR, CURRENT_YEAR)
+    ].copy()
+
+    if observed.empty:
+        return
+
+    state = branch_state.copy()
+    state["year"] = pd.to_numeric(state["year"], errors="coerce").astype("Int64")
+    state["branch_id"] = state["branch_id"].astype(str).str.zfill(3)
+
+    merged = observed.merge(
+        state[
+            [
+                "branch_id", "year", "customer_pressure",
+                "deposit_pressure", "digital_substitution", "closure_pressure",
+            ]
+        ],
+        left_on=["branch_id", "opening_year"],
+        right_on=["branch_id", "year"],
+        how="left",
+        validate="many_to_one",
+    )
+
+    print("\n" + "=" * 76)
+    print("BRANCH-STATE INTEGRATION AUDIT — ACCOUNTS V7")
+    print("=" * 76)
+    print(
+        f"Observed openings linked to branch state: "
+        f"{merged['year'].notna().mean():.2%}"
+    )
+
+    by_channel = (
+        merged.groupby("opening_channel")[
+            ["customer_pressure", "deposit_pressure", "digital_substitution", "closure_pressure"]
+        ]
+        .mean()
+        .round(3)
+    )
+    print("\nMean branch state at account opening by channel:")
+    print(by_channel.to_string())
+
+    closures = accounts.loc[
+        accounts["closing_year"].between(OBSERVATION_START_YEAR, CURRENT_YEAR)
+    ].copy()
+    if not closures.empty:
+        close_merged = closures.merge(
+            state[
+                [
+                    "branch_id", "year", "customer_pressure",
+                    "deposit_pressure", "digital_substitution", "closure_pressure",
+                ]
+            ],
+            left_on=["branch_id", "closing_year"],
+            right_on=["branch_id", "year"],
+            how="left",
+            validate="many_to_one",
+        )
+        print("\nMean branch state at observed account closure:")
+        print(
+            close_merged[
+                ["customer_pressure", "deposit_pressure", "digital_substitution", "closure_pressure"]
+            ]
+            .mean()
+            .round(3)
+            .to_string()
+        )
+
+
 def main():
     print("Loading BTYT inputs...")
-    customers, products, branches = load_inputs()
-    validate_inputs(customers, products, branches)
+    customers, products, branches, branch_state = load_inputs()
+    validate_inputs(customers, products, branches, branch_state)
 
     print(f"Customers loaded: {len(customers):,}")
     print(f"Development mode: {DEVELOPMENT_MODE} | Sample size: {DEVELOPMENT_CUSTOMERS:,}")
     print("Generating compressed pre-2021 account state...")
 
-    generator = AccountsGenerator(customers, branches)
+    generator = AccountsGenerator(customers, branches, branch_state)
     generator.generate_pre_2021()
 
     print("Generating detailed 2021-2026 account evolution...")
@@ -891,6 +1105,7 @@ def main():
     accounts.to_csv(OUTPUT_PATH, index=False)
 
     audit(accounts, customers)
+    audit_branch_state_integration(accounts, branch_state)
 
     print(f"\nSaved: {OUTPUT_PATH}")
     print(f"Shape: {accounts.shape}")
