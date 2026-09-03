@@ -1,0 +1,6 @@
+dataset,anomaly_family,records_exposed,records_affected,realized_rate
+transactions,branch_legacy_format,610317,6947,0.00099818
+transactions,branch_metadata_missing,50679,1592,0.00022875
+transactions,channel_missing,90381,5301,0.00076168
+transactions,timestamp_precision_loss,141060,3323,0.00047747
+campaign_exposures,duplicate_export_rows,369,23,0.00094147

@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""BTYT — Transactions + Account Balances generator — V2.3.1 transfer-capacity smoke test.
+"""BTYT — Transactions + Account Balances generator — V2.4 safe-performance optimization smoke test.
 
 Ground-truth first: transactions are generated as event intents, processed
 chronologically through a non-overdraft ledger, and account_balances is derived
 from completed movements. Credit-card payments and data-quality degradation are
 intentionally deferred to later modules.
 
-V2.3.1 smoke-test changes:
-- preserves all validated V2.3 bank-network, behavioral, liquidity, and ledger mechanics;
-- adds amount-aware economic compatibility when pairing internal BTYT counterparties;
-- preserves rare large transfers without using a hard cap;
+V2.4 safe-performance changes:
+- preserves all validated V2.3.1 bank-network, behavioral, liquidity, transfer-capacity, and ledger mechanics;
+- precomputes deterministic repeated work used by the hot transaction-generation path;
+- preserves stable seeded draws, event ordering, probabilities, and sequential ledger execution;
 - uses the canonical V2.3 production WORLD_SEED for controlled comparison;
-- writes only smoke-specific outputs so the 6.96M-row V2.3 candidate remains untouched.
+- writes only V2.4 smoke-specific outputs so earlier candidates remain untouched.
 """
 from __future__ import annotations
 
@@ -43,13 +43,13 @@ BANK_WORLD_PATH = GENERATED / "bank_world_parameters.csv"
 BANK_MARKET_PATH = GENERATED / "bank_market_weights.csv"
 BANK_MACRO_PATH = GENERATED / "bank_macro_environment.csv"
 
-TX_OUT = GENERATED / "transactions_smoke_v2_3_1.csv"
-BAL_OUT = GENERATED / "account_balances_smoke_v2_3_1.csv"
-TRAITS_OUT = INTERIM / "customer_transaction_traits_smoke_v2_3_1.csv"
-ROLES_OUT = INTERIM / "account_roles_smoke_v2_3_1.csv"
-AUDIT_OUT = INTERIM / "transaction_generation_audit_smoke_v2_3_1.csv"
-WORLD_OUT = INTERIM / "transaction_world_parameters_smoke_v2_3_1.csv"
-INTERNAL_PAIRS_OUT = INTERIM / "internal_transfer_pairs_smoke_v2_3_1.csv"
+TX_OUT = GENERATED / "transactions_smoke_v2_4.csv"
+BAL_OUT = GENERATED / "account_balances_smoke_v2_4.csv"
+TRAITS_OUT = INTERIM / "customer_transaction_traits_smoke_v2_4.csv"
+ROLES_OUT = INTERIM / "account_roles_smoke_v2_4.csv"
+AUDIT_OUT = INTERIM / "transaction_generation_audit_smoke_v2_4.csv"
+WORLD_OUT = INTERIM / "transaction_world_parameters_smoke_v2_4.csv"
+INTERNAL_PAIRS_OUT = INTERIM / "internal_transfer_pairs_smoke_v2_4.csv"
 
 # -----------------------------------------------------------------------------
 # WORLD SEED
@@ -108,6 +108,16 @@ MERCHANT_CATEGORIES = [
 
 # Populated once in main() from the frozen V4 bank-network outputs.
 BANK_CONTEXT = None
+
+# Safe performance caches. Every cached value is a deterministic function of the
+# same inputs and stable RNG seed used by V2.3.1; caching therefore removes
+# repeated work without changing the stochastic model or draw order.
+MONTH_CALENDAR_CACHE = {}
+OPEN_BRANCH_CACHE = {}
+MONTHLY_SCALE_CACHE = {}
+MERCHANT_BASE_CACHE = {}
+CUSTOMER_BANK_FIT_CACHE = {}
+LOAN_ACCOUNT_PICK_CACHE = {}
 
 
 def stable_seed(*parts) -> int:
@@ -306,6 +316,11 @@ def anchor_uyu(c):
 
 
 def monthly_scale(c,t,period):
+    key = (str(c["customer_id"]), str(period))
+    cached = MONTHLY_SCALE_CACHE.get(key)
+    if cached is not None:
+        return cached
+
     factor={2021:.63,2022:.72,2023:.82,2024:.90,2025:.96,2026:1}[period.year]
     r=rng_for("scale",c["customer_id"],period); yr=rng_for("year-scale",c["customer_id"],period.year)
     v=float(t["financial_volatility"]); season=1.0
@@ -314,7 +329,9 @@ def monthly_scale(c,t,period):
         if any(k in sector for k in ["TOUR","HOTEL","RESTAUR"]): season+=s*(.20 if period.month in [12,1,2] else -.04)
         elif any(k in sector for k in ["AGRI","RURAL","LIVESTOCK"]): season+=s*(.12 if period.month in [3,4,5,9,10] else -.025)
         elif any(k in sector for k in ["RETAIL","COMMER","TRADE"]): season+=s*(.10 if period.month==12 else 0)
-    return max(1000,anchor_uyu(c)*factor*np.exp(yr.normal(0,.06*v))*np.exp(r.normal(0,.07*v))*season)
+    value=max(1000,anchor_uyu(c)*factor*np.exp(yr.normal(0,.06*v))*np.exp(r.normal(0,.07*v))*season)
+    MONTHLY_SCALE_CACHE[key] = value
+    return value
 
 
 def inherited_balance(a,c,t):
@@ -516,8 +533,12 @@ def bank_selection_score(bank_id, base_weight, currency, ctype, amount_uyu, cust
 
     # Stable customer-bank taste creates persistent relationship heterogeneity
     # without overwriting structural market prominence or bank specialization.
-    pref_rng = rng_for("customer-bank-fit", customer_id, bank_id)
-    behavioral_fit = math.exp(float(pref_rng.normal(0.0, 0.16)))
+    fit_key = (str(customer_id), str(bank_id))
+    behavioral_fit = CUSTOMER_BANK_FIT_CACHE.get(fit_key)
+    if behavioral_fit is None:
+        pref_rng = rng_for("customer-bank-fit", customer_id, bank_id)
+        behavioral_fit = math.exp(float(pref_rng.normal(0.0, 0.16)))
+        CUSTOMER_BANK_FIT_CACHE[fit_key] = behavioral_fit
 
     return max(float(base_weight), 1e-12) * currency_fit * customer_fit * amount_fit * behavioral_fit
 
@@ -577,10 +598,15 @@ def resolve_transfer_bank(event, account, customer, traits, period, sequence):
 
 
 def merchant_probs(c,t,period):
-    alpha=np.array([5,2.4,2,3,1.6,1.4,1.8,.9,1.3,.9,1.8,1.5,2,1.2,.8,.8,1.0],float)
-    alpha[12]*=.75+1.10*float(t["digital_preference"]); alpha[1]*=.8+.6*float(t["spending_propensity"]); alpha[8]*=.8+.6*float(t["spending_propensity"])
-    if str(c["customer_type"]).upper()=="BUSINESS": alpha*=.7; alpha[15]*=4.5; alpha[14]*=2; alpha[13]*=1.5
-    p=rng_for("dirichlet",c["customer_id"]).dirichlet(alpha)
+    customer_id = str(c["customer_id"])
+    base = MERCHANT_BASE_CACHE.get(customer_id)
+    if base is None:
+        alpha=np.array([5,2.4,2,3,1.6,1.4,1.8,.9,1.3,.9,1.8,1.5,2,1.2,.8,.8,1.0],float)
+        alpha[12]*=.75+1.10*float(t["digital_preference"]); alpha[1]*=.8+.6*float(t["spending_propensity"]); alpha[8]*=.8+.6*float(t["spending_propensity"])
+        if str(c["customer_type"]).upper()=="BUSINESS": alpha*=.7; alpha[15]*=4.5; alpha[14]*=2; alpha[13]*=1.5
+        base=rng_for("dirichlet",c["customer_id"]).dirichlet(alpha)
+        MERCHANT_BASE_CACHE[customer_id] = base
+    p = base.copy()
     if period.month in [12,1,2]: p[7]*=1.35; p[1]*=1.15; p[8]*=1.10
     if period.month==12: p[3]*=1.35; p[12]*=1.25
     return p/p.sum()
@@ -665,17 +691,35 @@ def amount(r,tt,ctype,currency,scale,t,period,cat=None,recurring=False):
     return money(max(1 if currency=="USD" else 20, uyu/fx if currency=="USD" else uyu))
 
 
+def month_calendar(period):
+    key = str(period)
+    cached = MONTH_CALENDAR_CACHE.get(key)
+    if cached is not None:
+        return cached
+    nd=calendar.monthrange(period.year,period.month)[1]
+    days=np.arange(1,nd+1)
+    weekdays=np.fromiter(
+        (datetime(period.year,period.month,int(day)).weekday() for day in days),
+        dtype=np.int8,
+        count=nd,
+    )
+    cached=(nd,days,weekdays)
+    MONTH_CALENDAR_CACHE[key]=cached
+    return cached
+
+
 def event_datetime(r,period,tt,cp,ch,ctype,preferred=None):
-    nd=calendar.monthrange(period.year,period.month)[1]; days=np.arange(1,nd+1); w=np.ones(nd,float)
-    for i,d in enumerate(days):
-        wd=datetime(period.year,period.month,int(d)).weekday(); w[i]*=(1.7 if wd<5 else .35) if ctype=="BUSINESS" else (1.2 if tt=="DEBIT_PURCHASE" and wd>=5 else 1)
-        if cp=="EMPLOYER":w[i]*=5 if d<=5 or d>=nd-2 else .55
-        if preferred is not None:w[i]*=math.exp(-.35*abs(d-preferred))+.05
+    nd,days,weekdays=month_calendar(period); w=np.ones(nd,float)
+    if ctype=="BUSINESS":
+        w *= np.where(weekdays < 5, 1.7, .35)
+    elif tt=="DEBIT_PURCHASE":
+        w *= np.where(weekdays >= 5, 1.2, 1.0)
+    if cp=="EMPLOYER":
+        w *= np.where((days<=5)|(days>=nd-2),5.0,.55)
+    if preferred is not None:
+        w *= np.exp(-.35*np.abs(days-preferred))+.05
     day=int(r.choice(days,p=w/w.sum()))
     if ch=="BRANCH":
-        # BRANCH transactions must occur on weekdays. If the sampled day falls
-        # on a weekend, move to the nearest valid weekday without getting
-        # trapped on day 1 when the month starts on Saturday/Sunday.
         if datetime(period.year,period.month,day).weekday()>=5:
             prev_day=day
             while prev_day>1 and datetime(period.year,period.month,prev_day).weekday()>=5:
@@ -704,7 +748,15 @@ def branch_open(row,period):
 
 
 def tx_branch(r,a,c,branches,period):
-    e=branches[branches.apply(lambda x:branch_open(x,period),axis=1)].copy(); w=np.ones(len(e))*.15
+    key=str(period)
+    e=OPEN_BRANCH_CACHE.get(key)
+    if e is None:
+        mask=(pd.to_numeric(branches["opening_year"],errors="coerce")<=period.year)
+        closing=pd.to_numeric(branches["closing_year"],errors="coerce")
+        mask &= closing.isna() | (closing>=period.year)
+        e=branches.loc[mask].copy()
+        OPEN_BRANCH_CACHE[key]=e
+    w=np.ones(len(e))*.15
     for i,b in enumerate(e.itertuples(index=False)):
         if b.branch_id==a["branch_id"]:w[i]+=3.2
         if str(b.branch_id)==str(c.get("primary_branch_id","")):w[i]+=2.1
@@ -726,11 +778,22 @@ def loan_index(loans,snap,bridge,accounts,roles):
     snap["year_month"]=snap["year_month"].astype(str)
     rolemap=roles.set_index("account_id")["account_role"].to_dict(); omap={}
     if not bridge.empty and {"loan_id","origination_month_internal"}.issubset(bridge.columns):omap=bridge.set_index("loan_id")["origination_month_internal"].astype(str).to_dict()
+    account_currency=accounts["product_id"].map(CURRENCY)
     def pick(cid,curr,p,r):
-        g=accounts[(accounts["customer_id"]==cid)&(accounts["product_id"].map(CURRENCY)==curr)&(accounts["first_obs_month"]<=p)&(accounts["last_obs_month"]>=p)&(~accounts["product_id"].isin(FIXED))]
-        if g.empty:return None
-        ww=[{"BUSINESS_OPERATING":3,"PRIMARY_TRANSACTIONAL":2.7,"PAYROLL":2.2,"SECONDARY":.9,"SAVINGS":.7,"USD_RESERVE":.7}.get(rolemap.get(x,"SECONDARY"),.5) for x in g["account_id"]]
-        return choose(r,g["account_id"].tolist(),ww)
+        key=(str(cid),str(curr),str(p))
+        cached=LOAN_ACCOUNT_PICK_CACHE.get(key)
+        if cached is None:
+            g=accounts[(accounts["customer_id"]==cid)&(account_currency==curr)&(accounts["first_obs_month"]<=p)&(accounts["last_obs_month"]>=p)&(~accounts["product_id"].isin(FIXED))]
+            if g.empty:
+                LOAN_ACCOUNT_PICK_CACHE[key] = ((), ())
+                return None
+            ids=g["account_id"].tolist()
+            ww=[{"BUSINESS_OPERATING":3,"PRIMARY_TRANSACTIONAL":2.7,"PAYROLL":2.2,"SECONDARY":.9,"SAVINGS":.7,"USD_RESERVE":.7}.get(rolemap.get(x,"SECONDARY"),.5) for x in ids]
+            cached=(ids,ww)
+            LOAN_ACCOUNT_PICK_CACHE[key]=cached
+        ids,ww=cached
+        if not ids:return None
+        return choose(r,ids,ww)
     for L in loans.itertuples(index=False):
         lid=str(L.loan_id);cid=str(L.customer_id);prod=str(L.product_id);curr=str(L.currency);orig=float(L.original_amount);r=rng_for("loan",lid);prob=.76 if prod in {"P012","P013","P014"} else .84
         if prod!="P016":
@@ -1331,7 +1394,7 @@ def report(tx,bals,validation):
 def main():
     global BANK_CONTEXT
     d=sample_population(load_data());BANK_CONTEXT=build_bank_context(d);a=lifecycle(d["accounts"]);roles=build_roles(a,d["customers"]);traits=build_traits(d["customers"],a);cmap=d["customers"].set_index("customer_id", drop=False);tmap=traits.set_index("customer_id", drop=False);rmap=roles.set_index("account_id")["account_role"].to_dict();debit=debit_links(d["cards"]);lidx=loan_index(d["loans"],d["loan_snapshot"],d["loan_bridge"],a,roles)
-    print("="*72);print("BTYT TRANSACTION ENGINE — V2.3.1 TRANSFER-CAPACITY SMOKE TEST");print("="*72);print(f"Customers: {len(d['customers']):,}");print(f"Accounts: {len(a):,}");print(f"Loan-linked buckets: {len(lidx):,}");print(f"Smoke test: {SMOKE_TEST}");print(f"WORLD_SEED: {WORLD_SEED}");print(f"Bank network: {len(BANK_CONTEXT['domestic_ids'])} domestic external + {len(BANK_CONTEXT['foreign_ids'])} foreign counterparties");print(f"BANK_WORLD_SEED: {BANK_CONTEXT['bank_world_seed']}");print("World parameters:");[print(f"  {k:28s} {v:.4f}") for k,v in WORLD.items()];print()
+    print("="*72);print("BTYT TRANSACTION ENGINE — V2.4 SAFE-PERFORMANCE SMOKE TEST");print("="*72);print(f"Customers: {len(d['customers']):,}");print(f"Accounts: {len(a):,}");print(f"Loan-linked buckets: {len(lidx):,}");print(f"Smoke test: {SMOKE_TEST}");print(f"WORLD_SEED: {WORLD_SEED}");print(f"Bank network: {len(BANK_CONTEXT['domestic_ids'])} domestic external + {len(BANK_CONTEXT['foreign_ids'])} foreign counterparties");print(f"BANK_WORLD_SEED: {BANK_CONTEXT['bank_world_seed']}");print("World parameters:");[print(f"  {k:28s} {v:.4f}") for k,v in WORLD.items()];print()
     alltx=[];allb=[]
     for i,ar in enumerate(a.to_dict("records"),1):
         cid=str(ar["customer_id"]);tx,b=process_account(pd.Series(ar),cmap.loc[cid],tmap.loc[cid],rmap.get(ar["account_id"],"SECONDARY"),d["branches"],debit,lidx);alltx+=tx;allb+=b

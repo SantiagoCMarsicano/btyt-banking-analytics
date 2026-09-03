@@ -1,0 +1,14 @@
+diagnostic,n_customers,mean,p50,p95,p99,max,share_ge_2,share_ge_3,share_ge_5
+campaign_selections_per_selected_customer,7496.0,2.2650747065101386,2.0,4.0,5.0,8.0,0.7067769477054429,0.37126467449306294,0.03948772678762007
+campaign_relationships_per_exposed_customer,7122.0,2.064588598708228,2.0,4.0,5.0,7.0,0.6415332771693345,0.2993541140129177,0.02401010951979781
+exposure_events_per_contacted_customer,7122.0,3.430216231395675,3.0,7.0,10.0,13.0,0.8218197135636057,0.6010951979780961,0.2622858747542825
+channel_share_EMAIL,,0.3368808841588211,,,,,,,
+channel_share_MOBILE_APP,,0.20556692591076545,,,,,,,
+channel_share_WEB,,0.17261563651248465,,,,,,,
+channel_share_BRANCH,,0.09234547687269751,,,,,,,
+channel_share_SMS,,0.06942284076954564,,,,,,,
+channel_share_SOCIAL_MEDIA,,0.05914858780188293,,,,,,,
+channel_share_PHONE,,0.05685632419156775,,,,,,,
+channel_share_DIRECT_MAIL,,0.0071633237822349575,,,,,,,
+channels_per_exposed_relationship,14704.0,1.4302230685527748,1.0,3.0,3.0,4.0,0.3779923830250272,0.05073449401523395,0.0
+unauthorized_campaign_channel_pairs,,0.0,,,,,,,

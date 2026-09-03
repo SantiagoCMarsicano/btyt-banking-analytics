@@ -1,0 +1,13 @@
+check,status,observed,rule
+overall_selection_distribution_plausible,PASS,"P05= 31.50%, P95= 36.30%",P05 > 5% and P95 < 65%
+overall_exposure_distribution_plausible,PASS,"P05= 84.80%, P95= 88.31%",P05 > 60% and P95 < 97%
+overall_response_distribution_plausible,PASS,"P05= 15.22%, P95= 20.06%",P05 > 3% and P95 < 40%
+contact_frequency_plausible,PASS,"P05=1.615, P95=1.707",P05 >= 1.0 and P95 < 3.5 exposure events per exposed relationship
+large_campaigns_rarely_zero_selection,PASS,max zero-selected share=0.0000,Eligible >= 500: zero-selected world share < 1%
+large_campaigns_rarely_zero_exposure,PASS,max zero-exposed share=0.0000,Eligible >= 500: zero-exposed world share < 1%
+small_campaign_volatility_preserved,PASS,max zero-response world share=0.1655,At least one eligible<100 campaign has >=5% zero-response worlds
+delivery_not_near_deterministic,PASS,median large-campaign exposure P95= 92.57%,Median large-campaign exposure P95 < 97%
+authorized_channels_only,PASS,unauthorized pairs=0,No actual campaign/channel pair may be unauthorized
+customer_contact_concentration_plausible,PASS,"P99=10.0, max=13",P99 < 12 and max < 25 exposure events per contacted customer
+multichannel_not_universal,PASS,share with >=2 channels= 37.80%,Less than 75% of exposed relationships use multiple channels
+response_composition_reconciles,PASS,campaign-level response categories checked,Positive + neutral + negative = responding customers
