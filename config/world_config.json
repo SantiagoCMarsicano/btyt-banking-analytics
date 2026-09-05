@@ -1,0 +1,21 @@
+{
+  "world": {
+    "name": "BTYT Canonical World",
+    "seed": 739184621
+  },
+  "population": {
+    "customers": 20000
+  },
+  "observation_period": {
+    "start_date": "2021-01-01",
+    "end_date": "2026-12-31"
+  },
+  "execution": {
+    "mode": "production",
+    "smoke_customers": 500
+  },
+  "data_reliability": {
+    "mode": "imperfect",
+    "level": "realistic"
+  }
+}
