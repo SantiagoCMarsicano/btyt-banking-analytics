@@ -28,3 +28,16 @@ data/generated/transactions/
 data/operational/
 data/interim/world/external_customer_monthly_state.csv
 data/interim/transactions/internal_transfer_pairs.csv
+
+# Large operational exports
+data/operational/transactions/
+
+# Large reproducible interim state
+data/interim/world/external_customer_monthly_state.csv
+
+# Smoke-test artifacts
+data/generated/*smoke*.csv
+data/interim/*smoke*.csv
+
+__pycache__/
+*.py[cod]
