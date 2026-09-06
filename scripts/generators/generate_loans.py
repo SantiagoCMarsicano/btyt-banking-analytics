@@ -355,6 +355,7 @@ class LoanGenerator:
 
         self.branch_lookup = self.branches.set_index("branch_id").to_dict("index")
         self._prepare_branch_state()
+        self._prepare_branch_selection_cache()
         self._prepare_customer_signals()
 
     # ---------------------------------------------------------------------
@@ -607,77 +608,113 @@ class LoanGenerator:
     # Branch
     # ---------------------------------------------------------------------
 
-    def _eligible_branches(self, year: int) -> pd.DataFrame:
-        b = self.branches.copy()
-        b["opening_year"] = pd.to_numeric(b["opening_year"], errors="coerce")
-        b = b[b["opening_year"] <= year]
+    def _prepare_branch_selection_cache(self):
+        """
+        Precompute branch-selection arrays once per relevant year.
 
-        if "closing_year" in b.columns:
-            closing = pd.to_numeric(b["closing_year"], errors="coerce")
-            b = b[closing.isna() | (closing >= year)]
+        This removes repeated pandas/PyArrow -> NumPy conversions from the
+        origination hot loop without changing branch ordering, weights, or
+        stochastic draws.
+        """
+        branches = self.branches.copy()
+        branches["branch_id"] = branches["branch_id"].astype(str).str.zfill(3)
+        branches["opening_year"] = pd.to_numeric(branches["opening_year"], errors="coerce")
 
-        return b
+        if "closing_year" in branches.columns:
+            branches["closing_year"] = pd.to_numeric(branches["closing_year"], errors="coerce")
+        else:
+            branches["closing_year"] = np.nan
+
+        self._branch_selection_cache = {}
+
+        min_year = int(branches["opening_year"].dropna().min())
+        for year in range(min_year, CURRENT_YEAR + 1):
+            mask = (branches["opening_year"] <= year) & (
+                branches["closing_year"].isna() | (branches["closing_year"] >= year)
+            )
+            eligible = branches.loc[mask].copy()
+            if eligible.empty:
+                continue
+
+            branch_ids = np.asarray(eligible["branch_id"].astype(str).tolist(), dtype=str)
+            departments = np.asarray(eligible["department"].astype(str).tolist(), dtype=str)
+            regions = np.asarray(eligible["region"].astype(str).str.upper().tolist(), dtype=str)
+            branch_sizes = np.asarray(eligible["branch_size"].astype(str).str.upper().tolist(), dtype=str)
+
+            size_factor = np.array(
+                [
+                    {"SMALL": 0.90, "MEDIUM": 1.10, "LARGE": 1.35}.get(size, 1.0)
+                    for size in branch_sizes
+                ],
+                dtype=float,
+            )
+
+            credit_pressure = np.array(
+                [self._get_branch_state(branch_id, year)["credit_pressure"] for branch_id in branch_ids],
+                dtype=float,
+            )
+
+            self._branch_selection_cache[year] = {
+                "branch_ids": branch_ids,
+                "departments": departments,
+                "regions": regions,
+                "branch_sizes": branch_sizes,
+                "size_factor": size_factor,
+                "credit_pressure": credit_pressure,
+            }
 
     def _choose_branch(self, row, product_id: str, year: int) -> str:
-        eligible = self._eligible_branches(year)
-        if eligible.empty:
+        cached = self._branch_selection_cache.get(int(year))
+        if cached is None:
             raise RuntimeError(f"No branches eligible in {year}")
 
+        branch_ids = cached["branch_ids"]
+        departments = cached["departments"]
+        regions = cached["regions"]
+        branch_sizes = cached["branch_sizes"]
+
         primary = str(row["primary_branch_id"]).zfill(3)
-        weights = np.ones(len(eligible), dtype=float)
+        weights = np.ones(branch_ids.size, dtype=float)
 
         # Primary branch is likely but not guaranteed.
-        weights *= np.where(eligible["branch_id"].eq(primary), 4.6, 1.0)
+        weights *= np.where(branch_ids == primary, 4.6, 1.0)
 
         # Same department and region.
         cust_dept = str(row.get("residence_department", ""))
-        weights *= np.where(eligible["department"].astype(str).eq(cust_dept), 2.0, 1.0)
+        weights *= np.where(departments == cust_dept, 2.0, 1.0)
 
         if primary in self.branch_lookup:
             primary_region = str(self.branch_lookup[primary].get("region", ""))
-            weights *= np.where(eligible["region"].astype(str).eq(primary_region), 1.35, 1.0)
+            weights *= np.where(regions == primary_region, 1.35, 1.0)
 
         # Larger offices have somewhat more lending volume.
-        size_factor = eligible["branch_size"].astype(str).str.upper().map({
-            "SMALL": 0.90,
-            "MEDIUM": 1.10,
-            "LARGE": 1.35,
-        }).fillna(1.0).to_numpy()
-        weights *= size_factor
+        weights *= cached["size_factor"]
 
         # Product-specific branch tendencies.
         if product_id == "P017":
-            interior = ~eligible["department"].astype(str).eq("Montevideo")
+            interior = departments != "Montevideo"
             weights *= np.where(interior, 1.35, 0.75)
-            weights *= np.where(eligible["region"].astype(str).str.upper().eq("EAST"), 1.22, 1.0)
+            weights *= np.where(regions == "EAST", 1.22, 1.0)
 
         if product_id in {"P015", "P016", "P018"}:
-            weights *= np.where(eligible["branch_size"].astype(str).str.upper().eq("LARGE"), 1.18, 1.0)
+            weights *= np.where(branch_sizes == "LARGE", 1.18, 1.0)
 
         # Digital affinity weakens geographic concentration.
         if row["_digital_affinity"] > 0.65:
             weights = np.power(weights, 0.78)
 
         if year >= OBSERVATION_START_YEAR:
-            credit_pressure = np.array(
-                [
-                    self._get_branch_state(branch_id, year)["credit_pressure"]
-                    for branch_id in eligible["branch_id"]
-                ],
-                dtype=float,
-            )
-
             # Higher credit pressure modestly reduces the branch's origination
             # attractiveness while preserving geography, size, and product
             # specialization as the dominant branch-selection drivers.
             weights *= np.exp(
-                -0.16 * np.clip(credit_pressure, -2.5, 2.5)
+                -0.16 * np.clip(cached["credit_pressure"], -2.5, 2.5)
             )
 
         weights *= self.rng.lognormal(mean=0.0, sigma=0.18, size=len(weights))
         weights /= weights.sum()
 
-        return str(self.rng.choice(eligible["branch_id"].to_numpy(), p=weights))
+        return str(self.rng.choice(branch_ids, p=weights))
 
     # ---------------------------------------------------------------------
     # Contract characteristics
@@ -1789,7 +1826,7 @@ def main():
     )
 
     OUTPUT_PARQUET_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DATA_INTERIM.mkdir(parents=True, exist_ok=True)
+    BRIDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     loans.to_parquet(
         OUTPUT_PARQUET_PATH,
