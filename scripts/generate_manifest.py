@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""BTYT final dataset manifest generator — V1.0.1.
+"""BTYT final dataset manifest generator — V1.1.0.
 
 Creates a cryptographic inventory of the finalized BTYT Part I dataset without
 modifying any canonical or operational source dataset.
@@ -33,24 +31,29 @@ from typing import Any
 
 import pandas as pd
 
+from scripts.core.paths import (
+    INTERIM_AUDITS_DIR,
+    MANIFESTS_DIR,
+    PROJECT_ROOT,
+    USING_ACTIVE_WORLD,
+    WORLD_CONFIG_PATH,
+    WORLD_ROOT,
+)
 
-ENGINE_VERSION = "1.0.1"
-ROOT = Path(__file__).resolve().parents[1]
 
-CONFIG_DIR = ROOT / "config"
-DATA_DIR = ROOT / "data"
-GENERATED_DIR = DATA_DIR / "generated"
-OPERATIONAL_DIR = DATA_DIR / "operational"
-INTERIM_DIR = DATA_DIR / "interim"
-AUDITS_DIR = INTERIM_DIR / "audits"
+ENGINE_VERSION = "1.1.0"
 
-MANIFEST_DIR = ROOT / "manifests"
+# PROJECT_ROOT remains the Git/repository execution root.
+# WORLD_ROOT is the active world's isolated artifact root.
+ROOT = PROJECT_ROOT
+DATASET_ROOT = WORLD_ROOT
+
+MANIFEST_DIR = MANIFESTS_DIR
 MANIFEST_JSON = MANIFEST_DIR / "btyt_part_i_manifest.json"
 MANIFEST_FILES_CSV = MANIFEST_DIR / "btyt_part_i_manifest_files.csv"
 
-WORLD_CONFIG_PATH = CONFIG_DIR / "world_config.json"
-ORCHESTRATOR_LATEST_PATH = AUDITS_DIR / "orchestrator_run_latest.json"
-CROSS_SYSTEM_RESULTS_PATH = AUDITS_DIR / "cross_system_audit_results.csv"
+ORCHESTRATOR_LATEST_PATH = INTERIM_AUDITS_DIR / "orchestrator_run_latest.json"
+CROSS_SYSTEM_RESULTS_PATH = INTERIM_AUDITS_DIR / "cross_system_audit_results.csv"
 
 
 CANONICAL_FILES = (
@@ -147,7 +150,7 @@ def table_shape(path: Path) -> tuple[int | None, int | None]:
 
 
 def file_record(relative_path: str, role: str) -> dict[str, Any]:
-    path = ROOT / relative_path
+    path = DATASET_ROOT / relative_path
 
     if not path.exists():
         raise FileNotFoundError(f"Required manifest file not found: {relative_path}")
@@ -346,6 +349,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def verify_existing_manifest() -> None:
+    if not USING_ACTIVE_WORLD:
+        raise RuntimeError(
+            "Refusing manifest verification without an active isolated BTYT world."
+        )
+
     if not MANIFEST_JSON.exists():
         raise FileNotFoundError(
             f"Manifest does not exist: {MANIFEST_JSON}"
@@ -367,7 +375,7 @@ def verify_existing_manifest() -> None:
     for expected in expected_records:
         relative_path = expected["relative_path"]
         role = expected["role"]
-        path = ROOT / relative_path
+        path = DATASET_ROOT / relative_path
 
         if not path.exists():
             failures += 1
@@ -437,6 +445,11 @@ def verify_existing_manifest() -> None:
 
 
 def generate_manifest() -> None:
+    if not USING_ACTIVE_WORLD:
+        raise RuntimeError(
+            "Refusing to create a final manifest without an active isolated BTYT world."
+        )
+
     if not WORLD_CONFIG_PATH.exists():
         raise FileNotFoundError(
             f"Missing world configuration: {WORLD_CONFIG_PATH}"
@@ -449,7 +462,8 @@ def generate_manifest() -> None:
     print("=" * 100)
     print(f"BTYT FINAL DATASET MANIFEST GENERATOR — V{ENGINE_VERSION}")
     print("=" * 100)
-    print(f"Root: {ROOT}")
+    print(f"Repository root: {ROOT}")
+    print(f"Dataset root:    {DATASET_ROOT}")
     print()
     print("Inventorying files")
     print("-" * 100)
@@ -505,7 +519,8 @@ def generate_manifest() -> None:
         "dataset_name": "BTYT Banking Analytics — Part I",
         "dataset_state": "FROZEN",
         "created_at_utc": created_at,
-        "repository_root_name": ROOT.name,
+        "repository_root_name": PROJECT_ROOT.name,
+        "world_root_name": WORLD_ROOT.name,
         "world": extract_world_identity(world_config),
         "validation": {
             "cross_system_audit": cross_status,

@@ -22,13 +22,51 @@ def validate_world_config(config: dict) -> None:
             f"World configuration is missing required sections: {missing}"
         )
 
-    if config["population"]["customers"] <= 0:
-        raise ValueError("Customer population must be greater than zero.")
+    population = config["population"]
+    has_fixed_population = "customers" in population
+    has_population_range = {
+        "customers_min",
+        "customers_max",
+    }.issubset(population)
+
+    if has_fixed_population and has_population_range:
+        raise ValueError(
+            "Population configuration must define either 'customers' or "
+            "'customers_min'/'customers_max', not both."
+        )
+
+    if not has_fixed_population and not has_population_range:
+        raise ValueError(
+            "Population configuration must define either 'customers' or both "
+            "'customers_min' and 'customers_max'."
+        )
+
+    if has_fixed_population:
+        customers = int(population["customers"])
+        if customers <= 0:
+            raise ValueError("Customer population must be greater than zero.")
+    else:
+        customers_min = int(population["customers_min"])
+        customers_max = int(population["customers_max"])
+
+        if customers_min <= 0 or customers_max <= 0:
+            raise ValueError("Customer population bounds must be greater than zero.")
+
+        if customers_min > customers_max:
+            raise ValueError(
+                "customers_min must be less than or equal to customers_max."
+            )
+
+    if int(config["world"]["seed"]) < 0:
+        raise ValueError("World seed must be greater than or equal to zero.")
 
     if config["execution"]["mode"] not in {"production", "development"}:
         raise ValueError(
             "Execution mode must be either 'production' or 'development'."
         )
+
+    if int(config["execution"]["smoke_customers"]) <= 0:
+        raise ValueError("Smoke-test customer count must be greater than zero.")
 
     if config["data_reliability"]["mode"] not in {"clean", "imperfect"}:
         raise ValueError(

@@ -1,0 +1,49 @@
+{
+  "worlds": [
+    {
+      "world_id": "BTYT-33-2673785437",
+      "world_name": "BTYT",
+      "variant": 33,
+      "seed": 2673785437,
+      "canonical": false,
+      "path": "worlds\\BTYT\\33",
+      "status": "STOPPED"
+    },
+    {
+      "world_id": "BTYT33-66-1095910153",
+      "world_name": "BTYT33",
+      "variant": 66,
+      "seed": 1095910153,
+      "canonical": false,
+      "path": "worlds\\BTYT33\\66",
+      "status": "STOPPED"
+    },
+    {
+      "world_id": "BTYT-66-1999257437",
+      "world_name": "BTYT",
+      "variant": 66,
+      "seed": 1999257437,
+      "canonical": false,
+      "path": "worlds\\BTYT\\66",
+      "status": "STOPPED"
+    },
+    {
+      "world_id": "BTYT-66-749847844",
+      "world_name": "BTYT_",
+      "variant": 66,
+      "seed": 749847844,
+      "canonical": false,
+      "path": "worlds\\BTYT\\66",
+      "status": "STOPPED"
+    },
+    {
+      "world_id": "BTYT33-01-606597249",
+      "world_name": "BTYT33",
+      "variant": 1,
+      "seed": 606597249,
+      "canonical": true,
+      "path": "worlds\\BTYT33\\01",
+      "status": "GENERATING"
+    }
+  ]
+}

@@ -16,7 +16,6 @@ Core rules:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import hashlib
@@ -24,16 +23,23 @@ import math
 import numpy as np
 import pandas as pd
 
+from scripts.core.paths import (
+    GENERATED_DATA_DIR,
+    INTERIM_DATA_DIR,
+    OPERATIONAL_DATA_DIR,
+)
+
 
 # =============================================================================
 # Paths and configuration
 # =============================================================================
 
-ROOT = Path(__file__).resolve().parents[2]
-GENERATED = ROOT / "data" / "generated"
-MASTER = ROOT / "data" / "master"
-INTERIM = ROOT / "data" / "interim"
-OPERATIONAL = ROOT / "data" / "operational"
+# All runtime data paths are resolved centrally through scripts.core.paths.
+# When an active BTYT world exists, these paths point inside that world's
+# isolated data directory rather than the legacy project-level data directory.
+GENERATED = GENERATED_DATA_DIR
+INTERIM = INTERIM_DATA_DIR
+OPERATIONAL = OPERATIONAL_DATA_DIR
 
 DATA_RELIABILITY_MODE = "imperfect"       # clean | imperfect
 DATA_RELIABILITY_LEVEL = "realistic"      # light | realistic | stress
@@ -82,7 +88,7 @@ PROTECTED_LOAN_COLUMNS = {
     "customer_id",
 }
 
-ENGINE_VERSION = "2.0.2"
+ENGINE_VERSION = "2.1.0"
 
 GENERATED_CORE = GENERATED / "core"
 GENERATED_TRANSACTIONS = GENERATED / "transactions"

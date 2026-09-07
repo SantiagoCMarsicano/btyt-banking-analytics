@@ -1,4 +1,4 @@
-"""BTYT final cross-system audit — V2.0.0.
+"""BTYT final cross-system audit — V2.1.0.
 
 Read-only integrity audit for the frozen Part I synthetic banking universe.
 It does not modify generated datasets and does not recalibrate any DGP.
@@ -21,27 +21,44 @@ whose source files are not present.
 from __future__ import annotations
 
 from collections import defaultdict
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from scripts.core.paths import (
+    GENERATED_CAMPAIGNS_DIR,
+    GENERATED_CORE_DIR,
+    GENERATED_CREDIT_DIR,
+    GENERATED_DATA_DIR,
+    GENERATED_PERFORMANCE_DIR,
+    GENERATED_TRANSACTIONS_DIR,
+    INTERIM_AUDITS_DIR,
+    INTERIM_CREDIT_DIR,
+    INTERIM_DATA_DIR,
+    INTERIM_WORLD_DIR,
+    OPERATIONAL_DATA_DIR,
+    WORLD_ROOT,
+)
 
-ROOT = Path(__file__).resolve().parents[2]
 
-GENERATED = ROOT / "data" / "generated"
-GENERATED_CORE = GENERATED / "core"
-GENERATED_CREDIT = GENERATED / "credit"
-GENERATED_TRANSACTIONS = GENERATED / "transactions"
-GENERATED_CAMPAIGNS = GENERATED / "campaigns"
-GENERATED_PERFORMANCE = GENERATED / "performance"
+# All runtime data paths are resolved centrally through scripts.core.paths.
+# With an active BTYT world, every audit input and output remains isolated
+# inside that world's directory.
+ROOT = WORLD_ROOT
 
-INTERIM = ROOT / "data" / "interim"
-INTERIM_WORLD = INTERIM / "world"
-INTERIM_CREDIT = INTERIM / "credit"
-INTERIM_AUDITS = INTERIM / "audits"
+GENERATED = GENERATED_DATA_DIR
+GENERATED_CORE = GENERATED_CORE_DIR
+GENERATED_CREDIT = GENERATED_CREDIT_DIR
+GENERATED_TRANSACTIONS = GENERATED_TRANSACTIONS_DIR
+GENERATED_CAMPAIGNS = GENERATED_CAMPAIGNS_DIR
+GENERATED_PERFORMANCE = GENERATED_PERFORMANCE_DIR
 
-OPERATIONAL = ROOT / "data" / "operational"
+INTERIM = INTERIM_DATA_DIR
+INTERIM_WORLD = INTERIM_WORLD_DIR
+INTERIM_CREDIT = INTERIM_CREDIT_DIR
+INTERIM_AUDITS = INTERIM_AUDITS_DIR
+
+OPERATIONAL = OPERATIONAL_DATA_DIR
 
 OBS_START = pd.Timestamp("2021-01-01")
 OBS_END = pd.Timestamp("2026-12-31 23:59:59")
@@ -736,7 +753,7 @@ def audit_operational_exports(canonical, operational, reliability_world, reliabi
 
 def main():
     print("=" * 92)
-    print("BTYT FINAL CROSS-SYSTEM AUDIT — V2.0.0")
+    print("BTYT FINAL CROSS-SYSTEM AUDIT — V2.1.0")
     print("=" * 92)
     print(f"Root: {ROOT}")
 
@@ -1127,7 +1144,7 @@ def main():
         raise SystemExit(1)
 
     print()
-    print("BTYT FINAL CROSS-SYSTEM AUDIT V2.0.0: PASS")
+    print("BTYT FINAL CROSS-SYSTEM AUDIT V2.1.0: PASS")
     print("All canonical datasets remained read-only.")
 
 

@@ -1,43 +1,109 @@
+# =============================================================================
+# BTYT Banking Analytics
+# Git ignore rules
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
 # Python
+# -----------------------------------------------------------------------------
+
 __pycache__/
 *.py[cod]
 *.pyo
 
+
+# -----------------------------------------------------------------------------
 # Virtual environments
+# -----------------------------------------------------------------------------
+
 .venv/
 venv/
 env/
 
+
+# -----------------------------------------------------------------------------
 # Jupyter
+# -----------------------------------------------------------------------------
+
 .ipynb_checkpoints/
 
+
+# -----------------------------------------------------------------------------
 # IDE / editor
+# -----------------------------------------------------------------------------
+
 .vscode/
 .idea/
 
-# OS
+
+# -----------------------------------------------------------------------------
+# Operating system
+# -----------------------------------------------------------------------------
+
 .DS_Store
 Thumbs.db
 
+
+# -----------------------------------------------------------------------------
 # Environment variables / secrets
+# -----------------------------------------------------------------------------
+
 .env
 
 
-# Large reproducible datasets
+# =============================================================================
+# LEGACY GLOBAL DATASET
+# =============================================================================
+#
+# These paths belong to the pre-World-Builder dataset architecture.
+# Some smaller historical files remain tracked for compatibility.
+# Large reproducible artifacts must not be added to Git.
+
 data/generated/transactions/
 data/operational/
 data/interim/world/external_customer_monthly_state.csv
 data/interim/transactions/internal_transfer_pairs.csv
 
-# Large operational exports
-data/operational/transactions/
-
-# Large reproducible interim state
-data/interim/world/external_customer_monthly_state.csv
-
-# Smoke-test artifacts
 data/generated/*smoke*.csv
 data/interim/*smoke*.csv
 
-__pycache__/
-*.py[cod]
+
+# =============================================================================
+# WORLD BUILDER — GENERATED WORLD ARTIFACTS
+# =============================================================================
+#
+# World definitions and metadata remain versionable.
+# Materialized datasets are reproducible from the world definition and seed
+# and therefore must not be stored in Git.
+#
+# Keep:
+#   worlds/registry.json
+#   worlds/<world>/<variant>/world.json
+#   worlds/<world>/<variant>/metadata.json
+#
+# Ignore:
+#   generated data
+#   interim state
+#   operational exports
+#   databases
+#   manifests/audit runtime artifacts
+
+worlds/*/*/data/
+worlds/*/*/database/
+worlds/*/*/audit/
+worlds/*/*/manifests/
+
+
+# -----------------------------------------------------------------------------
+# Runtime / diagnostic artifacts
+# -----------------------------------------------------------------------------
+
+path_audit.txt
+
+
+# -----------------------------------------------------------------------------
+# Temporary root-level migration artifacts
+# -----------------------------------------------------------------------------
+
+/operational_exports.py
