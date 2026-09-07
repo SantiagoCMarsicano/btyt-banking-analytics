@@ -1,5 +1,27 @@
 # BTYT — Customers Data Dictionary
 
+## Architecture context
+
+**Documentation status:** Canonical-generation contract — updated 2026-09-07  
+**World scope:** Active BTYT world  
+**Routing:** Physical storage is resolved through `scripts/core/paths.py` and `config/active_world.json`.
+
+Paths written as `data/generated/...`, `data/interim/...`, or `data/operational/...`
+are **world-relative paths**. Under the active-world architecture they resolve beneath:
+
+```text
+worlds/<world>/<variant>/
+```
+
+The dictionary describes the table contract and statistical meaning, not one specific
+materialized world. World identity, seed, population, observation period, execution mode,
+and operational reliability are supplied by the active world configuration.
+
+> **World Builder configures the world; Python generators realize its history.**
+
+---
+
+
 ## Table: `customers`
 
 **Description:**
@@ -1474,35 +1496,44 @@ historical residence context at registration
 
 ## Dataset generation scope
 
-**Target customer population:**
+**Population contract:**
 
--   Between 90,000 and 120,000 customers in the final frozen dataset.
+- Customer population is defined by the active world configuration.
+- A world may use a fixed `customers` value or a deterministic range using
+  `customers_min` and `customers_max`.
+- When a range is configured, `scripts/core/world.py` resolves the realized
+  customer count from the world seed through the dedicated `world.population`
+  RNG namespace.
+- Population is therefore part of world identity and is reproducible.
+- Technical chunk size does not define population and must not change the
+  realized synthetic world.
 
-**Development mode:**
+**Current canonical-generation example:**
 
--   Development runs use a fixed population of 20,000 customers to make validation and iteration faster.
--   Development output is not considered the final frozen population.
+- World: `BTYT33`
+- World seed: `606597249`
+- Resolved customer population: `63,205`
+- Observation horizon: defined by the active world configuration.
 
-**Final mode:**
-
--   The exact final customer count is not predetermined.
--   A reproducible random process selects the final customer count within the 90,000--120,000 range.
--   The random seed used by the current Python generator is `20260827`.
--   Once the final-mode dataset passes structural and plausibility validation, the generated customer population is frozen as part of the BTYT dataset version.
+This current realization is documentation context only. The table contract remains
+valid for other BTYT worlds generated from different identities or population settings.
 
 **Current exported schema:**
 
--   23 columns.
--   Internal development-audit variables are not exported.
--   Numeric monetary fields are exported as nullable numeric values.
--   `primary_branch_id` is exported as a zero-padded string.
+- 23 columns.
+- Internal development-audit variables are not exported.
+- Numeric monetary fields are exported as nullable numeric values.
+- `primary_branch_id` is exported as a zero-padded string.
 
 **Validation principle:**
 
--   Formal validation checks structural integrity, missingness rules, unique identifiers, geography consistency, branch chronology, lifecycle chronology and data types.
--   Development reports additionally inspect cross-distributions such as age versus employment, income versus employment, revenue versus company size, nationality versus geography and current residence versus primary-branch department.
--   Passing formal validation does not by itself guarantee economic plausibility; cross-distribution diagnostics are used before freezing the table.
-
+- Formal validation checks structural integrity, missingness rules, unique identifiers,
+  geography consistency, branch chronology, lifecycle chronology and data types.
+- Development reports additionally inspect cross-distributions such as age versus
+  employment, income versus employment, revenue versus company size, nationality versus
+  geography and current residence versus primary-branch department.
+- Passing formal validation does not by itself guarantee economic plausibility;
+  cross-distribution diagnostics are used before freezing the table.
 
 ## Post-Python implementation status
 

@@ -1,5 +1,27 @@
 # BTYT Banking Analytics — External Shocks Data Dictionary
 
+## Architecture context
+
+**Documentation status:** Canonical-generation contract — updated 2026-09-07  
+**World scope:** Active BTYT world  
+**Routing:** Physical storage is resolved through `scripts/core/paths.py` and `config/active_world.json`.
+
+Paths written as `data/generated/...`, `data/interim/...`, or `data/operational/...`
+are **world-relative paths**. Under the active-world architecture they resolve beneath:
+
+```text
+worlds/<world>/<variant>/
+```
+
+The dictionary describes the table contract and statistical meaning, not one specific
+materialized world. World identity, seed, population, observation period, execution mode,
+and operational reliability are supplied by the active world configuration.
+
+> **World Builder configures the world; Python generators realize its history.**
+
+---
+
+
 ## 1. Purpose
 
 The External Shocks layer introduces exogenous and idiosyncratic disturbances into the BTYT synthetic banking universe while preserving the project's central modeling principle:
@@ -518,11 +540,16 @@ one customer × one month
 
 for the complete 2021–2026 horizon.
 
-With 10,000 customers and 72 months, the expected grain is:
+For a world with `N` customers and `M` observation months, the expected grain is:
 
 ```text
-720,000 customer-month rows
+N × M customer-month rows
 ```
+
+For the current BTYT33 canonical-generation realization, 63,205 customers over
+72 months imply 4,550,760 customer-month rows if every customer-month is represented.
+The validation contract should derive the expected count from active-world configuration
+rather than from a hard-coded development population.
 
 This table combines:
 
@@ -742,7 +769,7 @@ Current streams are:
 | `644` | Common-cause mediation |
 | `651` | Customer-level exposure jitter |
 
-The production world seed is stored separately from the stream identifiers.
+The active world seed is stored separately from mechanism-specific stream identifiers.
 
 The design guarantees that changing one mechanism does not intentionally reuse the same random draw as another mechanism.
 
@@ -755,7 +782,7 @@ The design guarantees that changing one mechanism does not intentionally reuse t
 Location:
 
 ```text
-data/master/external_shocks.csv
+data/generated/world/external_shocks.csv
 ```
 
 Grain:

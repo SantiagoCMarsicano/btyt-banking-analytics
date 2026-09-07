@@ -1,18 +1,41 @@
 # BTYT Final Cross-System Audit --- Data Dictionary & Validation Contract
 
-**Version:** 1.0.0\
-**Script:** `scripts/audit_cross_system.py`\
+## Architecture context
+
+**Documentation status:** Canonical-generation contract — updated 2026-09-07  
+**World scope:** Active BTYT world  
+**Routing:** Physical storage is resolved through `scripts/core/paths.py` and `config/active_world.json`.
+
+Paths written as `data/generated/...`, `data/interim/...`, or `data/operational/...`
+are **world-relative paths**. Under the active-world architecture they resolve beneath:
+
+```text
+worlds/<world>/<variant>/
+```
+
+The dictionary describes the table contract and statistical meaning, not one specific
+materialized world. World identity, seed, population, observation period, execution mode,
+and operational reliability are supplied by the active world configuration.
+
+> **World Builder configures the world; Python generators realize its history.**
+
+---
+
+
+**Documentation revision:** 2026-09-07\
+**Script:** `scripts/audits/audit_cross_system.py`\
 **Project:** BTYT Banking Analytics --- Part I: Business Intelligence &
 Performance Management\
-**Status:** Pre-freeze final integrity audit
+**Status:** Active canonical-generation validation contract
 
 ------------------------------------------------------------------------
 
 ## 1. Purpose
 
-The BTYT Final Cross-System Audit is the final read-only validation
-layer executed before freezing the synthetic banking universe and moving
-to the database, SQL, and Power BI stages.
+The BTYT Final Cross-System Audit is the final read-only validation layer of
+the canonical 15-stage generation pipeline. It executes against the active-world
+dataset before manifest finalization, dataset freeze, and the downstream database,
+SQL, and BI stages.
 
 Its purpose is not to generate, recalibrate, repair, or modify data. Its
 purpose is to verify that the independently generated BTYT subsystems
@@ -459,13 +482,16 @@ normalize malformed values.
 
 External shocks remain a probabilistic contextual layer.
 
-The audit may inspect:
+The audit may inspect the following **world-relative** paths:
 
 ``` text
-data/master/external_shocks.csv
+data/generated/world/external_shocks.csv
 data/interim/external_customer_monthly_state.csv
 data/interim/external_idiosyncratic_events.csv
 ```
+
+Their physical root is the active world resolved by `scripts/core/paths.py`; the audit
+must not silently validate a different legacy/global dataset.
 
 Checks include, when the corresponding columns exist:
 

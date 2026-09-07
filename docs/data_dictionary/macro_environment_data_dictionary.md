@@ -1,5 +1,27 @@
 # BTYT Banking Analytics
 
+## Architecture context
+
+**Documentation status:** Canonical-generation contract — updated 2026-09-07  
+**World scope:** Active BTYT world  
+**Routing:** Physical storage is resolved through `scripts/core/paths.py` and `config/active_world.json`.
+
+Paths written as `data/generated/...`, `data/interim/...`, or `data/operational/...`
+are **world-relative paths**. Under the active-world architecture they resolve beneath:
+
+```text
+worlds/<world>/<variant>/
+```
+
+The dictionary describes the table contract and statistical meaning, not one specific
+materialized world. World identity, seed, population, observation period, execution mode,
+and operational reliability are supplied by the active world configuration.
+
+> **World Builder configures the world; Python generators realize its history.**
+
+---
+
+
 # 
 
 # Macro Environment Data Dictionary
@@ -8,7 +30,7 @@
 
 # Primary file: macro\_environment.csv
 
-# Canonical path: data/generated/world/macro\_environment.csv
+# Canonical world-relative path: data/generated/world/macro\_environment.csv
 
 # Generator: scripts/generators/generate\_macro\_environment.py
 
