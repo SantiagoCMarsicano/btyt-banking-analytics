@@ -1,4 +1,4 @@
-"""BTYT final dataset manifest generator — V1.1.0.
+﻿"""BTYT final dataset manifest generator â€” V1.1.0.
 
 Creates a cryptographic inventory of the finalized BTYT Part I dataset without
 modifying any canonical or operational source dataset.
@@ -69,7 +69,7 @@ CANONICAL_FILES = (
     "data/generated/core/cards.parquet",
     "data/generated/core/loans.parquet",
     "data/generated/credit/loan_monthly_snapshot.parquet",
-    "data/generated/performance/external_shocks.csv",
+    "data/generated/world/external_shocks.csv",
     "data/generated/transactions/transactions.parquet",
     "data/generated/core/account_balances.parquet",
     "data/generated/campaigns/campaigns.csv",
@@ -366,7 +366,7 @@ def verify_existing_manifest() -> None:
         raise ValueError("Existing manifest contains no file inventory.")
 
     print("=" * 100)
-    print(f"BTYT FINAL DATASET MANIFEST VERIFICATION — V{ENGINE_VERSION}")
+    print(f"BTYT FINAL DATASET MANIFEST VERIFICATION â€” V{ENGINE_VERSION}")
     print("=" * 100)
 
     failures = 0
@@ -379,7 +379,7 @@ def verify_existing_manifest() -> None:
 
         if not path.exists():
             failures += 1
-            print(f"FAIL  {relative_path} — missing")
+            print(f"FAIL  {relative_path} â€” missing")
             continue
 
         current = file_record(relative_path, role)
@@ -460,7 +460,7 @@ def generate_manifest() -> None:
     records: list[dict[str, Any]] = []
 
     print("=" * 100)
-    print(f"BTYT FINAL DATASET MANIFEST GENERATOR — V{ENGINE_VERSION}")
+    print(f"BTYT FINAL DATASET MANIFEST GENERATOR â€” V{ENGINE_VERSION}")
     print("=" * 100)
     print(f"Repository root: {ROOT}")
     print(f"Dataset root:    {DATASET_ROOT}")
@@ -516,7 +516,7 @@ def generate_manifest() -> None:
     manifest = {
         "schema_version": 1,
         "manifest_generator_version": ENGINE_VERSION,
-        "dataset_name": "BTYT Banking Analytics — Part I",
+        "dataset_name": "BTYT Banking Analytics â€” Part I",
         "dataset_state": "FROZEN",
         "created_at_utc": created_at,
         "repository_root_name": PROJECT_ROOT.name,
@@ -565,7 +565,7 @@ def generate_manifest() -> None:
 
     print()
     print("=" * 100)
-    print("BTYT FINAL DATASET MANIFEST — SUMMARY")
+    print("BTYT FINAL DATASET MANIFEST â€” SUMMARY")
     print("=" * 100)
     print(f"Canonical files:   {len(canonical_records)}")
     print(f"Operational files: {len(operational_records)}")
@@ -596,3 +596,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

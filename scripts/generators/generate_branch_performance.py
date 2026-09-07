@@ -1746,7 +1746,7 @@ def main(write_csv: bool = False) -> None:
     print(f"BTYT BRANCH PERFORMANCE ENGINE — V{ENGINE_VERSION}")
     print(f"World seed: {WORLD_SEED}")
     print(f"RNG namespace: {RNG_NAMESPACE}")
-    print(f"Observation window: {OBS_START} → {OBS_END}")
+    print(f"Observation window: {OBS_START} -> {OBS_END}")
     print("=" * 84)
 
     print("Loading frozen canonical inputs...")

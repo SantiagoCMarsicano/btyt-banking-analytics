@@ -2291,7 +2291,7 @@ def main():
     print(f"RNG namespace: {RNG_NAMESPACE}")
     print(f"Customers: {len(d['customers']):,}")
     print(f"Accounts: {len(accounts):,}")
-    print(f"Observation window: {OBS_START} → {OBS_END}")
+    print(f"Observation window: {OBS_START} -> {OBS_END}")
     print(f"Account chunk size: {args.chunk_size:,}")
     print(f"Smoke mode: {args.smoke}")
     print(f"Institution network: {len(INSTITUTION_CONTEXT['domestic_bank_ids'])} domestic external banks + {len(INSTITUTION_CONTEXT['foreign_bank_ids'])} international banks + {len(INSTITUTION_CONTEXT['iede_ids'])} IEDEs")

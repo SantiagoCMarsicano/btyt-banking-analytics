@@ -1,823 +1,1054 @@
 BTYT Banking Analytics
 
-End-to-end banking analytics project for Banco de Treinta y Tres (BTYT), a fictional Uruguayan commercial bank.
 
-BTYT Banking Analytics is a portfolio project focused on the design, generation, validation, storage, and analysis of a realistic synthetic banking environment.
 
-Rather than relying on a pre-existing dataset, the project builds the bank programmatically in Python using business rules, probabilistic processes, temporal dependencies, cross-table consistency constraints, and explicit validation layers.
+Banco de Treinta y Tres (BTYT) is a fictional Uruguayan commercial bank used as the analytical universe for an end-to-end banking data project.
 
-The project is structured in two main analytical stages:
 
-Part I — Business Intelligence & Performance Management
 
-Part II — Credit Risk Analytics & Machine Learning
+BTYT Banking Analytics combines synthetic data generation, banking-domain modeling, reproducible simulation, validation, SQL, business intelligence, and later credit-risk modeling in one shared banking universe.
 
-The same synthetic banking universe is reused across both stages.
 
-Project Objectives
-
-The main objectives are to:
-
-Design a realistic relational banking data model.
-
-Generate synthetic banking data using Python.
-
-Model heterogeneous customer, branch, transaction, and credit behavior.
-
-Preserve temporal and relational consistency across datasets.
-
-Implement structural, financial, and behavioral validation.
-
-Build a reproducible data generation pipeline.
-
-Create an analytical SQL layer.
-
-Develop banking KPIs and business intelligence dashboards.
-
-Analyze branch and bank profitability.
-
-Prepare the same banking universe for later credit risk modeling.
-
-Current Project Status
-
-Part I — Source Data Generation
-
-Completed and frozen.
-
-The synthetic banking environment for the 2021–2026 analytical period has been generated and validated.
-
-Component
-
-Status
-
-Branch Network
-
-Frozen
-
-Banking Network
-
-Frozen
-
-Customers
-
-Frozen
-
-Products
-
-Frozen
-
-Accounts
-
-Frozen
-
-Cards
-
-Frozen
-
-Loans
-
-Frozen
-
-Loan Lifecycle Bridge
-
-Frozen
-
-Loan Monthly Snapshot
-
-Frozen
-
-Transactions
-
-Frozen
-
-Account Balances
-
-Frozen
-
-Campaign Master Data
-
-Frozen
-
-Branch Monthly Performance
-
-Frozen
-
-Bank Monthly Performance
-
-Frozen
-
-Cross-table Validation
-
-Passed
-
-Next Stage
-
-The project now moves from data generation to analytics:
-
-Synthetic Data Generation
-        ↓
-Validation & Quality Control
-        ↓
-Local Relational Database
-        ↓
-SQL Analytical Layer
-        ↓
-Power BI Semantic Model
-        ↓
-Business Intelligence Dashboards
-        ↓
-Credit Risk & Machine Learning
-
-Synthetic Banking Universe
-
-The detailed observational period covers January 2021 through December 2026.
-
-Selected customer, account, branch, and credit relationships may originate before 2021 in order to represent inherited historical state.
-
-Current canonical environment:
-
-Entity
-
-Size
-
-Customers
-
-10,000
-
-Accounts
-
-21,040
-
-Cards
-
-27,888
-
-Loans
-
-21,044
-
-Loan monthly snapshot rows
-
-455,370
-
-Transactions
-
-6,959,634
-
-Account-month balance rows
-
-674,619
-
-Branches
-
-37
-
-Branch-month performance rows
-
-2,664
-
-Bank-month performance rows
-
-72
-
-The transaction engine contains approximately 6.96 million transactions, of which approximately 6.78 million are completed transactions.
-
-Banking Data Model
-
-Core Banking
-
-Branches
-
-Customers
-
-Products
-
-Accounts
-
-Cards
-
-Loans
-
-Financial Activity
-
-Account balances
-
-Transactions
-
-Loan monthly snapshots
-
-Branch monthly performance
-
-Bank monthly performance
-
-Banking Network
-
-Domestic and foreign banking counterparties
-
-Annual bank financial indicators
-
-Market weights
-
-Macro environment
-
-Banking world parameters
-
-Marketing
-
-Campaigns
-
-Campaign geography
-
-Campaign channels
-
-Data Generation Philosophy
-
-The objective is not to create independent random tables.
-
-The project generates a coherent banking system in which observable outcomes emerge from underlying business rules and stochastic mechanisms.
-
-The generation process incorporates:
-
-Customer heterogeneity
-
-Product preferences
-
-Account ownership structures
-
-Branch relationships
-
-Income and business characteristics
-
-Digital and physical banking preferences
-
-Financial behavior
-
-Loan lifecycle dynamics
-
-Delinquency and write-off processes
-
-Transaction activity
-
-Seasonality
-
-Temporal evolution
-
-External and local shocks
-
-Cross-table dependencies
-
-Branch-level operating pressure
-
-Banking market dynamics
-
-The central design principle is:
 
 Fiction, yes. Fantasy, no.
 
-The data is synthetic, but relationships between variables are designed to remain economically and operationally plausible.
+The data is synthetic, but the relationships, temporal dynamics, business rules, and accounting constraints are designed to remain economically and operationally plausible.
 
-Branch Network
 
-BTYT operates a synthetic nationwide network of 37 branches and agencies across Uruguay.
 
-The branch system includes:
+Project Scope
 
-large urban branches,
 
-regional branches,
 
-small agencies,
+The project is divided into two main analytical stages:
 
-premium commercial locations,
 
-historically inherited offices,
 
-heterogeneous operating structures,
+Part I — Business Intelligence \& Performance Management
 
-branch-specific cost and activity patterns.
 
-Branches can experience different levels of:
 
-customer pressure,
+Part I builds and validates the synthetic banking universe and then uses it for:
 
-deposit pressure,
 
-transaction pressure,
 
-credit pressure,
+relational database design;
 
-cost pressure,
 
-digital substitution,
 
-operational pressure,
+SQL analytics;
 
-local shocks.
 
-These variables belong to the internal data-generating process and are not directly exposed as final BI metrics.
 
-Observed branch performance is allowed to emerge from the underlying system.
+banking KPIs;
 
-Banking Network
 
-BTYT interacts with a synthetic banking network containing:
 
-BTYT itself,
+Power BI;
 
-major domestic banks operating in Uruguay,
 
-selected international banking counterparties.
 
-Some institution names correspond to real banks in order to create a recognizable banking environment.
+Power Query and DAX;
 
-All simulated market weights, transaction relationships, financial indicators, customer behavior, and interbank activity are synthetic.
 
-The project does not claim that these generated values represent actual bank market shares, customer behavior, transaction flows, or reported financial statements.
 
-Transactions
+Tableau / geographic analysis;
 
-The transaction engine generates approximately 6.96 million transaction records.
 
-Transaction types include:
 
-Transfers in
+Apache Superset;
 
-Transfers out
 
-Debit purchases
 
-Service payments
+customer, product, branch, transaction, lending, and profitability analysis.
 
-Cash withdrawals
 
-Cash deposits
 
-Loan payments
+Part II — Credit Risk Analytics \& Machine Learning
 
-Interest credits
 
-Loan disbursements
 
-Transactions include:
+Part II reuses the same frozen banking universe for:
 
-transaction datetime,
 
-account,
 
-direction,
+SQL-based feature extraction;
 
-channel,
 
-amount,
 
-counterparty type,
+exploratory credit-risk analysis;
 
-transfer scope,
 
-counterparty bank,
 
-physical branch when applicable,
+feature engineering;
 
-transaction status,
 
-merchant category,
 
-failure reason.
+statistical modeling;
 
-Transfer scope distinguishes:
 
-internal BTYT transfers,
 
-domestic external transfers,
+machine learning;
 
-international transfers.
 
-The engine also models digital adoption, channel migration, failed transactions, cash usage, and internal transfer reconciliation.
 
-Loans and Credit Performance
+model evaluation;
 
-The lending system contains both retail and business credit products.
 
-Examples include:
 
-Personal loans
+explainability;
 
-Auto loans
 
-Mortgage loans
 
-SME loans
+later local experiment tracking and scoring infrastructure.
 
-Business credit lines
 
-Agricultural loans
 
-Business leasing
+No disconnected replacement dataset is created for Part II.
 
-Loan behavior is modeled through a dedicated monthly snapshot containing:
 
-outstanding balance,
 
-current interest rate,
+Current Project Status
 
-scheduled payment,
 
-actual payment,
 
-days past due,
+BTYT is currently in the canonical world generation and validation phase.
 
-delinquency status,
 
-arrears amount.
 
-Loan lifecycle events include:
+The data-generation architecture has been migrated from a collection of loosely coupled scripts to a reproducible world-based system with:
 
-scheduled maturity,
 
-early prepayment,
 
-restructuring after default,
+deterministic world identity;
 
-write-off,
 
-facility expiry,
 
-open current exposures,
+centralized world configuration;
 
-open default exposures,
 
-severe delinquency states at the analytical cutoff.
 
-The final performance engine recognizes loan provisioning changes and terminal write-off losses.
+isolated per-world storage;
 
-Branch and Bank Performance
 
-Part I includes a dedicated profitability layer.
 
-branch_monthly_performance.csv
+dedicated RNG namespaces and streams;
 
-Grain: one branch per month.
 
-Period:
 
-2021-01 → 2026-12
+a 15-stage orchestrated pipeline;
 
-Rows:
 
-37 branches × 72 months = 2,664 rows
 
-Main fields include:
+cross-system auditing;
 
-active customers,
 
-active accounts,
 
-average deposits,
+operational data-reliability layers;
 
-average loan balance,
 
-transaction count,
 
-transaction volume,
+manifest generation;
 
-physical branch transaction count,
 
-interest income,
 
-interest expense,
+dataset fingerprints;
 
-net interest income,
 
-fee income,
 
-total revenue,
+a desktop BTYT World Builder interface.
 
-personnel cost,
 
-fixed cost,
 
-variable cost,
+The final large BTYT analytical world is not yet frozen. Smoke and integration worlds are used to validate the complete generation architecture before the canonical dataset is produced.
 
-operational cost,
 
-total operating cost,
 
-credit loss,
+World-Based Architecture
 
-pre-provision profit,
 
-net income.
 
-bank_monthly_performance.csv
+Each simulated banking universe is defined by a world identity and configuration.
 
-The consolidated bank-level table contains 72 monthly observations and reconciles exactly with the aggregation of branch-level performance.
 
-Final Performance Calibration
 
-The frozen model produces:
+World Name
 
-Fee income / revenue: approximately 6.13%
+&#x20;   +
 
-Annualized credit loss / average loan portfolio: approximately 1.05%
+Variant
 
-Meaningful branch-level profitability dispersion
+&#x20;   ↓
 
-Both profitable and loss-making branches
+Deterministic World Seed
 
-A negative consolidated result in 2021 followed by stronger performance in later years
+&#x20;   ↓
 
-Provision releases where justified by changes in required credit reserves
+World Configuration
 
-The project intentionally avoids forcing all branches or all years to be profitable.
+&#x20;   ↓
 
-Analytical KPIs
+15-Stage Generation Pipeline
 
-The project does not precompute most BI ratios in CSV outputs.
+&#x20;   ↓
 
-They are intended to be calculated in SQL and/or DAX.
+Cross-System Audit
 
-Examples include:
+&#x20;   ↓
 
-Cost-to-Income Ratio
+Manifest + Fingerprint
 
-Net Interest Margin
+&#x20;   ↓
 
-Revenue per Customer
+Frozen Analytical World
 
-Cost per Customer
 
-Cost per Transaction
 
-Branch Margin
+Worlds are isolated under:
 
-Credit Loss Ratio
 
-Deposit Growth
 
-Loan Growth
+worlds/<WORLD>/<VARIANT>/
 
-Transaction Growth
 
-Digital Channel Share
 
-Branch Profitability
+A world contains its own metadata, configuration snapshot, generated datasets, interim latent-state data, operational exports, audit outputs, and manifests.
 
-Regional Profitability
 
-Product Profitability
 
-Customer Segment Performance
+BTYT World Builder
 
-Data Integrity and Validation
 
-Validation is incorporated throughout the generation process.
 
-Examples include:
+The project includes a desktop interface for configuring and launching synthetic worlds.
 
-Referential integrity between banking entities
 
-Temporal consistency between opening and closing dates
 
-Account lifecycle constraints
+The BTYT World Builder currently supports:
 
-Card-account compatibility
 
-Loan lifecycle consistency
 
-Loan snapshot continuity
+world name and variant;
 
-Transaction reconciliation
 
-Account balance reconciliation
 
-Prevention of negative balances
+deterministic seed derivation;
 
-Failed transaction consistency
 
-Internal transfer pairing
 
-Counterparty bank validation
+fixed or ranged customer population;
 
-Branch-month to bank-month reconciliation
 
-Structural profitability identities
 
-Economic and behavioral audits are also used to verify that generated patterns remain plausible.
+observation-period configuration;
 
-Final branch performance reconciliation:
 
-SUM(branch_monthly_performance)
-==
-bank_monthly_performance
 
-Status: PASS
+data-reliability settings;
 
-Repository Structure
 
-btyt-banking-analytics/
-│
-├── data/
-│   ├── generated/
-│   ├── interim/
-│   └── master/
-│
-├── database/
-│
-├── scripts/
-│
-└── README.md
 
-data/master/
+pipeline start and end stages;
 
-Small manually controlled reference tables and business definitions.
 
-Examples:
 
-products
+automatic reference-asset materialization;
 
-campaigns
 
-campaign channels
 
-campaign geography
+live stage status;
 
-data/interim/
 
-Internal generation artifacts, latent state tables, bridges, audits, and reproducibility outputs.
 
-Examples:
+per-stage progress;
 
-branch yearly state
 
-loan lifecycle bridge
 
-transaction world parameters
+global pipeline progress;
 
-internal transfer pairs
 
-generation audits
 
-data/generated/
+pause / resume / stop controls;
 
-Canonical observable banking datasets used by downstream analytics.
 
-Examples:
 
-customers
+manifest generation;
 
-accounts
 
-cards
 
-loans
+manifest verification;
 
-loan monthly snapshot
 
-transactions
 
-account balances
+world-folder access;
 
-branches
+
+
+execution logging.
+
+
+
+Current development launch command:
+
+
+
+.\\.venv\\Scripts\\python.exe -m world\_builder.app
+
+
+
+A standalone Windows executable is considered a packaging enhancement rather than a dependency of the analytical project.
+
+
+
+Generation Pipeline
+
+
+
+The full project orchestrator executes 15 stages:
+
+
+
+\#
+
+
+
+Stage
+
+
+
+Purpose
+
+
+
+1
+
+
+
+macro
+
+
+
+Macroeconomic environment
+
+
+
+2
+
+
 
 banks
 
-branch monthly performance
 
-bank monthly performance
 
-Large Generated Files
+Banking market and financial dynamics
 
-Large generated datasets are intentionally excluded from Git when appropriate.
 
-In particular, multi-million-row transaction data can exceed GitHub file-size limits.
 
-The repository is therefore designed around reproducible generation from code, rather than storing every generated dataset directly in version control.
+3
+
+
+
+financial\_institutions
+
+
+
+Financial-institution reference network
+
+
+
+4
+
+
+
+branches
+
+
+
+Dynamic branch network and annual branch state
+
+
+
+5
+
+
+
+customers
+
+
+
+Individual and business customers
+
+
+
+6
+
+
+
+accounts
+
+
+
+Customer-account relationships and lifecycle
+
+
+
+7
+
+
+
+cards
+
+
+
+Debit and credit-card lifecycle
+
+
+
+8
+
+
+
+loans
+
+
+
+Retail and business lending
+
+
+
+9
+
+
+
+loan\_snapshot
+
+
+
+Monthly loan lifecycle and delinquency state
+
+
+
+10
+
+
+
+external\_shocks
+
+
+
+Shared external operational/economic shocks
+
+
+
+11
+
+
+
+transactions
+
+
+
+Transaction engine and account balances
+
+
+
+12
+
+
+
+campaigns
+
+
+
+Campaign targets, exposures, and responses
+
+
+
+13
+
+
+
+branch\_performance
+
+
+
+Branch and consolidated bank performance
+
+
+
+14
+
+
+
+operational\_exports
+
+
+
+Imperfect operational representation
+
+
+
+15
+
+
+
+cross\_system\_audit
+
+
+
+Integrated cross-system validation
+
+
+
+The orchestrator runs each stage in a fresh subprocess and uses fail-fast execution by default.
+
+
+
+Synthetic Banking Universe
+
+
+
+The detailed analytical observation window is:
+
+
+
+January 2021 → December 2026
+
+
+
+Some customer, account, card, branch, and credit relationships may originate before 2021 to represent inherited historical state.
+
+
+
+The universe includes core banking, financial activity, banking-market, marketing, world-state, and operational datasets, including branches, customers, products, accounts, cards, loans, transactions, balances, monthly credit snapshots, campaigns, bank dynamics, external shocks, and performance tables.
+
+
+
+Data-Generation Philosophy
+
+
+
+BTYT does not generate independent random tables.
+
+
+
+The project generates a coherent banking system in which observable outcomes emerge from underlying mechanisms such as customer heterogeneity, product preferences, account ownership, branch relationships, digital adoption, lending behavior, delinquency dynamics, transaction activity, seasonality, market evolution, external and local shocks, branch operating pressure, and controlled data-quality degradation.
+
+
+
+A macroeconomic or local event may influence several downstream systems, but it does not deterministically assign outcomes to individual entities.
+
+
+
+Branch Network
+
+
+
+BTYT contains a structurally defined network of 37 branches and agencies across Uruguay.
+
+
+
+Branches differ by branch type, size, geography, administrative parent, opening history, strategic importance, and structural closure risk.
+
+
+
+Branch closures are stochastic rather than hard-coded. The annual latent branch-state panel preserves every branch across every observation year, including years after closure, so downstream historical relationships remain valid.
+
+
+
+Banking Network
+
+
+
+BTYT operates inside a synthetic financial system containing BTYT itself, domestic banks operating in Uruguay, selected international banking counterparties, and electronic-money institutions.
+
+
+
+Some institution names correspond to real financial institutions to create a recognizable structural banking environment. All simulated market weights, financial values, transaction relationships, behavioral parameters, shocks, and bank trajectories are synthetic and must not be interpreted as real-world bank data.
+
+
+
+Transactions
+
+
+
+The transaction engine supports transfers, debit purchases, service payments, cash operations, loan payments, interest credits, and loan disbursements.
+
+
+
+It also models digital adoption, channel migration, cash usage, failed transactions, internal-transfer pairing, counterparty institutions, physical-branch usage when applicable, and account-balance reconciliation.
+
+
+
+Large production worlds may generate tens of millions of transaction rows, so generated data is intentionally excluded from normal Git history.
+
+
+
+Loans and Credit Performance
+
+
+
+The lending system contains retail and business credit products and a monthly loan snapshot tracking outstanding balance, current interest rate, scheduled and actual payment, days past due, delinquency state, arrears, restructuring, default, write-off, prepayment, maturity, and open exposures.
+
+
+
+Branch and Bank Performance
+
+
+
+BTYT includes a dedicated monthly profitability layer.
+
+
+
+branch\_monthly\_performance
+
+
+
+Grain: one branch per month.
+
+
+
+37 branches × 72 months = 2,664 rows
+
+
+
+bank\_monthly\_performance
+
+
+
+Grain: one consolidated BTYT observation per month.
+
+
+
+72 months = 72 rows
+
+
+
+The consolidated bank table must reconcile with the aggregation of branch-level performance.
+
+
+
+Analytical KPIs
+
+
+
+Most BI ratios are deliberately not precomputed by the Python generators. They are intended to be derived in SQL and/or DAX.
+
+
+
+Examples include Cost-to-Income Ratio, Net Interest Margin, Revenue per Customer, Cost per Transaction, Branch Margin, Credit Loss Ratio, Deposit Growth, Loan Growth, Digital Channel Share, Branch Profitability, Regional Profitability, Product Profitability, and Customer Segment Performance.
+
+
+
+Validation and Auditing
+
+
+
+Successful script execution is not considered sufficient evidence of correctness.
+
+
+
+BTYT includes generator-level and integrated validations covering referential integrity, temporal integrity, lifecycle constraints, loan-snapshot continuity, transaction and balance reconciliation, internal-transfer pairing, counterparty validation, branch-state completeness, branch-to-bank performance reconciliation, accounting identities, and operational-export integrity.
+
+
+
+The final pipeline stage performs an integrated cross-system audit.
+
+
+
+Validations must never be weakened merely to force a PASS.
+
+
+
+Synthetic Truth vs. Operational Representation
+
+
+
+BTYT separates internally coherent synthetic truth from a controlled operational representation that can introduce realistic data-quality degradation without corrupting protected economic and relational truths.
+
+
+
+Manifest and Dataset Fingerprint
+
+
+
+A completed world can generate a manifest containing canonical and operational file inventories, provenance files, row counts, file sizes, hashes, pipeline status, audit status, and a dataset fingerprint.
+
+
+
+The fingerprint provides a compact reproducibility identifier for a frozen BTYT world.
+
+
+
+Repository Structure
+
+
+
+btyt-banking-analytics/
+
+│
+
+├── config/
+
+│   ├── active\_world.json
+
+│   └── world\_config.json
+
+│
+
+├── resources/
+
+│   └── reference/
+
+│       ├── products.csv
+
+│       └── campaigns/
+
+│
+
+├── worlds/
+
+│   ├── registry.json
+
+│   └── <WORLD>/
+
+│       └── <VARIANT>/
+
+│           ├── world.json
+
+│           ├── metadata.json
+
+│           ├── data/
+
+│           │   ├── interim/
+
+│           │   ├── generated/
+
+│           │   └── operational/
+
+│           ├── database/
+
+│           ├── audit/
+
+│           └── manifests/
+
+│
+
+├── scripts/
+
+│   ├── core/
+
+│   ├── generators/
+
+│   ├── audits/
+
+│   ├── generate\_btyt.py
+
+│   └── generate\_manifest.py
+
+│
+
+├── world\_builder/
+
+│   └── app.py
+
+│
+
+├── docs/
+
+│   ├── architecture/
+
+│   └── data\_dictionary/
+
+│
+
+└── README.md
+
+
+
+Reference Assets
+
+
+
+Small static business/reference dimensions are version-controlled separately from generated worlds.
+
+
+
+Canonical reference assets currently include:
+
+
+
+resources/reference/products.csv
+
+
+
+resources/reference/campaigns/
+
+├── campaigns.csv
+
+├── campaign\_channels.csv
+
+└── campaign\_geography.csv
+
+
+
+The World Builder materializes these reference files into new isolated worlds before generation.
+
+
 
 Reproducibility
 
-BTYT is designed as a reproducible synthetic banking environment.
 
-Generation scripts define the underlying:
 
-business rules,
+BTYT is designed so that a world is determined by its identity and configuration rather than by execution order or chunk size.
 
-probability distributions,
 
-economic assumptions,
 
-temporal processes,
+The architecture centralizes world configuration, world seed, observation period, population specification, and output routing, while individual generators retain dedicated RNG namespaces and streams for independent stochastic mechanisms.
 
-stochastic events,
 
-validation constraints.
 
-Random seeds are used to reproduce canonical synthetic worlds while preserving the ability to generate alternative environments from the same model architecture.
+Large Generated Files
 
-Once a generated component passes its structural and economic audits, it is frozen as part of the canonical BTYT environment.
+
+
+Large generated datasets are intentionally excluded from Git where appropriate.
+
+
+
+The repository is designed around:
+
+
+
+model code
+
+&#x20;   +
+
+reference assets
+
+&#x20;   +
+
+world configuration
+
+&#x20;   ↓
+
+reproducible generated dataset
+
+
+
+rather than storing every production output directly in version control.
+
+
+
+SQL and Data Model
+
+
+
+The next analytical phase will construct the relational model step by step in SQL.
+
+
+
+For each table, the project will explicitly document:
+
+
+
+primary key;
+
+
+
+foreign keys;
+
+
+
+referenced tables;
+
+
+
+grain;
+
+
+
+cardinality;
+
+
+
+temporal keys;
+
+
+
+validated join paths.
+
+
+
+The final SQL Entity-Relationship Diagram will be derived from the implemented relational model rather than inferred visually from the Python generators.
+
+
 
 Technology Stack
 
+
+
 Implemented
+
+
 
 Python
 
+
+
 Pandas
+
+
 
 NumPy
 
+
+
+PyArrow / Parquet
+
+
+
 Git
+
+
 
 GitHub
 
-Next Stage
+
+
+CustomTkinter
+
+
+
+deterministic RNG architecture
+
+
+
+cross-system auditing
+
+
+
+Next Analytical Stage
+
+
 
 SQL
 
-Local relational database
+
+
+local relational database
+
+
 
 Power BI
 
+
+
 Power Query
+
+
 
 DAX
 
-Planned / Later Stage
+
+
+Later Stages
+
+
 
 Tableau
 
+
+
 Apache Superset
+
+
 
 scikit-learn
 
-Credit risk modeling
 
-Machine learning
 
-Explainability
+credit-risk modeling
 
-Technologies are added to the implemented stack only when their corresponding project stage is completed.
 
-Part I — Business Intelligence & Performance Management
 
-The main analytical question is:
+machine learning
 
-How is BTYT performing, and where are the main opportunities and risks across its loan portfolio, deposits, products, customer segments, branches, and banking relationships?
 
-Part I will use the frozen synthetic banking environment to build:
 
-SQL analytical views,
+model explainability
 
-a BI semantic model,
 
-banking KPIs,
 
-branch performance dashboards,
+MLflow
 
-customer and product analysis,
 
-transaction and channel analysis,
 
-lending and delinquency analysis,
+local scoring service
 
-geographic analysis.
+
+
+Docker / Docker Compose
+
+
+
+Technologies are added to the implemented stack only when their corresponding project stage is actually completed.
+
+
+
+Main Analytical Question — Part I
+
+
+
+How is BTYT performing, and where are the main opportunities and risks across its loan portfolio, deposits, products, customer segments, branches, channels, and banking relationships?
+
+
+
+Part I will answer this through SQL analytical views, a validated relational model, banking KPIs, branch-performance analysis, customer and product analysis, transaction and channel analysis, lending and delinquency analysis, geographic analysis, and business-intelligence dashboards.
+
+
 
 Part II — Credit Risk Analytics
 
-Part II will reuse the same underlying customers, products, branches, accounts, loans, and historical credit behavior.
 
-The objective is to build a credit risk workflow including:
 
-feature engineering,
+Part II will reuse the same frozen BTYT universe for SQL-based feature extraction, exploratory risk analysis, feature engineering, statistical modeling, machine learning, model evaluation, and explainability.
 
-exploratory risk analysis,
 
-SQL-based feature extraction,
 
-statistical modeling,
+No separate disconnected dataset will be created for the credit-risk stage.
 
-machine learning,
 
-model evaluation,
-
-explainability.
-
-No separate disconnected dataset will be created for Part II.
 
 Disclaimer
 
+
+
 BTYT is a fictional bank created exclusively for educational and portfolio purposes.
 
-All customers, accounts, transactions, balances, financial records, branches, market behavior, banking relationships, and credit events represented in the project are synthetic.
+
+
+All customers, accounts, cards, loans, transactions, balances, branch behavior, market behavior, banking relationships, financial values, campaign outcomes, and credit events represented in the project are synthetic.
+
+
 
 The project contains no real customer data, confidential banking information, or actual bank transaction records.
 
-Names of real financial institutions may be used only as structural references within the simulated banking environment.
 
-Synthetic metrics associated with those institutions must not be interpreted as actual reported financial results or observed market behavior.
+
+Names of real financial institutions may appear only as structural references within the simulated banking environment. Synthetic metrics associated with those institutions must not be interpreted as actual reported financial results or observed market behavior.
+
+
 
 Author
 
+
+
 Santiago Castillo Marsicano
 
-Economics & Sociology
+
+
+Economics \& Sociology
+
 Data Analytics | Business Intelligence
+

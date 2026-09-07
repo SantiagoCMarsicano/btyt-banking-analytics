@@ -1143,12 +1143,65 @@ def _simulate_branch_world(
         for row_dict in branch_records:
             branch_id = str(row_dict["branch_id"])
 
-            if branch_id in closed_ids:
-                continue
             if int(row_dict["opening_year"]) > int(year):
                 continue
 
             row = pd.Series(row_dict)
+
+            # Closed branches remain part of the annual state panel after closure.
+            # Downstream systems may still reference historical accounts, loans,
+            # customers, and transactions linked to the former office. Therefore,
+            # closure changes the branch state; it does not remove the branch from
+            # branch_yearly_state.csv.
+            if branch_id in closed_ids:
+                previous_state = states[branch_id]
+                neutral_hazard = structural_annual_hazard(branch_id)
+
+                if collect_state:
+                    state_rows.append(
+                        {
+                            "world_seed": int(world_seed),
+                            "year": int(year),
+                            "branch_id": branch_id,
+                            "branch_name": str(row_dict["branch_name"]),
+                            "risk_group": RISK_GROUP[branch_id],
+                            "structural_six_year_closure_prob": (
+                                STRUCTURAL_SIX_YEAR_CLOSURE_PROB[branch_id]
+                            ),
+                            "neutral_annual_hazard": neutral_hazard,
+                            **previous_state,
+                            "local_shock_flag": False,
+                            "local_shock_magnitude": 0.0,
+                            "macro_growth_factor": float(
+                                macro_row["macro_growth_factor"]
+                            ),
+                            "credit_cycle_factor": float(
+                                macro_row["credit_cycle_factor"]
+                            ),
+                            "financial_stress_factor": float(
+                                macro_row["financial_stress_factor"]
+                            ),
+                            "digitalization_factor": float(
+                                macro_row["digitalization_factor"]
+                            ),
+                            "systemic_shock": float(
+                                macro_row["systemic_shock"]
+                            ),
+                            "systemic_shock_flag": bool(
+                                macro_row["systemic_shock_flag"]
+                            ),
+                            "closure_pressure": np.nan,
+                            "closures_before_draw": int(realized_closures),
+                            "saturation_multiplier": 0.0,
+                            "annual_closure_probability": 0.0,
+                            "closure_draw": np.nan,
+                            "closed_this_year": False,
+                            "closure_reason": None,
+                            "branch_status": "CLOSED",
+                        }
+                    )
+
+                continue
 
             shock_flag = bool(
                 rng_shock.random() < local_shock_probability(row)
@@ -1264,6 +1317,9 @@ def _simulate_branch_world(
                         "closure_draw": draw,
                         "closed_this_year": closed_this_year,
                         "closure_reason": reason,
+                        "branch_status": (
+                            "CLOSED" if closed_this_year else "OPEN"
+                        ),
                     }
                 )
 
@@ -1376,6 +1432,49 @@ def validate_state(
 
     if state_df.empty:
         errors.append("branch_yearly_state.csv would be empty.")
+
+    expected_pairs = {
+        (str(branch_id), int(year))
+        for branch_id in branches["branch_id"].astype(str)
+        for year in YEARS
+    }
+    actual_pairs = set(
+        zip(
+            state_df["branch_id"].astype(str),
+            state_df["year"].astype(int),
+        )
+    )
+
+    missing_pairs = expected_pairs - actual_pairs
+    extra_pairs = actual_pairs - expected_pairs
+
+    if missing_pairs:
+        examples = ", ".join(
+            f"{branch_id}/{year}"
+            for branch_id, year in sorted(missing_pairs)[:10]
+        )
+        errors.append(
+            "Annual branch-state panel is incomplete. "
+            f"Missing examples: {examples}"
+        )
+
+    if extra_pairs:
+        examples = ", ".join(
+            f"{branch_id}/{year}"
+            for branch_id, year in sorted(extra_pairs)[:10]
+        )
+        errors.append(
+            "Annual branch-state panel contains unexpected rows. "
+            f"Examples: {examples}"
+        )
+
+    if state_df.duplicated(["branch_id", "year"]).any():
+        errors.append("Duplicate branch_id/year in annual branch-state panel.")
+
+    if "branch_status" not in state_df.columns:
+        errors.append("branch_status is missing from annual branch-state panel.")
+    elif not state_df["branch_status"].isin(["OPEN", "CLOSED"]).all():
+        errors.append("Invalid branch_status in annual branch-state panel.")
 
     if not state_df["annual_closure_probability"].between(0.0, 1.0).all():
         errors.append("Invalid annual closure probability.")

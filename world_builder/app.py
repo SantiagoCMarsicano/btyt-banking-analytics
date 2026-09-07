@@ -27,6 +27,14 @@ APP_TITLE = "BTYT World Builder"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = PROJECT_ROOT / "config"
 WORLDS_ROOT = PROJECT_ROOT / "worlds"
+REFERENCE_ROOT = PROJECT_ROOT / "resources" / "reference"
+
+REFERENCE_ASSETS = (
+    (REFERENCE_ROOT / "products.csv", Path("data/generated/core/products.csv")),
+    (REFERENCE_ROOT / "campaigns" / "campaigns.csv", Path("data/generated/campaigns/campaigns.csv")),
+    (REFERENCE_ROOT / "campaigns" / "campaign_channels.csv", Path("data/generated/campaigns/campaign_channels.csv")),
+    (REFERENCE_ROOT / "campaigns" / "campaign_geography.csv", Path("data/generated/campaigns/campaign_geography.csv")),
+)
 
 ACTIVE_CONFIG_PATH = CONFIG_DIR / "world_config.json"
 ACTIVE_WORLD_PATH = CONFIG_DIR / "active_world.json"
@@ -128,6 +136,49 @@ def has_files(path: Path) -> bool:
     return path.exists() and any(item.is_file() for item in path.rglob("*"))
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+
+    return digest.hexdigest()
+
+
+def materialize_reference_assets(world_root: Path) -> list[Path]:
+    """Materialize canonical reference assets inside an isolated BTYT world."""
+    materialized: list[Path] = []
+
+    for source, relative_destination in REFERENCE_ASSETS:
+        if not source.is_file():
+            raise FileNotFoundError(
+                f"Canonical reference asset not found: {source}"
+            )
+
+        destination = world_root / relative_destination
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        if destination.exists():
+            if not destination.is_file():
+                raise RuntimeError(
+                    f"Reference asset destination is not a file: {destination}"
+                )
+
+            if sha256_file(source) != sha256_file(destination):
+                raise RuntimeError(
+                    "Reference asset conflict detected. "
+                    f"World file differs from canonical source: {destination}"
+                )
+
+            continue
+
+        shutil.copy2(source, destination)
+        materialized.append(destination)
+
+    return materialized
+
+
 class WorldBuilder(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
@@ -167,6 +218,7 @@ class WorldBuilder(ctk.CTk):
         self._update_control_states()
 
         self.after(100, self._poll_events)
+        self.after(250, self._progress_animation_tick)
 
     # ------------------------------------------------------------------
     # Variables
@@ -1359,6 +1411,8 @@ class WorldBuilder(ctk.CTk):
             if definition["clean_outputs"]:
                 self._clean_existing_outputs(world_root)
 
+            materialize_reference_assets(world_root)
+
         except Exception as exc:
             self.status_var.set("VALIDATION FAILED")
             self.detail_var.set(str(exc))
@@ -1871,8 +1925,9 @@ class WorldBuilder(ctk.CTk):
         """
         Advance the active stage while output is flowing.
 
-        Exact x/y progress wins when available. Otherwise the bar moves
-        conservatively and never exceeds 90% until the orchestrator confirms PASS.
+        Exact x/y progress wins when available. Otherwise output activity and
+        the UI animation keep the bar moving conservatively. The stage never
+        reaches 100% until the orchestrator confirms PASS.
         """
         key = self.active_stage_key
         if key is None:
@@ -1894,6 +1949,43 @@ class WorldBuilder(ctk.CTk):
                 key,
                 min(current + increment, 0.90),
             )
+
+    def _progress_animation_tick(self) -> None:
+        """
+        Keep the active stage visually moving while work is in progress.
+
+        Exact x/y progress reported by generators remains authoritative.
+        When a stage does not expose measurable progress, the UI advances
+        conservatively and asymptotically, never reaching completion before
+        the orchestrator emits an explicit PASS.
+        """
+        if (
+            self.generation_running
+            and not self.paused
+            and self.current_phase == "generate"
+            and self.active_stage_key is not None
+        ):
+            key = self.active_stage_key
+            current = self.stage_progress_values.get(key, 0.0)
+
+            # Visual fallback only. Real generator x/y output can move the bar
+            # ahead at any time. Reserve the final 10% for explicit completion.
+            if current < 0.90:
+                if current < 0.20:
+                    increment = 0.012
+                elif current < 0.50:
+                    increment = 0.007
+                elif current < 0.75:
+                    increment = 0.0035
+                else:
+                    increment = 0.0015
+
+                self._set_stage_progress(
+                    key,
+                    min(current + increment, 0.90),
+                )
+
+        self.after(250, self._progress_animation_tick)
 
     # ------------------------------------------------------------------
     # Event handling

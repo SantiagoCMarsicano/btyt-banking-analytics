@@ -2219,7 +2219,7 @@ def main() -> None:
     print(f"Customers simulated:         {len(inputs.customers):,}")
     print(
         f"Observation window:          "
-        f"{observation_start.date()} → {observation_end.date()}"
+        f"{observation_start.date()} -> {observation_end.date()}"
     )
     print()
 
