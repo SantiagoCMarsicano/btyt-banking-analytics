@@ -1,8 +1,8 @@
 """
 BTYT Banking Analytics
-External Shocks Engine V1.1.0
+External Shocks Engine — Centralized World Architecture
 
-Multilevel stochastic shock generator for 2021-2026.
+Multilevel stochastic shock generator for the configured observation period.
 
 Scales
 ------
@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import math
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, Mapping, Sequence, Tuple
 
 import numpy as np
@@ -41,17 +40,29 @@ import pandas as pd
 # Configuration
 # =============================================================================
 
-ENGINE_VERSION = "1.1.2"
+ENGINE_VERSION = "1.2.0"
 
-START_MONTH = "2021-01"
-END_MONTH = "2026-12"
+from scripts.core.paths import (
+    GENERATED_CORE_DIR,
+    GENERATED_CREDIT_DIR,
+    GENERATED_WORLD_DIR,
+    INTERIM_AUDITS_DIR,
+    INTERIM_WORLD_DIR,
+)
+from scripts.core.rng import make_rng
+from scripts.core.world import load_world
+
+WORLD = load_world()
+RNG_NAMESPACE = "external_shocks"
+
+START_MONTH = WORLD.start_date.strftime("%Y-%m")
+END_MONTH = WORLD.end_date.strftime("%Y-%m")
 MONTHS = pd.period_range(START_MONTH, END_MONTH, freq="M")
 MONTH_LABELS = [str(m) for m in MONTHS]
 N_MONTHS = len(MONTHS)
+N_YEARS = len({m.year for m in MONTHS})
 
-DEFAULT_WORLD_SEED = 20260902
-
-# Independent RNG streams.
+# Independent RNG streams by causal mechanism.
 STREAM_SYSTEMIC_OCCURRENCE = 601
 STREAM_SYSTEMIC_TIMING = 602
 STREAM_SYSTEMIC_MAGNITUDE = 603
@@ -78,24 +89,24 @@ STREAM_IDIO_MAGNITUDE = 643
 STREAM_IDIO_MEDIATION = 644
 STREAM_CUSTOMER_JITTER = 651
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA_GENERATED = ROOT / "data" / "generated"
-DATA_INTERIM = ROOT / "data" / "interim"
-DATA_MASTER = ROOT / "data" / "master"
+CUSTOMERS_PARQUET_PATH = GENERATED_CORE_DIR / "customers.parquet"
+CUSTOMERS_CSV_PATH = GENERATED_CORE_DIR / "customers.csv"
+ACCOUNTS_PARQUET_PATH = GENERATED_CORE_DIR / "accounts.parquet"
+ACCOUNTS_CSV_PATH = GENERATED_CORE_DIR / "accounts.csv"
+LOANS_PARQUET_PATH = GENERATED_CORE_DIR / "loans.parquet"
+LOANS_CSV_PATH = GENERATED_CORE_DIR / "loans.csv"
 
-CUSTOMERS_PATH = DATA_GENERATED / "customers.csv"
-ACCOUNTS_PATH = DATA_GENERATED / "accounts.csv"
-LOANS_PATH = DATA_GENERATED / "loans.csv"
+EVENTS_PATH = GENERATED_WORLD_DIR / "external_shocks.csv"
+MONTHLY_PATH = INTERIM_WORLD_DIR / "external_shock_monthly_state.csv"
+EXPOSURE_PATH = INTERIM_WORLD_DIR / "external_shock_exposure.csv"
+RESILIENCE_PATH = INTERIM_WORLD_DIR / "external_shock_resilience.csv"
+INTERACTIONS_PATH = INTERIM_WORLD_DIR / "external_shock_interactions.csv"
+IDIO_EVENTS_PATH = INTERIM_WORLD_DIR / "external_idiosyncratic_events.csv"
+CUSTOMER_STATE_PARQUET_PATH = INTERIM_WORLD_DIR / "external_customer_monthly_state.parquet"
+WORLD_PARAMS_PATH = INTERIM_WORLD_DIR / "external_shock_world_parameters.csv"
+AUDIT_PATH = INTERIM_AUDITS_DIR / "external_shock_audit.csv"
 
-EVENTS_PATH = DATA_MASTER / "external_shocks.csv"
-MONTHLY_PATH = DATA_INTERIM / "external_shock_monthly_state.csv"
-EXPOSURE_PATH = DATA_INTERIM / "external_shock_exposure.csv"
-RESILIENCE_PATH = DATA_INTERIM / "external_shock_resilience.csv"
-INTERACTIONS_PATH = DATA_INTERIM / "external_shock_interactions.csv"
-IDIO_EVENTS_PATH = DATA_INTERIM / "external_idiosyncratic_events.csv"
-CUSTOMER_STATE_PATH = DATA_INTERIM / "external_customer_monthly_state.csv"
-WORLD_PARAMS_PATH = DATA_INTERIM / "external_shock_world_parameters.csv"
-AUDIT_PATH = DATA_INTERIM / "external_shock_audit.csv"
+PARQUET_COMPRESSION = "zstd"
 
 REGIONS = ("MONTEVIDEO", "METROPOLITAN", "EAST", "NORTH", "CENTER", "LITORAL")
 SECTORS = (
@@ -452,10 +463,16 @@ IDIO_SPECS = (
 # Generic utilities
 # =============================================================================
 
-def derive_seed(world_seed: int, stream: int) -> int:
-    modulus = 2**32 - 1
-    value = (int(world_seed) * 1_000_003 + int(stream) * 97_409) % modulus
-    return int(value if value > 0 else stream + 1)
+def read_preferred(parquet_path, csv_path):
+    if parquet_path.exists():
+        return pd.read_parquet(parquet_path), parquet_path
+    if csv_path.exists():
+        return pd.read_csv(csv_path), csv_path
+    raise FileNotFoundError(
+        f"Missing required input. Expected either:\n"
+        f"  - {parquet_path}\n"
+        f"  - {csv_path}"
+    )
 
 
 def sigmoid(x):
@@ -541,10 +558,8 @@ def temporal_profile(duration: int, peak_offset: int, persistence: float, recove
 # =============================================================================
 
 def load_customers() -> pd.DataFrame:
-    if not CUSTOMERS_PATH.exists():
-        raise FileNotFoundError(f"Missing required input: {CUSTOMERS_PATH}")
-
-    raw = pd.read_csv(CUSTOMERS_PATH)
+    raw, source = read_preferred(CUSTOMERS_PARQUET_PATH, CUSTOMERS_CSV_PATH)
+    print(f"Customer source: {source}")
     cid = infer_column(raw, ("customer_id", "client_id"))
     if cid is None:
         raise KeyError("customers.csv must contain customer_id.")
@@ -611,15 +626,17 @@ def load_customers() -> pd.DataFrame:
 def load_financial_features(customers: pd.DataFrame) -> pd.DataFrame:
     features = customers[["customer_id"]].copy()
 
-    if ACCOUNTS_PATH.exists():
-        df = pd.read_csv(ACCOUNTS_PATH)
+    if ACCOUNTS_PARQUET_PATH.exists() or ACCOUNTS_CSV_PATH.exists():
+        df, source = read_preferred(ACCOUNTS_PARQUET_PATH, ACCOUNTS_CSV_PATH)
+        print(f"Account source:  {source}")
         cid = infer_column(df, ("customer_id", "client_id"))
         if cid:
             agg = df.groupby(cid).size().rename("account_count").reset_index().rename(columns={cid: "customer_id"})
             features = features.merge(agg, on="customer_id", how="left")
 
-    if LOANS_PATH.exists():
-        df = pd.read_csv(LOANS_PATH)
+    if LOANS_PARQUET_PATH.exists() or LOANS_CSV_PATH.exists():
+        df, source = read_preferred(LOANS_PARQUET_PATH, LOANS_CSV_PATH)
+        print(f"Loan source:     {source}")
         cid = infer_column(df, ("customer_id", "client_id"))
         amount = infer_column(df, ("original_amount", "loan_amount", "principal_amount"))
         status = infer_column(df, ("loan_status", "status"))
@@ -684,7 +701,7 @@ class ExternalShockWorld:
         self.world_seed = int(world_seed)
 
         def rng(stream):
-            return np.random.default_rng(derive_seed(world_seed, stream))
+            return make_rng(self.world_seed, RNG_NAMESPACE, stream)
 
         self.sys_occ = rng(STREAM_SYSTEMIC_OCCURRENCE)
         self.sys_time = rng(STREAM_SYSTEMIC_TIMING)
@@ -714,7 +731,7 @@ class ExternalShockWorld:
 
     @staticmethod
     def event_count(spec: EventSpec, rng: np.random.Generator) -> int:
-        expected = spec.annual_hazard * 6.0
+        expected = spec.annual_hazard * float(N_YEARS)
         return min(int(rng.poisson(expected)), 2)
 
     @staticmethod
@@ -1269,6 +1286,8 @@ def world_parameters(seed: int):
     return pd.DataFrame([{
         "engine_version": ENGINE_VERSION,
         "world_seed": seed,
+        "rng_namespace": RNG_NAMESPACE,
+        "configured_customer_count": WORLD.customer_count,
         "period_start": START_MONTH,
         "period_end": END_MONTH,
         "systemic_occurrence_stream": STREAM_SYSTEMIC_OCCURRENCE,
@@ -1296,8 +1315,9 @@ def world_parameters(seed: int):
 
 
 def write_outputs(events, monthly, exposure, resilience, interactions, idio_events, customer_state, params, audit):
-    DATA_MASTER.mkdir(parents=True, exist_ok=True)
-    DATA_INTERIM.mkdir(parents=True, exist_ok=True)
+    GENERATED_WORLD_DIR.mkdir(parents=True, exist_ok=True)
+    INTERIM_WORLD_DIR.mkdir(parents=True, exist_ok=True)
+    INTERIM_AUDITS_DIR.mkdir(parents=True, exist_ok=True)
 
     events.to_csv(EVENTS_PATH, index=False)
     monthly.to_csv(MONTHLY_PATH, index=False)
@@ -1305,7 +1325,11 @@ def write_outputs(events, monthly, exposure, resilience, interactions, idio_even
     resilience.to_csv(RESILIENCE_PATH, index=False)
     interactions.to_csv(INTERACTIONS_PATH, index=False)
     idio_events.to_csv(IDIO_EVENTS_PATH, index=False)
-    customer_state.to_csv(CUSTOMER_STATE_PATH, index=False)
+    customer_state.to_parquet(
+        CUSTOMER_STATE_PARQUET_PATH,
+        index=False,
+        compression=PARQUET_COMPRESSION,
+    )
     params.to_csv(WORLD_PARAMS_PATH, index=False)
 
     if audit is not None:
@@ -1315,7 +1339,7 @@ def write_outputs(events, monthly, exposure, resilience, interactions, idio_even
     print("Saved:")
     for p in (
         EVENTS_PATH, MONTHLY_PATH, EXPOSURE_PATH, RESILIENCE_PATH,
-        INTERACTIONS_PATH, IDIO_EVENTS_PATH, CUSTOMER_STATE_PATH,
+        INTERACTIONS_PATH, IDIO_EVENTS_PATH, CUSTOMER_STATE_PARQUET_PATH,
         WORLD_PARAMS_PATH,
     ):
         print(f"  {p}")
@@ -1329,7 +1353,6 @@ def write_outputs(events, monthly, exposure, resilience, interactions, idio_even
 
 def parse_args():
     parser = argparse.ArgumentParser(description="BTYT multilevel external shock engine.")
-    parser.add_argument("--seed", type=int, default=DEFAULT_WORLD_SEED)
     parser.add_argument("--audit-worlds", type=int, default=0)
     parser.add_argument("--audit-seed", type=int, default=20261001)
     parser.add_argument("--no-write", action="store_true")
@@ -1341,9 +1364,14 @@ def main():
 
     print("Loading customer universe...")
     customers = load_customers()
+    if len(customers) != WORLD.customer_count:
+        raise ValueError(
+            "Customer population does not match world_config.json: "
+            f"loaded={len(customers):,}, configured={WORLD.customer_count:,}."
+        )
     financial = load_financial_features(customers)
 
-    world = ExternalShockWorld(args.seed)
+    world = ExternalShockWorld(WORLD.seed)
     resilience = build_resilience(customers, financial, world.resilience_rng)
 
     events, monthly, exposure = world.generate_macro_world()
@@ -1357,9 +1385,9 @@ def main():
     customer_state = world.apply_idiosyncratic_state(shared_state, idio_events)
 
     print("=" * 96)
-    print("BTYT EXTERNAL SHOCK ENGINE — V1.1.2")
+    print("BTYT EXTERNAL SHOCK ENGINE — V1.2.0")
     print("=" * 96)
-    print(f"World seed: {args.seed}")
+    print(f"World seed: {WORLD.seed}")
     print(f"Customers: {len(customers):,}")
     print(f"Customer-month states: {len(customer_state):,}")
 
@@ -1435,12 +1463,12 @@ def main():
     if not args.no_write:
         write_outputs(
             events, monthly, exposure, resilience, interactions,
-            idio_events, customer_state, world_parameters(args.seed), audit
+            idio_events, customer_state, world_parameters(WORLD.seed), audit
         )
 
     print()
     print("=" * 96)
-    print("BTYT EXTERNAL SHOCK ENGINE V1.1.2: PASS")
+    print("BTYT EXTERNAL SHOCK ENGINE V1.2.0: PASS")
     print("=" * 96)
     print("No frozen observable banking dataset was modified.")
 

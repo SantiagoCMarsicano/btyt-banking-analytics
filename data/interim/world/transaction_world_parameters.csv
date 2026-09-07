@@ -1,2 +1,2 @@
-digital_initial_shift,cash_initial_shift,digital_adoption_strength,cash_transition_strength,activity_multiplier,volatility_multiplier,world_seed,transaction_seed,bank_world_seed
--0.6546546569688,-0.3601453264952717,0.20789778261588893,0.10488557416584181,0.9835176531326676,1.1196506098231278,1582593673,1582593673,1146763347
+digital_initial_shift,cash_initial_shift,digital_adoption_strength,cash_transition_strength,activity_multiplier,volatility_multiplier,world_seed,rng_namespace,bank_world_seed,engine_version
+-0.3675942329789775,0.07203954950170817,0.142232520677601,0.19613527419406196,0.9397680977862438,0.9840046459899786,739184621,transactions,739184621,4.0.0

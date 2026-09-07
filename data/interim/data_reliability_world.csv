@@ -1,0 +1,7 @@
+world_seed,mode,reliability_level,incident_id,incident_family,affected_system,start_date,end_date,affected_region,latent_severity,notes
+20260903,imperfect,realistic,INC-BRANCH-01,branch_system_degradation,transactions,2023-05-01,2023-05-18,METROPOLITAN,0.705059,Temporary branch-side infrastructure or connectivity degradation.
+20260903,imperfect,realistic,INC-LEGACY-01,legacy_migration,transactions,2023-10-01,2024-03-26,,0.424275,Coexistence of legacy and target coding conventions.
+20260903,imperfect,realistic,INC-CRM-01,crm_ingestion_degradation,campaigns,2024-05-01,2024-05-29,,0.809646,Campaign/contact ingestion degradation.
+20260903,imperfect,realistic,INC-UPGRADE-01,reliability_upgrade,transactions,2024-10-01,2026-12-31,,0.160464,Successful operational reliability improvement.
+20260903,imperfect,realistic,INC-DIGITAL-01,digital_telemetry_degradation,transactions,2025-11-11,2025-11-24,,0.716019,Partial loss of digital metadata capture.
+20260903,imperfect,realistic,INC-MANUAL-01,manual_backfill,transactions,2026-06-01,2026-06-12,EAST,0.439815,Temporary manual reconstruction or delayed operational entry.

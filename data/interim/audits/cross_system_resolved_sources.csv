@@ -1,0 +1,32 @@
+dataset,path,exists,rows,columns
+customers,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\core\customers.parquet,True,20000.0,23.0
+accounts,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\core\accounts.parquet,True,42594.0,8.0
+cards,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\core\cards.parquet,True,55639.0,8.0
+loans,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\core\loans.parquet,True,42852.0,12.0
+loan_snapshot,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\credit\loan_monthly_snapshot.parquet,True,921029.0,9.0
+transactions,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\transactions\transactions.parquet,True,354119.0,14.0
+balances,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\core\account_balances.parquet,True,35639.0,6.0
+branches,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\core\branches.csv,True,37.0,15.0
+branch_perf,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\performance\branch_monthly_performance.parquet,True,2664.0,22.0
+bank_perf,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\performance\bank_monthly_performance.parquet,True,72.0,21.0
+banks,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\core\banks.csv,True,19.0,10.0
+bank_market,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\performance\bank_market_weights.csv,True,72.0,15.0
+bank_financials,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\performance\bank_financials.csv,True,114.0,11.0
+bank_macro,,False,,
+external_shocks,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\performance\external_shocks.csv,True,12.0,17.0
+external_customer_state,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\interim\world\external_customer_monthly_state.parquet,True,1440000.0,12.0
+external_idio,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\interim\world\external_idiosyncratic_events.csv,True,21392.0,19.0
+campaigns,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\campaigns\campaigns.csv,True,20.0,7.0
+campaign_customers,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\campaigns\campaign_customers.parquet,True,21187.0,7.0
+campaign_exposures,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\generated\campaigns\campaign_exposures.parquet,True,30892.0,5.0
+operational_customers,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\operational\customers.csv,True,20000.0,23.0
+operational_accounts,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\operational\accounts.csv,True,42594.0,8.0
+operational_cards,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\operational\cards.csv,True,55639.0,8.0
+operational_loans,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\operational\loans.csv,True,42852.0,12.0
+operational_branches,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\operational\branches.csv,True,37.0,15.0
+operational_transactions,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\operational\transactions.csv,True,354119.0,14.0
+operational_campaign_customers,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\operational\campaign_customers.csv,True,21187.0,7.0
+operational_campaign_exposures,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\operational\campaign_exposures.csv,True,30925.0,5.0
+reliability_world,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\interim\data_reliability_world.csv,True,6.0,11.0
+reliability_audit,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\interim\data_reliability_audit.csv,True,5.0,5.0
+operational_lineage,C:\Users\santi\Proyectos\BTYT\Part I — Business Intelligence & Performance Management\btyt-banking-analytics\data\interim\operational_export_sources.csv,True,8.0,9.0

@@ -1,22 +1,24 @@
 """
 BTYT Banking Analytics
-Campaign Behavioral Engine — V1.0.2
+Campaign Behavioral Engine — V2.0.0
 
-Contactability and delivery calibration rewrite.
+Architecture refactor of Campaign Behavioral Engine V1.0.2.
 
-Changes from V1.0.1
--------------------
-- Preserves the optimized 10,000-customer campaign simulation universe.
-- Adds persistent customer-level latent contactability.
-- Delivery failures are now correlated across attempts through customer
-  contactability instead of behaving like nearly independent high-probability
-  successes.
-- Channel delivery probabilities are differentiated more strongly.
-- Retry attempts after a failed delivery are probabilistic rather than automatic.
-- Targeting and response calibration are intentionally unchanged.
+V2.0.0 changes
+--------------
+- Uses the canonical BTYT world configuration and root world seed.
+- Uses the centralized RNG architecture under namespace ``campaigns``.
+- Removes the campaign-specific 10,000-customer universe.
+- Processes the complete customer universe supplied by the configured run.
+- Uses stable entity-level random streams so processing order does not define
+  the realized campaign world.
+- Uses canonical BTYT data directories and Parquet-first upstream loading.
+- Writes campaign facts to Parquet, with optional CSV compatibility exports.
+- Keeps the V1.0.2 targeting, delivery, contactability, fatigue, response and
+  follow-up behavioral specification intentionally unchanged.
 - No downstream banking outcome is created by this engine.
 
-Modeling philosophy is unchanged:
+Modeling philosophy:
 campaigns modify probabilities; they do not deterministically manufacture
 customer responses or downstream banking outcomes.
 
@@ -26,6 +28,8 @@ All code and comments are intentionally written in English.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,39 +38,68 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
+from scripts.core.paths import (
+    GENERATED_CAMPAIGNS_DIR,
+    GENERATED_CORE_DIR,
+    GENERATED_CREDIT_DIR,
+    GENERATED_WORLD_DIR,
+    INTERIM_AUDITS_DIR,
+    INTERIM_WORLD_DIR,
+    WORLD_CONFIG_PATH,
+)
+from scripts.core.rng import make_rng
+
 
 # =============================================================================
-# Version and paths
+# Version, world configuration and canonical paths
 # =============================================================================
 
-ENGINE_VERSION = "1.0.2"
-DEFAULT_WORLD_SEED = 20260902
-DEFAULT_CUSTOMER_LIMIT = 10_000
-DATASET_END_DATE = pd.Timestamp("2026-12-31")
+ENGINE_VERSION = "2.1.0"
+RNG_NAMESPACE = "campaigns"
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA_MASTER = ROOT / "data" / "master"
-DATA_GENERATED = ROOT / "data" / "generated"
-DATA_INTERIM = ROOT / "data" / "interim"
 
-CAMPAIGNS_PATH = DATA_MASTER / "campaigns.csv"
-CAMPAIGN_CHANNELS_PATH = DATA_MASTER / "campaign_channels.csv"
-CAMPAIGN_GEOGRAPHY_PATH = DATA_MASTER / "campaign_geography.csv"
-PRODUCTS_PATH = DATA_MASTER / "products.csv"
+def load_world_settings() -> tuple[int, pd.Timestamp, pd.Timestamp]:
+    if not WORLD_CONFIG_PATH.exists():
+        raise FileNotFoundError(f"World config not found: {WORLD_CONFIG_PATH}")
 
-CUSTOMERS_PATH = DATA_GENERATED / "customers.csv"
-ACCOUNTS_PATH = DATA_GENERATED / "accounts.csv"
-CARDS_PATH = DATA_GENERATED / "cards.csv"
-LOANS_PATH = DATA_GENERATED / "loans.csv"
-BRANCHES_PATH = DATA_GENERATED / "branches.csv"
+    with WORLD_CONFIG_PATH.open("r", encoding="utf-8") as f:
+        config = json.load(f)
 
-EXTERNAL_STATE_PATH = DATA_INTERIM / "external_customer_monthly_state.csv"
-RESILIENCE_PATH = DATA_INTERIM / "external_shock_resilience.csv"
+    try:
+        world_seed = int(config["world"]["seed"])
+        observation_start = pd.Timestamp(config["observation_period"]["start_date"])
+        observation_end = pd.Timestamp(config["observation_period"]["end_date"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "world_config.json is missing a valid world.seed or observation_period."
+        ) from exc
 
-OUT_CAMPAIGN_CUSTOMERS = DATA_GENERATED / "campaign_customers.csv"
-OUT_CAMPAIGN_EXPOSURES = DATA_GENERATED / "campaign_exposures.csv"
-OUT_WORLD_PARAMETERS = DATA_INTERIM / "campaign_world_parameters.csv"
-OUT_AUDIT = DATA_INTERIM / "campaign_generation_audit.csv"
+    if observation_end < observation_start:
+        raise RuntimeError("Observation period end precedes start.")
+
+    return world_seed, observation_start.normalize(), observation_end.normalize()
+
+
+CAMPAIGNS_PATH = GENERATED_CAMPAIGNS_DIR / "campaigns.csv"
+CAMPAIGN_CHANNELS_PATH = GENERATED_CAMPAIGNS_DIR / "campaign_channels.csv"
+CAMPAIGN_GEOGRAPHY_PATH = GENERATED_CAMPAIGNS_DIR / "campaign_geography.csv"
+PRODUCTS_PATH = GENERATED_CORE_DIR / "products.csv"
+
+CUSTOMERS_PATH = GENERATED_CORE_DIR / "customers.parquet"
+ACCOUNTS_PATH = GENERATED_CORE_DIR / "accounts.parquet"
+CARDS_PATH = GENERATED_CREDIT_DIR / "cards.parquet"
+LOANS_PATH = GENERATED_CORE_DIR / "loans.parquet"
+BRANCHES_PATH = GENERATED_CORE_DIR / "branches.csv"
+
+EXTERNAL_STATE_PATH = INTERIM_WORLD_DIR / "external_customer_monthly_state.parquet"
+RESILIENCE_PATH = INTERIM_WORLD_DIR / "external_shock_resilience.csv"
+
+OUT_CAMPAIGN_CUSTOMERS = GENERATED_CAMPAIGNS_DIR / "campaign_customers.parquet"
+OUT_CAMPAIGN_EXPOSURES = GENERATED_CAMPAIGNS_DIR / "campaign_exposures.parquet"
+OUT_CAMPAIGN_CUSTOMERS_CSV = GENERATED_CAMPAIGNS_DIR / "campaign_customers.csv"
+OUT_CAMPAIGN_EXPOSURES_CSV = GENERATED_CAMPAIGNS_DIR / "campaign_exposures.csv"
+OUT_WORLD_PARAMETERS = INTERIM_WORLD_DIR / "campaign_world_parameters.csv"
+OUT_AUDIT = INTERIM_AUDITS_DIR / "campaign_generation_audit.csv"
 
 
 # =============================================================================
@@ -74,7 +107,6 @@ OUT_AUDIT = DATA_INTERIM / "campaign_generation_audit.csv"
 # =============================================================================
 
 RNG_STREAMS = {
-    "customer_subset": 680,
     "relationship_dates": 690,
     "product_dates": 691,
     "campaign_parameters": 700,
@@ -93,9 +125,21 @@ RNG_STREAMS = {
 }
 
 
-def make_rng(seed: int, stream: int) -> np.random.Generator:
-    ss = np.random.SeedSequence([int(seed), int(stream)])
-    return np.random.default_rng(ss)
+def stable_stream(base_stream: int, *parts: object) -> int:
+    payload = "|".join(str(part) for part in parts).encode("utf-8")
+    digest = hashlib.sha256(payload).digest()
+    entity_component = int.from_bytes(digest[:4], "big", signed=False)
+    return int((int(base_stream) + entity_component) % (2**32 - 1))
+
+
+def entity_rng(world_seed: int, stream_name: str, *parts: object) -> np.random.Generator:
+    if stream_name not in RNG_STREAMS:
+        raise KeyError(f"Unknown campaign RNG stream: {stream_name}")
+    stream = stable_stream(RNG_STREAMS[stream_name], *parts)
+    return make_rng(world_seed, RNG_NAMESPACE, stream)
+
+
+OBSERVATION_END_DATE = pd.Timestamp("2026-12-31")
 
 
 # =============================================================================
@@ -183,6 +227,24 @@ def normalize_text(x) -> str:
 
 def normalize_upper(x) -> str:
     return normalize_text(x).upper()
+
+
+def normalize_id(value) -> str:
+    """Normalize identifier-like values without treating them as quantities."""
+    if pd.isna(value):
+        return ""
+
+    text = str(value).strip()
+
+    if text.endswith(".0"):
+        candidate = text[:-2]
+        if candidate.isdigit():
+            text = candidate
+
+    if text.isdigit():
+        return str(int(text))
+
+    return text
 
 
 def normalize_customer_type(x) -> str:
@@ -277,36 +339,39 @@ class Inputs:
     resilience: pd.DataFrame
 
 
-def read_csv_required(path: Path) -> pd.DataFrame:
+def read_required(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Required file not found: {path}")
-    df = pd.read_csv(path)
-    if "index" in df.columns:
-        df = df.drop(columns=["index"])
-    return df
+    if path.suffix.lower() == ".parquet":
+        return pd.read_parquet(path)
+    return pd.read_csv(path)
 
 
-def read_csv_optional(path: Path) -> pd.DataFrame:
+def read_optional(path: Path) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame()
-    df = pd.read_csv(path)
-    if "index" in df.columns:
-        df = df.drop(columns=["index"])
-    return df
+    if path.suffix.lower() == ".parquet":
+        return pd.read_parquet(path)
+    return pd.read_csv(path)
 
 
 def load_inputs() -> Inputs:
-    campaigns = read_csv_required(CAMPAIGNS_PATH)
-    channels = read_csv_required(CAMPAIGN_CHANNELS_PATH)
-    geography = read_csv_required(CAMPAIGN_GEOGRAPHY_PATH)
-    products = read_csv_required(PRODUCTS_PATH)
-    customers = read_csv_required(CUSTOMERS_PATH)
-    accounts = read_csv_optional(ACCOUNTS_PATH)
-    cards = read_csv_optional(CARDS_PATH)
-    loans = read_csv_optional(LOANS_PATH)
-    branches = read_csv_required(BRANCHES_PATH)
-    external_state = read_csv_optional(EXTERNAL_STATE_PATH)
-    resilience = read_csv_optional(RESILIENCE_PATH)
+    campaigns = read_required(CAMPAIGNS_PATH)
+    channels = read_required(CAMPAIGN_CHANNELS_PATH)
+    geography = read_required(CAMPAIGN_GEOGRAPHY_PATH)
+    products = read_required(PRODUCTS_PATH)
+    customers = read_required(CUSTOMERS_PATH)
+    accounts = read_optional(ACCOUNTS_PATH)
+    cards = read_optional(CARDS_PATH)
+    loans = read_optional(LOANS_PATH)
+    branches = read_required(BRANCHES_PATH)
+    external_state = read_optional(EXTERNAL_STATE_PATH)
+    resilience = read_optional(RESILIENCE_PATH)
+
+    # Normalize branch identifiers before joins. IDs are categorical keys, not
+    # numeric measures; this reconciles values such as 25, "25", and "25.0".
+    customers["primary_branch_id"] = customers["primary_branch_id"].map(normalize_id)
+    branches["branch_id"] = branches["branch_id"].map(normalize_id)
 
     ensure_columns(
         campaigns,
@@ -350,7 +415,7 @@ def load_inputs() -> Inputs:
             "customer_status",
             "closing_year",
         ],
-        "customers.csv",
+        "customers.parquet",
     )
     ensure_columns(
         branches,
@@ -365,6 +430,9 @@ def load_inputs() -> Inputs:
         "branches.csv",
     )
 
+    campaigns["campaign_id"] = campaigns["campaign_id"].astype(str)
+    channels["campaign_id"] = channels["campaign_id"].astype(str)
+    geography["campaign_id"] = geography["campaign_id"].astype(str)
     campaigns["start_date"] = pd.to_datetime(campaigns["start_date"])
     campaigns["end_date"] = pd.to_datetime(campaigns["end_date"])
     campaigns["campaign_type"] = campaigns["campaign_type"].map(normalize_upper)
@@ -387,7 +455,7 @@ def load_inputs() -> Inputs:
                 "positive_shared_impulse",
                 "net_external_state",
             ],
-            "external_customer_monthly_state.csv",
+            "external_customer_monthly_state.parquet",
         )
 
     if not resilience.empty:
@@ -413,66 +481,17 @@ def load_inputs() -> Inputs:
 
 
 # =============================================================================
-# Deterministic 10k campaign universe
-# =============================================================================
-
-def select_campaign_universe(
-    inputs: Inputs,
-    world_seed: int,
-    customer_limit: int | None,
-) -> Inputs:
-    """
-    Select the customer universe used by the campaign engine.
-
-    If customers.csv contains more than customer_limit customers, a deterministic
-    random subset is selected using an independent RNG stream.
-
-    This does NOT alter customers.csv or redefine the upstream banking universe.
-    It only limits the customer panel processed by this campaign simulation.
-    """
-    if customer_limit is None or customer_limit <= 0:
-        return inputs
-
-    n = len(inputs.customers)
-    if n <= customer_limit:
-        return inputs
-
-    rng = make_rng(world_seed, RNG_STREAMS["customer_subset"])
-    idx = np.sort(rng.choice(n, size=customer_limit, replace=False))
-    customers = inputs.customers.iloc[idx].copy().reset_index(drop=True)
-    customer_ids = set(customers["customer_id"])
-
-    def restrict(df: pd.DataFrame) -> pd.DataFrame:
-        if df.empty or "customer_id" not in df.columns:
-            return df
-        return df[df["customer_id"].isin(customer_ids)].copy().reset_index(drop=True)
-
-    return Inputs(
-        campaigns=inputs.campaigns,
-        channels=inputs.channels,
-        geography=inputs.geography,
-        products=inputs.products,
-        customers=customers,
-        accounts=restrict(inputs.accounts),
-        cards=restrict(inputs.cards),
-        loans=restrict(inputs.loans),
-        branches=inputs.branches,
-        external_state=restrict(inputs.external_state),
-        resilience=restrict(inputs.resilience),
-    )
-
-
-# =============================================================================
 # Historical state and optimized lookup maps
 # =============================================================================
 
 def infer_relationship_dates(
     customers: pd.DataFrame,
-    rng: np.random.Generator,
+    world_seed: int,
 ) -> dict:
     lookup = {}
 
     for row in customers.itertuples(index=False):
+        rng = entity_rng(world_seed, "relationship_dates", row.customer_id)
         reg_year = int(row.registration_year)
         reg_date = random_date_between(
             pd.Timestamp(f"{reg_year}-01-01"),
@@ -505,7 +524,7 @@ def build_product_lookup(
     accounts: pd.DataFrame,
     cards: pd.DataFrame,
     loans: pd.DataFrame,
-    rng: np.random.Generator,
+    world_seed: int,
 ):
     """
     Build O(1)-style product lifecycle lookup structures.
@@ -534,6 +553,13 @@ def build_product_lookup(
                 continue
 
             open_year = int(open_year)
+            rng = entity_rng(
+                world_seed,
+                "product_dates",
+                row.customer_id,
+                row.product_id,
+                open_year,
+            )
             open_date = random_date_between(
                 pd.Timestamp(f"{open_year}-01-01"),
                 pd.Timestamp(f"{open_year}-12-31"),
@@ -623,7 +649,7 @@ def build_external_lookup(external_state: pd.DataFrame) -> dict:
 def enrich_customers(
     inputs: Inputs,
     relationship_lookup: dict,
-    rng_contactability: np.random.Generator,
+    world_seed: int,
 ) -> pd.DataFrame:
     branch_geo = inputs.branches[
         ["branch_id", "department", "locality", "region"]
@@ -650,7 +676,10 @@ def enrich_customers(
     c["campaign_region"] = c["region"].map(normalize_upper)
 
     if "birth_year" in c.columns:
-        c["birth_year_num"] = pd.to_numeric(c["birth_year"], errors="coerce")
+        c["birth_year_num"] = (
+            pd.to_numeric(c["birth_year"], errors="coerce")
+            .astype("float64")
+        )
     else:
         c["birth_year_num"] = np.nan
 
@@ -676,7 +705,7 @@ def enrich_customers(
         else ""
     )
 
-    age_2024 = 2024 - c["birth_year_num"]
+    age_2024 = 2024.0 - c["birth_year_num"].to_numpy(dtype=float)
     age_component = np.where(
         np.isfinite(age_2024),
         np.clip((55.0 - age_2024) / 35.0, -0.6, 0.8),
@@ -720,7 +749,17 @@ def enrich_customers(
     # fail several delivery attempts in the same campaign. This creates
     # realistic positive correlation among delivery failures without making
     # exposure deterministic.
-    contact_noise = rng_contactability.normal(0.0, 0.95, size=len(c))
+    contact_noise = np.array(
+        [
+            entity_rng(
+                world_seed,
+                "customer_contactability",
+                customer_id,
+            ).normal(0.0, 0.95)
+            for customer_id in c["customer_id"]
+        ],
+        dtype=float,
+    )
     contact_logit = (
         0.10
         + 0.48 * c["digital_base_score"].to_numpy()
@@ -785,7 +824,7 @@ def build_geography_eligibility(
 def build_campaign_parameters(
     campaigns: pd.DataFrame,
     channels: pd.DataFrame,
-    rng: np.random.Generator,
+    world_seed: int,
 ) -> dict:
     params = {}
 
@@ -794,6 +833,11 @@ def build_campaign_parameters(
     for campaign in campaigns.sort_values(["start_date", "campaign_id"]).itertuples(index=False):
         ctype = normalize_upper(campaign.campaign_type)
         a, b = REACH_PRIOR_BY_TYPE.get(ctype, (2.0, 5.5))
+        rng = entity_rng(
+            world_seed,
+            "campaign_parameters",
+            campaign.campaign_id,
+        )
 
         params[str(campaign.campaign_id)] = {
             "reach_propensity": float(rng.beta(a, b)),
@@ -1340,34 +1384,15 @@ def generate_campaign_behavior(
     inputs: Inputs,
     world_seed: int,
 ):
-    rng_relationship = make_rng(world_seed, RNG_STREAMS["relationship_dates"])
-    rng_product_dates = make_rng(world_seed, RNG_STREAMS["product_dates"])
-    rng_campaign_params = make_rng(world_seed, RNG_STREAMS["campaign_parameters"])
-    rng_targeting = make_rng(world_seed, RNG_STREAMS["targeting"])
-    rng_selection_timing = make_rng(world_seed, RNG_STREAMS["selection_timing"])
-    rng_contactability = make_rng(world_seed, RNG_STREAMS["customer_contactability"])
-    rng_exposure_occurrence = make_rng(world_seed, RNG_STREAMS["exposure_occurrence"])
-    rng_exposure_channel = make_rng(world_seed, RNG_STREAMS["exposure_channel"])
-    rng_exposure_timing = make_rng(world_seed, RNG_STREAMS["exposure_timing"])
-    rng_followup = make_rng(world_seed, RNG_STREAMS["followup_occurrence"])
-    rng_response_occurrence = make_rng(world_seed, RNG_STREAMS["response_occurrence"])
-    rng_response_direction = make_rng(world_seed, RNG_STREAMS["response_direction"])
-    rng_response_timing = make_rng(world_seed, RNG_STREAMS["response_timing"])
-    rng_fatigue = make_rng(world_seed, RNG_STREAMS["fatigue"])
-    rng_heterogeneity = make_rng(
-        world_seed,
-        RNG_STREAMS["customer_response_heterogeneity"],
-    )
-
     print("Precomputing relationship state...")
-    relationship_lookup = infer_relationship_dates(inputs.customers, rng_relationship)
+    relationship_lookup = infer_relationship_dates(inputs.customers, world_seed)
 
     print("Precomputing product lifecycle maps...")
     exact_lookup = build_product_lookup(
         inputs.accounts,
         inputs.cards,
         inputs.loans,
-        rng_product_dates,
+        world_seed,
     )
     family_lookup = build_family_lookup(exact_lookup, inputs.products)
 
@@ -1375,7 +1400,7 @@ def generate_campaign_behavior(
     customers = enrich_customers(
         inputs,
         relationship_lookup,
-        rng_contactability,
+        world_seed,
     )
 
     print(
@@ -1399,7 +1424,7 @@ def generate_campaign_behavior(
     campaign_params = build_campaign_parameters(
         inputs.campaigns,
         inputs.channels,
-        rng_campaign_params,
+        world_seed,
     )
     product_map = build_product_metadata(inputs.products)
 
@@ -1426,7 +1451,6 @@ def generate_campaign_behavior(
     audit_rows = []
 
     exposure_history = defaultdict(list)
-    exposure_counter = 1
 
     campaigns = inputs.campaigns.sort_values(
         ["start_date", "campaign_id"]
@@ -1467,7 +1491,7 @@ def generate_campaign_behavior(
         candidate_ids = set(type_candidates["customer_id"]) & geo_ids
         candidate_rows = [
             all_customer_lookup[cid]
-            for cid in candidate_ids
+            for cid in sorted(candidate_ids, key=str)
         ]
 
         eligible_count = 0
@@ -1480,6 +1504,44 @@ def generate_campaign_behavior(
         no_response_count = 0
 
         for customer in candidate_rows:
+            customer_id = customer.customer_id
+            rng_selection_timing = entity_rng(
+                world_seed, "selection_timing", campaign_id, customer_id
+            )
+            rng_targeting = entity_rng(
+                world_seed, "targeting", campaign_id, customer_id
+            )
+            rng_fatigue = entity_rng(
+                world_seed, "fatigue", campaign_id, customer_id
+            )
+            rng_exposure_channel = entity_rng(
+                world_seed, "exposure_channel", campaign_id, customer_id
+            )
+            rng_exposure_occurrence = entity_rng(
+                world_seed, "exposure_occurrence", campaign_id, customer_id
+            )
+            rng_exposure_timing = entity_rng(
+                world_seed, "exposure_timing", campaign_id, customer_id
+            )
+            rng_followup = entity_rng(
+                world_seed, "followup_occurrence", campaign_id, customer_id
+            )
+            rng_response_occurrence = entity_rng(
+                world_seed, "response_occurrence", campaign_id, customer_id
+            )
+            rng_response_direction = entity_rng(
+                world_seed, "response_direction", campaign_id, customer_id
+            )
+            rng_response_timing = entity_rng(
+                world_seed, "response_timing", campaign_id, customer_id
+            )
+            rng_heterogeneity = entity_rng(
+                world_seed,
+                "customer_response_heterogeneity",
+                campaign_id,
+                customer_id,
+            )
+
             selection_date = random_date_between(
                 campaign.start_date,
                 campaign.end_date,
@@ -1601,7 +1663,7 @@ def generate_campaign_behavior(
                     )
                     response_date = min(
                         response_date,
-                        DATASET_END_DATE,
+                        OBSERVATION_END_DATE,
                     )
 
                     if response_status == "POSITIVE":
@@ -1616,14 +1678,13 @@ def generate_campaign_behavior(
 
                 exposure_rows.append(
                     {
-                        "exposure_id": f"E{exposure_counter:06d}",
+                        "exposure_id": f"E_{campaign_id}_{customer_id}_01",
                         "campaign_id": campaign_id,
                         "customer_id": customer.customer_id,
                         "exposure_datetime": first_exposure_dt,
                         "channel": first_channel,
                     }
                 )
-                exposure_counter += 1
                 exposure_history[customer.customer_id].append(first_exposure_dt)
 
                 followups = generate_followups(
@@ -1641,17 +1702,20 @@ def generate_campaign_behavior(
                     rng_exposure_timing,
                 )
 
-                for followup_dt, followup_channel in followups:
+                for followup_number, (followup_dt, followup_channel) in enumerate(
+                    followups, start=2
+                ):
                     exposure_rows.append(
                         {
-                            "exposure_id": f"E{exposure_counter:06d}",
+                            "exposure_id": (
+                                f"E_{campaign_id}_{customer_id}_{followup_number:02d}"
+                            ),
                             "campaign_id": campaign_id,
                             "customer_id": customer.customer_id,
                             "exposure_datetime": followup_dt,
                             "channel": followup_channel,
                         }
                     )
-                    exposure_counter += 1
                     exposure_history[customer.customer_id].append(
                         followup_dt
                     )
@@ -1718,6 +1782,8 @@ def generate_campaign_behavior(
         {"parameter": "world_seed", "value": str(world_seed)},
         {"parameter": "campaign_count", "value": str(len(inputs.campaigns))},
         {"parameter": "campaign_customer_universe", "value": str(len(inputs.customers))},
+        {"parameter": "rng_namespace", "value": RNG_NAMESPACE},
+        {"parameter": "rng_entity_isolation", "value": "campaign_customer_stable_v1"},
         {"parameter": "contactability_model", "value": "persistent_customer_latent_v1"},
         {"parameter": "delivery_retry_model", "value": "probabilistic_retry_after_failure"},
     ]
@@ -1878,7 +1944,7 @@ def validate_outputs(
 
     checks["response_before_dataset_end"] = (
         cc2.loc[has_response, "response_date"]
-        <= DATASET_END_DATE
+        <= OBSERVATION_END_DATE
     ).all()
 
     selected_pairs = set(
@@ -2069,32 +2135,40 @@ def save_outputs(
     campaign_exposures: pd.DataFrame,
     world_params: pd.DataFrame,
     audit: pd.DataFrame,
+    write_csv: bool,
 ) -> None:
-    DATA_GENERATED.mkdir(parents=True, exist_ok=True)
-    DATA_INTERIM.mkdir(parents=True, exist_ok=True)
+    GENERATED_CAMPAIGNS_DIR.mkdir(parents=True, exist_ok=True)
+    INTERIM_WORLD_DIR.mkdir(parents=True, exist_ok=True)
+    INTERIM_AUDITS_DIR.mkdir(parents=True, exist_ok=True)
 
-    cc = campaign_customers.copy()
-    ce = campaign_exposures.copy()
-
-    for col in [
-        "selection_date",
-        "exposure_date",
-        "response_date",
-    ]:
-        original_na = cc[col].isna()
-        cc[col] = pd.to_datetime(
-            cc[col]
-        ).dt.strftime("%Y-%m-%d")
-        cc.loc[original_na, col] = ""
-
-    ce["exposure_datetime"] = pd.to_datetime(
-        ce["exposure_datetime"]
-    ).dt.strftime("%Y-%m-%d %H:%M:%S")
-
-    cc.to_csv(OUT_CAMPAIGN_CUSTOMERS, index=False)
-    ce.to_csv(OUT_CAMPAIGN_EXPOSURES, index=False)
+    campaign_customers.to_parquet(
+        OUT_CAMPAIGN_CUSTOMERS,
+        index=False,
+        compression="zstd",
+    )
+    campaign_exposures.to_parquet(
+        OUT_CAMPAIGN_EXPOSURES,
+        index=False,
+        compression="zstd",
+    )
     world_params.to_csv(OUT_WORLD_PARAMETERS, index=False)
     audit.to_csv(OUT_AUDIT, index=False)
+
+    if write_csv:
+        cc = campaign_customers.copy()
+        ce = campaign_exposures.copy()
+
+        for col in ["selection_date", "exposure_date", "response_date"]:
+            original_na = cc[col].isna()
+            cc[col] = pd.to_datetime(cc[col]).dt.strftime("%Y-%m-%d")
+            cc.loc[original_na, col] = ""
+
+        ce["exposure_datetime"] = pd.to_datetime(
+            ce["exposure_datetime"]
+        ).dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        cc.to_csv(OUT_CAMPAIGN_CUSTOMERS_CSV, index=False)
+        ce.to_csv(OUT_CAMPAIGN_EXPOSURES_CSV, index=False)
 
     print()
     print("Saved:")
@@ -2102,6 +2176,9 @@ def save_outputs(
     print(f"  {OUT_CAMPAIGN_EXPOSURES}")
     print(f"  {OUT_WORLD_PARAMETERS}")
     print(f"  {OUT_AUDIT}")
+    if write_csv:
+        print(f"  {OUT_CAMPAIGN_CUSTOMERS_CSV}")
+        print(f"  {OUT_CAMPAIGN_EXPOSURES_CSV}")
 
 
 # =============================================================================
@@ -2109,51 +2186,47 @@ def save_outputs(
 # =============================================================================
 
 def main() -> None:
+    global OBSERVATION_END_DATE
+
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=DEFAULT_WORLD_SEED,
-    )
-    parser.add_argument(
-        "--customer-limit",
-        type=int,
-        default=DEFAULT_CUSTOMER_LIMIT,
-        help=(
-            "Maximum customers processed by the campaign engine. "
-            "Default: 10000. Use 0 to process the full customers.csv universe."
-        ),
-    )
     parser.add_argument(
         "--no-write",
         action="store_true",
+        help="Run generation and validation without persisting outputs.",
+    )
+    parser.add_argument(
+        "--write-csv",
+        action="store_true",
+        help="Also write compatibility CSV exports for campaign fact tables.",
     )
     args = parser.parse_args()
 
+    world_seed, observation_start, observation_end = load_world_settings()
+    OBSERVATION_END_DATE = observation_end
+
     print("Loading campaign and banking universe...")
-    inputs_full = load_inputs()
+    inputs = load_inputs()
 
-    source_customer_count = len(inputs_full.customers)
-
-    inputs = select_campaign_universe(
-        inputs_full,
-        args.seed,
-        args.customer_limit,
-    )
+    if len(inputs.customers) == 0:
+        raise RuntimeError("Campaign engine received an empty customer universe.")
 
     print("=" * 104)
     print(f"BTYT CAMPAIGN BEHAVIORAL ENGINE — V{ENGINE_VERSION}")
     print("=" * 104)
-    print(f"World seed:                  {args.seed}")
+    print(f"World seed:                  {world_seed}")
+    print(f"RNG namespace:               {RNG_NAMESPACE}")
     print(f"Campaigns:                   {len(inputs.campaigns):,}")
-    print(f"Customers in source file:    {source_customer_count:,}")
     print(f"Customers simulated:         {len(inputs.customers):,}")
+    print(
+        f"Observation window:          "
+        f"{observation_start.date()} → {observation_end.date()}"
+    )
     print()
 
     campaign_customers, campaign_exposures, world_params, audit = (
         generate_campaign_behavior(
             inputs,
-            args.seed,
+            world_seed,
         )
     )
 
@@ -2176,6 +2249,7 @@ def main() -> None:
             campaign_exposures,
             world_params,
             audit,
+            write_csv=args.write_csv,
         )
     else:
         print()

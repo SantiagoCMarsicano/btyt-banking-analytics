@@ -1,10 +1,24 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+from scripts.core.paths import (
+    GENERATED_DATA_DIR,
+    GENERATED_CORE_DIR,
+    GENERATED_CREDIT_DIR,
+    GENERATED_PERFORMANCE_DIR,
+    GENERATED_TRANSACTIONS_DIR,
+    INTERIM_DATA_DIR,
+    INTERIM_CREDIT_DIR,
+    INTERIM_WORLD_DIR,
+    WORLD_CONFIG_PATH,
+)
+from scripts.core.rng import make_rng
 
 
 # =============================================================================
@@ -15,8 +29,8 @@ import pandas as pd
 # It does not regenerate or modify upstream canonical data.
 #
 # Outputs:
-#   data/generated/branch_monthly_performance.csv
-#   data/generated/bank_monthly_performance.csv
+#   data/generated/performance/branch_monthly_performance.parquet
+#   data/generated/performance/bank_monthly_performance.parquet
 #
 # All monetary outputs are expressed in UYU-equivalent.
 # All code and comments are intentionally written in English.
@@ -27,40 +41,122 @@ import pandas as pd
 # PROJECT PATHS
 # =============================================================================
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CUSTOMERS_CANDIDATES = [
+    GENERATED_CORE_DIR / "customers.parquet",
+    GENERATED_CORE_DIR / "customers.csv",
+    GENERATED_DATA_DIR / "customers.parquet",
+    GENERATED_DATA_DIR / "customers.csv",
+]
 
-DATA_GENERATED = PROJECT_ROOT / "data" / "generated"
-DATA_INTERIM = PROJECT_ROOT / "data" / "interim"
-DATA_MASTER = PROJECT_ROOT / "data" / "master"
+ACCOUNTS_CANDIDATES = [
+    GENERATED_CORE_DIR / "accounts.parquet",
+    GENERATED_CORE_DIR / "accounts.csv",
+    GENERATED_DATA_DIR / "accounts.parquet",
+    GENERATED_DATA_DIR / "accounts.csv",
+]
 
-CUSTOMERS_PATH = DATA_GENERATED / "customers.csv"
-ACCOUNTS_PATH = DATA_GENERATED / "accounts.csv"
-CARDS_PATH = DATA_GENERATED / "cards.csv"
-LOANS_PATH = DATA_GENERATED / "loans.csv"
-LOAN_SNAPSHOT_PATH = DATA_GENERATED / "loan_monthly_snapshot.csv"
-TRANSACTIONS_PATH = DATA_GENERATED / "transactions.csv"
-ACCOUNT_BALANCES_PATH = DATA_GENERATED / "account_balances.csv"
-BRANCHES_PATH = DATA_GENERATED / "branches.csv"
-BRANCH_STATE_PATH = DATA_INTERIM / "branch_yearly_state.csv"
-LOAN_LIFECYCLE_BRIDGE_PATH = DATA_INTERIM / "loan_lifecycle_bridge.csv"
-PRODUCTS_PATH = DATA_MASTER / "products.csv"
+CARDS_CANDIDATES = [
+    GENERATED_CREDIT_DIR / "cards.parquet",
+    GENERATED_CORE_DIR / "cards.parquet",
+    GENERATED_CREDIT_DIR / "cards.csv",
+    GENERATED_CORE_DIR / "cards.csv",
+    GENERATED_DATA_DIR / "cards.parquet",
+    GENERATED_DATA_DIR / "cards.csv",
+]
 
-BRANCH_OUTPUT_PATH = DATA_GENERATED / "branch_monthly_performance.csv"
-BANK_OUTPUT_PATH = DATA_GENERATED / "bank_monthly_performance.csv"
+LOANS_CANDIDATES = [
+    GENERATED_CORE_DIR / "loans.parquet",
+    GENERATED_CREDIT_DIR / "loans.parquet",
+    GENERATED_CORE_DIR / "loans.csv",
+    GENERATED_CREDIT_DIR / "loans.csv",
+    GENERATED_DATA_DIR / "loans.parquet",
+    GENERATED_DATA_DIR / "loans.csv",
+]
+
+LOAN_SNAPSHOT_CANDIDATES = [
+    GENERATED_CREDIT_DIR / "loan_monthly_snapshot.parquet",
+    GENERATED_CREDIT_DIR / "loan_monthly_snapshot.csv",
+    GENERATED_DATA_DIR / "loan_monthly_snapshot.parquet",
+    GENERATED_DATA_DIR / "loan_monthly_snapshot.csv",
+]
+
+TRANSACTIONS_CANDIDATES = [
+    GENERATED_TRANSACTIONS_DIR / "transactions.parquet",
+    GENERATED_TRANSACTIONS_DIR / "transactions.csv",
+    GENERATED_DATA_DIR / "transactions.parquet",
+    GENERATED_DATA_DIR / "transactions.csv",
+]
+
+ACCOUNT_BALANCES_CANDIDATES = [
+    GENERATED_CORE_DIR / "account_balances.parquet",
+    GENERATED_CORE_DIR / "account_balances.csv",
+    GENERATED_TRANSACTIONS_DIR / "account_balances.parquet",
+    GENERATED_TRANSACTIONS_DIR / "account_balances.csv",
+    GENERATED_DATA_DIR / "account_balances.parquet",
+    GENERATED_DATA_DIR / "account_balances.csv",
+]
+
+BRANCHES_CANDIDATES = [
+    GENERATED_CORE_DIR / "branches.csv",
+    GENERATED_CORE_DIR / "branches.parquet",
+    GENERATED_DATA_DIR / "branches.csv",
+    GENERATED_DATA_DIR / "branches.parquet",
+]
+
+BRANCH_STATE_CANDIDATES = [
+    INTERIM_WORLD_DIR / "branch_yearly_state.csv",
+    INTERIM_WORLD_DIR / "branch_yearly_state.parquet",
+    INTERIM_DATA_DIR / "branch_yearly_state.csv",
+    INTERIM_DATA_DIR / "branch_yearly_state.parquet",
+]
+
+LOAN_LIFECYCLE_BRIDGE_CANDIDATES = [
+    INTERIM_CREDIT_DIR / "loan_lifecycle_bridge.csv",
+    INTERIM_CREDIT_DIR / "loan_lifecycle_bridge.parquet",
+    INTERIM_DATA_DIR / "loan_lifecycle_bridge.csv",
+    INTERIM_DATA_DIR / "loan_lifecycle_bridge.parquet",
+]
+
+PRODUCTS_CANDIDATES = [
+    GENERATED_CORE_DIR / "products.csv",
+    GENERATED_CORE_DIR / "products.parquet",
+    GENERATED_DATA_DIR / "products.csv",
+    GENERATED_DATA_DIR / "products.parquet",
+]
+
+BRANCH_OUTPUT_PATH = GENERATED_PERFORMANCE_DIR / "branch_monthly_performance.parquet"
+BANK_OUTPUT_PATH = GENERATED_PERFORMANCE_DIR / "bank_monthly_performance.parquet"
+BRANCH_OUTPUT_CSV_PATH = GENERATED_PERFORMANCE_DIR / "branch_monthly_performance.csv"
+BANK_OUTPUT_CSV_PATH = GENERATED_PERFORMANCE_DIR / "bank_monthly_performance.csv"
+
+ENGINE_VERSION = "2.1.2"
+RNG_NAMESPACE = "branch_performance"
+REPORTING_CURRENCY = "UYU"
+TRANSACTION_BATCH_SIZE = 500_000
 
 
 # =============================================================================
-# OBSERVATION WINDOW
+# WORLD CONFIGURATION
 # =============================================================================
 
-OBS_START = pd.Period("2021-01", freq="M")
-OBS_END = pd.Period("2026-12", freq="M")
+def load_world_settings() -> tuple[int, pd.Period, pd.Period]:
+    with WORLD_CONFIG_PATH.open("r", encoding="utf-8") as handle:
+        config = json.load(handle)
+
+    world_seed = int(config["world"]["seed"])
+    observation = config["observation_period"]
+    obs_start = pd.Period(observation["start_date"], freq="M")
+    obs_end = pd.Period(observation["end_date"], freq="M")
+
+    if obs_end < obs_start:
+        raise ValueError("World observation end date precedes start date.")
+
+    return world_seed, obs_start, obs_end
+
+
+WORLD_SEED, OBS_START, OBS_END = load_world_settings()
 MONTHS = pd.period_range(OBS_START, OBS_END, freq="M")
 YEARS = tuple(range(OBS_START.year, OBS_END.year + 1))
-
-REPORTING_CURRENCY = "UYU"
-TRANSACTION_CHUNK_SIZE = 500_000
-PERFORMANCE_SEED = 20260902
 
 
 # =============================================================================
@@ -279,6 +375,63 @@ def require_file(path: Path) -> None:
         raise FileNotFoundError(f"Required input not found: {path}")
 
 
+def resolve_first_existing(paths: list[Path], label: str) -> Path:
+    for path in paths:
+        if path.exists():
+            return path
+
+    raise FileNotFoundError(
+        f"Required input not found for {label}. Checked:\n"
+        + "\n".join(f"  {path}" for path in paths)
+    )
+
+
+def read_table(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
+    """Read a BTYT table from Parquet or CSV."""
+    require_file(path)
+
+    suffix = path.suffix.lower()
+    if suffix == ".parquet":
+        return pd.read_parquet(path, columns=columns)
+    if suffix == ".csv":
+        return pd.read_csv(path, usecols=columns)
+
+    raise ValueError(f"Unsupported table format: {path}")
+
+
+def iter_transaction_batches(
+    path: Path,
+    columns: list[str],
+    batch_size: int,
+):
+    """Yield transaction batches without loading the full fact table into memory."""
+    require_file(path)
+
+    suffix = path.suffix.lower()
+
+    if suffix == ".parquet":
+        import pyarrow.parquet as pq
+
+        parquet_file = pq.ParquetFile(path)
+        for batch in parquet_file.iter_batches(
+            batch_size=batch_size,
+            columns=columns,
+        ):
+            yield batch.to_pandas()
+        return
+
+    if suffix == ".csv":
+        yield from pd.read_csv(
+            path,
+            usecols=columns,
+            chunksize=batch_size,
+            low_memory=False,
+        )
+        return
+
+    raise ValueError(f"Unsupported transaction format: {path}")
+
+
 def require_columns(df: pd.DataFrame, required: set[str], name: str) -> None:
     missing = required - set(df.columns)
     if missing:
@@ -317,11 +470,11 @@ def annual_rate_to_fraction(series: pd.Series) -> pd.Series:
 
 
 def stable_uniform(key: str, low: float, high: float) -> float:
-    payload = f"{PERFORMANCE_SEED}|{key}".encode("utf-8")
-    digest = hashlib.blake2b(payload, digest_size=8).digest()
-    integer = int.from_bytes(digest, byteorder="big", signed=False)
-    u = integer / float(2**64 - 1)
-    return float(low + (high - low) * u)
+    """Return a deterministic entity-local draw from the branch-performance namespace."""
+    digest = hashlib.sha256(key.encode("utf-8")).digest()
+    stream = int.from_bytes(digest[:4], byteorder="big", signed=False)
+    rng = make_rng(WORLD_SEED, RNG_NAMESPACE, stream)
+    return float(rng.uniform(low, high))
 
 
 def monthly_index(year_month: str, annual_index: dict[int, float]) -> float:
@@ -347,32 +500,51 @@ def branch_operational_in_year(opening_year: int, closing_year, year: int) -> bo
 # =============================================================================
 
 def load_inputs() -> dict[str, pd.DataFrame]:
-    for path in [
-        CUSTOMERS_PATH,
-        ACCOUNTS_PATH,
-        CARDS_PATH,
-        LOANS_PATH,
-        LOAN_SNAPSHOT_PATH,
-        TRANSACTIONS_PATH,
-        ACCOUNT_BALANCES_PATH,
-        BRANCHES_PATH,
-        BRANCH_STATE_PATH,
-        LOAN_LIFECYCLE_BRIDGE_PATH,
-        PRODUCTS_PATH,
-    ]:
-        require_file(path)
+    resolved = {
+        "customers": resolve_first_existing(CUSTOMERS_CANDIDATES, "customers"),
+        "accounts": resolve_first_existing(ACCOUNTS_CANDIDATES, "accounts"),
+        "cards": resolve_first_existing(CARDS_CANDIDATES, "cards"),
+        "loans": resolve_first_existing(LOANS_CANDIDATES, "loans"),
+        "loan_snapshot": resolve_first_existing(
+            LOAN_SNAPSHOT_CANDIDATES,
+            "loan_monthly_snapshot",
+        ),
+        "transactions": resolve_first_existing(
+            TRANSACTIONS_CANDIDATES,
+            "transactions",
+        ),
+        "account_balances": resolve_first_existing(
+            ACCOUNT_BALANCES_CANDIDATES,
+            "account_balances",
+        ),
+        "branches": resolve_first_existing(BRANCHES_CANDIDATES, "branches"),
+        "branch_state": resolve_first_existing(
+            BRANCH_STATE_CANDIDATES,
+            "branch_yearly_state",
+        ),
+        "loan_lifecycle_bridge": resolve_first_existing(
+            LOAN_LIFECYCLE_BRIDGE_CANDIDATES,
+            "loan_lifecycle_bridge",
+        ),
+        "products": resolve_first_existing(PRODUCTS_CANDIDATES, "products"),
+    }
+
+    print("\nResolved inputs:")
+    for label, path in resolved.items():
+        print(f"  {label:<24} {path}")
 
     data = {
-        "customers": pd.read_csv(CUSTOMERS_PATH),
-        "accounts": pd.read_csv(ACCOUNTS_PATH),
-        "cards": pd.read_csv(CARDS_PATH),
-        "loans": pd.read_csv(LOANS_PATH),
-        "loan_snapshot": pd.read_csv(LOAN_SNAPSHOT_PATH),
-        "account_balances": pd.read_csv(ACCOUNT_BALANCES_PATH),
-        "branches": pd.read_csv(BRANCHES_PATH),
-        "branch_state": pd.read_csv(BRANCH_STATE_PATH),
-        "loan_lifecycle_bridge": pd.read_csv(LOAN_LIFECYCLE_BRIDGE_PATH),
-        "products": pd.read_csv(PRODUCTS_PATH),
+        "customers": read_table(resolved["customers"]),
+        "accounts": read_table(resolved["accounts"]),
+        "cards": read_table(resolved["cards"]),
+        "loans": read_table(resolved["loans"]),
+        "loan_snapshot": read_table(resolved["loan_snapshot"]),
+        "account_balances": read_table(resolved["account_balances"]),
+        "branches": read_table(resolved["branches"]),
+        "branch_state": read_table(resolved["branch_state"]),
+        "loan_lifecycle_bridge": read_table(resolved["loan_lifecycle_bridge"]),
+        "products": read_table(resolved["products"]),
+        "_transactions_path": resolved["transactions"],
     }
 
     require_columns(data["customers"], {"customer_id", "primary_branch_id"}, "customers.csv")
@@ -487,17 +659,17 @@ def validate_inputs(data: dict[str, pd.DataFrame]) -> None:
     lifecycle = data["loan_lifecycle_bridge"]
 
     if branches["branch_id"].isna().any():
-        raise ValueError("branches.csv contains invalid branch_id values.")
+        raise ValueError("branches contains invalid branch_id values.")
 
     if lifecycle["loan_id"].duplicated().any():
-        raise ValueError("loan_lifecycle_bridge.csv contains duplicate loan_id values.")
+        raise ValueError("loan_lifecycle_bridge contains duplicate loan_id values.")
 
     unknown_lifecycle_loans = set(lifecycle["loan_id"].dropna()) - set(loans["loan_id"].dropna())
     if unknown_lifecycle_loans:
         sample = sorted(unknown_lifecycle_loans)[:10]
-        raise ValueError(f"loan_lifecycle_bridge.csv contains unknown loan_id values: {sample}")
+        raise ValueError(f"loan_lifecycle_bridge contains unknown loan_id values: {sample}")
     if branches["branch_id"].duplicated().any():
-        raise ValueError("Duplicate branch_id in branches.csv.")
+        raise ValueError("Duplicate branch_id in branches.")
 
     expected_branch_years = pd.MultiIndex.from_product(
         [branches["branch_id"].tolist(), YEARS], names=["branch_id", "year"]
@@ -508,21 +680,21 @@ def validate_inputs(data: dict[str, pd.DataFrame]) -> None:
     missing_state = expected_branch_years.difference(actual_branch_years)
     if len(missing_state):
         raise ValueError(
-            "branch_yearly_state.csv does not cover all branch/year combinations. "
+            "branch_yearly_state does not cover all branch/year combinations. "
             f"Missing examples: {list(missing_state[:10])}"
         )
 
     if branch_state.duplicated(["branch_id", "year"]).any():
-        raise ValueError("Duplicate branch_id/year in branch_yearly_state.csv.")
+        raise ValueError("Duplicate branch_id/year in branch_yearly_state.")
 
     known_branches = set(branches["branch_id"].dropna())
     unknown_account_branches = set(accounts["branch_id"].dropna()) - known_branches
     unknown_loan_branches = set(loans["branch_id"].dropna()) - known_branches
 
     if unknown_account_branches:
-        raise ValueError(f"accounts.csv contains unknown branches: {sorted(unknown_account_branches)[:10]}")
+        raise ValueError(f"accounts contains unknown branches: {sorted(unknown_account_branches)[:10]}")
     if unknown_loan_branches:
-        raise ValueError(f"loans.csv contains unknown branches: {sorted(unknown_loan_branches)[:10]}")
+        raise ValueError(f"loans contains unknown branches: {sorted(unknown_loan_branches)[:10]}")
 
     for name, mapping in [
         ("FX_UYU_PER_USD", FX_UYU_PER_USD),
@@ -579,7 +751,7 @@ def build_account_metrics(
     closing = pd.to_numeric(frame["closing_balance"], errors="raise").astype(float)
 
     if (opening < -0.01).any() or (closing < -0.01).any():
-        raise ValueError("Negative account balance detected in account_balances.csv.")
+        raise ValueError("Negative account balance detected in account_balances.")
 
     frame["average_native_balance"] = (opening + closing) / 2.0
     frame["fx"] = fx_factor(frame["currency"], frame["year"])
@@ -808,6 +980,7 @@ def build_loan_metrics(
     # Provision releases may offset current deterioration and write-off charges,
     # but the managerial output column represents credit-loss expense rather
     # than provision income. Therefore branch-month credit loss is floored at 0.
+    aggregate["credit_loss"] = aggregate["credit_loss"].clip(lower=0.0)
 
     return aggregate
 
@@ -954,15 +1127,13 @@ def build_transaction_metrics(
 
     print("\nReading canonical transactions in chunks...")
 
-    for chunk_number, chunk in enumerate(
-        pd.read_csv(
-            transactions_path,
-            usecols=usecols,
-            chunksize=TRANSACTION_CHUNK_SIZE,
-            low_memory=False,
-        ),
-        start=1,
-    ):
+    batches = iter_transaction_batches(
+        transactions_path,
+        columns=usecols,
+        batch_size=TRANSACTION_BATCH_SIZE,
+    )
+
+    for chunk_number, chunk in enumerate(batches, start=1):
         total_rows += len(chunk)
         chunk["account_id"] = normalize_id_string(chunk["account_id"])
         chunk["transaction_status"] = chunk["transaction_status"].astype("string").str.upper()
@@ -987,7 +1158,7 @@ def build_transaction_metrics(
         if branch.isna().any():
             bad = chunk.loc[branch.isna(), "account_id"].head(10).tolist()
             raise ValueError(
-                "transactions.csv contains account_id values missing from accounts.csv: "
+                "transactions contains account_id values missing from accounts: "
                 f"{bad}"
             )
 
@@ -1186,7 +1357,7 @@ def assemble_performance(data: dict[str, pd.DataFrame]) -> pd.DataFrame:
         data["loan_lifecycle_bridge"],
     )
     card_fees = build_card_fee_metrics(data["cards"], data["accounts"], data["customers"])
-    transaction_metrics = build_transaction_metrics(TRANSACTIONS_PATH, data["accounts"], data["products"])
+    transaction_metrics = build_transaction_metrics(data["_transactions_path"], data["accounts"], data["products"])
 
     frame = base.merge(account_metrics, on=["branch_id", "year_month"], how="left", validate="one_to_one")
     frame = frame.merge(loan_metrics, on=["branch_id", "year_month"], how="left", validate="one_to_one")
@@ -1234,7 +1405,7 @@ def validate_branch_output(branch_output: pd.DataFrame, branches: pd.DataFrame) 
     if branch_output.duplicated(["branch_id", "year_month"]).any():
         errors.append("duplicate branch_id/year_month")
     if set(branch_output["year_month"]) != {str(m) for m in MONTHS}:
-        errors.append("year_month coverage differs from 2021-01 through 2026-12")
+        errors.append(f"year_month coverage differs from {OBS_START} through {OBS_END}")
     if set(branch_output["branch_id"]) != set(branches["branch_id"]):
         errors.append("branch coverage differs from branches.csv")
 
@@ -1254,6 +1425,7 @@ def validate_branch_output(branch_output: pd.DataFrame, branches: pd.DataFrame) 
         "variable_cost",
         "operational_cost",
         "total_operating_cost",
+        "credit_loss",
     ]
     for col in nonnegative:
         if (pd.to_numeric(branch_output[col], errors="coerce") < -0.01).any():
@@ -1325,6 +1497,81 @@ def finalize_branch_output(frame: pd.DataFrame) -> pd.DataFrame:
     for col in MONETARY_COLUMNS:
         result[col] = pd.to_numeric(result[col], errors="raise").round(2)
     return result.sort_values(["year_month", "branch_id"]).reset_index(drop=True)
+
+
+# =============================================================================
+# INPUT COVERAGE DIAGNOSTICS
+# =============================================================================
+
+def print_input_coverage_diagnostics(data: dict[str, pd.DataFrame]) -> None:
+    accounts = data["accounts"]
+    customers = data["customers"]
+    balances = data["account_balances"]
+    transactions_path = data["_transactions_path"]
+
+    total_accounts = int(accounts["account_id"].nunique())
+    total_customers = int(customers["customer_id"].nunique())
+    balance_accounts = int(balances["account_id"].nunique())
+    balance_rows = len(balances)
+
+    expected_account_months_upper = total_accounts * len(MONTHS)
+    balance_account_coverage = safe_ratio(balance_accounts, total_accounts)
+    balance_row_density = safe_ratio(balance_rows, expected_account_months_upper)
+
+    transaction_rows = 0
+    completed_rows = 0
+    transaction_accounts: set[str] = set()
+    transaction_customers: set[str] = set()
+    account_customer = (
+        accounts[["account_id", "customer_id"]]
+        .drop_duplicates("account_id")
+        .set_index("account_id")["customer_id"]
+    )
+
+    coverage_cols = ["account_id", "transaction_status"]
+    for chunk in iter_transaction_batches(
+        transactions_path,
+        columns=coverage_cols,
+        batch_size=TRANSACTION_BATCH_SIZE,
+    ):
+        transaction_rows += len(chunk)
+        chunk["account_id"] = normalize_id_string(chunk["account_id"])
+        status = chunk["transaction_status"].astype("string").str.upper()
+        completed = chunk.loc[status.eq("COMPLETED"), "account_id"].dropna()
+        completed_rows += len(completed)
+        transaction_accounts.update(completed.astype(str).unique().tolist())
+        mapped_customers = completed.map(account_customer).dropna()
+        transaction_customers.update(mapped_customers.astype(str).unique().tolist())
+
+    years = max(len(YEARS), 1)
+    tx_per_account_year = safe_ratio(completed_rows, total_accounts * years)
+    tx_per_customer_year = safe_ratio(completed_rows, total_customers * years)
+    tx_account_coverage = safe_ratio(len(transaction_accounts), total_accounts)
+    tx_customer_coverage = safe_ratio(len(transaction_customers), total_customers)
+
+    print("\nInput coverage diagnostics:")
+    print(
+        f"  account balances — represented accounts: {balance_accounts:,}/{total_accounts:,} "
+        f"({balance_account_coverage:.2%})"
+    )
+    print(
+        f"  account balances — rows: {balance_rows:,} | "
+        f"density vs accounts × months upper bound: {balance_row_density:.2%}"
+    )
+    print(
+        f"  transactions — source rows: {transaction_rows:,} | "
+        f"completed rows: {completed_rows:,}"
+    )
+    print(
+        f"  transactions — accounts represented: {len(transaction_accounts):,}/{total_accounts:,} "
+        f"({tx_account_coverage:.2%})"
+    )
+    print(
+        f"  transactions — customers represented: {len(transaction_customers):,}/{total_customers:,} "
+        f"({tx_customer_coverage:.2%})"
+    )
+    print(f"  completed transactions / account / year: {tx_per_account_year:,.2f}")
+    print(f"  completed transactions / customer / year: {tx_per_customer_year:,.2f}")
 
 
 # =============================================================================
@@ -1401,6 +1648,14 @@ def print_audit(branch_output: pd.DataFrame, bank_output: pd.DataFrame) -> None:
         .to_string(index=False)
     )
     print("Monetary values above are UYU millions.")
+
+    annual["deposit_to_loan_ratio"] = (
+        annual["average_deposits"]
+        / annual["average_loan_balance"].replace(0, np.nan)
+    )
+    print("\nFunding diagnostic — average deposits / average loan balance:")
+    for row in annual[["year", "deposit_to_loan_ratio"]].itertuples(index=False):
+        print(f"  {row.year}: {row.deposit_to_loan_ratio:.2%}")
 
     total_cost = branch_output["total_operating_cost"].sum()
     cost_mix = {
@@ -1486,12 +1741,16 @@ def print_audit(branch_output: pd.DataFrame, bank_output: pd.DataFrame) -> None:
 # MAIN
 # =============================================================================
 
-def main() -> None:
+def main(write_csv: bool = False) -> None:
     print("=" * 84)
-    print("BTYT BRANCH PERFORMANCE ENGINE")
+    print(f"BTYT BRANCH PERFORMANCE ENGINE — V{ENGINE_VERSION}")
+    print(f"World seed: {WORLD_SEED}")
+    print(f"RNG namespace: {RNG_NAMESPACE}")
+    print(f"Observation window: {OBS_START} → {OBS_END}")
     print("=" * 84)
 
     print("Loading frozen canonical inputs...")
+    print("Canonical-first transition-aware input resolution enabled.")
     data = normalize_inputs(load_inputs())
     validate_inputs(data)
 
@@ -1503,6 +1762,8 @@ def main() -> None:
     print(f"Loan lifecycle bridge rows: {len(data['loan_lifecycle_bridge']):,}")
     print(f"Account-month balance rows: {len(data['account_balances']):,}")
     print(f"Branch-year states: {len(data['branch_state']):,}")
+
+    print_input_coverage_diagnostics(data)
 
     print("\nBuilding monthly branch economics...")
     raw = assemble_performance(data)
@@ -1517,9 +1778,12 @@ def main() -> None:
     validate_branch_output(branch_output, data["branches"])
     validate_bank_reconciliation(branch_output, bank_output)
 
-    DATA_GENERATED.mkdir(parents=True, exist_ok=True)
-    branch_output.to_csv(BRANCH_OUTPUT_PATH, index=False)
-    bank_output.to_csv(BANK_OUTPUT_PATH, index=False)
+    GENERATED_PERFORMANCE_DIR.mkdir(parents=True, exist_ok=True)
+    branch_output.to_parquet(BRANCH_OUTPUT_PATH, index=False, compression="zstd")
+    bank_output.to_parquet(BANK_OUTPUT_PATH, index=False, compression="zstd")
+    if write_csv:
+        branch_output.to_csv(BRANCH_OUTPUT_CSV_PATH, index=False)
+        bank_output.to_csv(BANK_OUTPUT_CSV_PATH, index=False)
 
     print_audit(branch_output, bank_output)
 
@@ -1528,7 +1792,18 @@ def main() -> None:
     print(f"  shape = {branch_output.shape}")
     print(f"  {BANK_OUTPUT_PATH}")
     print(f"  shape = {bank_output.shape}")
+    if write_csv:
+        print(f"  {BRANCH_OUTPUT_CSV_PATH}")
+        print(f"  {BANK_OUTPUT_CSV_PATH}")
+
+    print(f"\nBTYT BRANCH PERFORMANCE ENGINE V{ENGINE_VERSION}: PASS")
+    print("No upstream canonical dataset was modified.")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate BTYT branch and bank performance outputs.")
+    parser.add_argument("--write-csv", action="store_true", help="Also write compatibility CSV outputs.")
+    args = parser.parse_args()
+    main(write_csv=args.write_csv)

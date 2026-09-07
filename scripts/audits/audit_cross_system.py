@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""BTYT final cross-system audit — V1.0.2.
+"""BTYT final cross-system audit — V2.0.0.
 
 Read-only integrity audit for the frozen Part I synthetic banking universe.
 It does not modify generated datasets and does not recalibrate any DGP.
@@ -29,7 +27,7 @@ import numpy as np
 import pandas as pd
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 GENERATED = ROOT / "data" / "generated"
 GENERATED_CORE = GENERATED / "core"
@@ -40,6 +38,10 @@ GENERATED_PERFORMANCE = GENERATED / "performance"
 
 INTERIM = ROOT / "data" / "interim"
 INTERIM_WORLD = INTERIM / "world"
+INTERIM_CREDIT = INTERIM / "credit"
+INTERIM_AUDITS = INTERIM / "audits"
+
+OPERATIONAL = ROOT / "data" / "operational"
 
 OBS_START = pd.Timestamp("2021-01-01")
 OBS_END = pd.Timestamp("2026-12-31 23:59:59")
@@ -63,17 +65,51 @@ def skip(section, check, detail):
     DETAILS.append((section, check, "SKIP", str(detail)))
 
 
-def load_csv(path, dtype=None):
-    if not path.exists():
+def load_table(path, dtype=None):
+    if path is None or not Path(path).exists():
         return None
-    return pd.read_csv(path, dtype=dtype, low_memory=False)
+
+    path = Path(path)
+    suffix = path.suffix.lower()
+
+    if suffix == ".parquet":
+        return pd.read_parquet(path)
+
+    if suffix == ".csv":
+        return pd.read_csv(path, dtype=dtype, low_memory=False)
+
+    raise ValueError(f"Unsupported dataset format: {path}")
 
 
 def first_existing(*paths):
     for path in paths:
-        if path.exists():
-            return path
+        if path is not None and Path(path).exists():
+            return Path(path)
     return None
+
+
+def canonical_candidates(*paths):
+    expanded = []
+    for path in paths:
+        p = Path(path)
+        if p.suffix:
+            expanded.append(p)
+        else:
+            expanded.extend([p.with_suffix(".parquet"), p.with_suffix(".csv")])
+    return expanded
+
+
+def resolve_dataset(name, *paths, required=False):
+    candidates = canonical_candidates(*paths)
+    resolved = first_existing(*candidates)
+
+    if required and resolved is None:
+        searched = "\\n  - ".join(str(p) for p in candidates)
+        raise FileNotFoundError(
+            f"Missing mandatory canonical dataset: {name}. Searched:\\n  - {searched}"
+        )
+
+    return resolved
 
 
 def normalize_id(df, columns):
@@ -543,111 +579,556 @@ def audit_campaigns(campaigns, campaign_customers, exposures, customers):
            not missing_pairs, f"missing_pairs={len(missing_pairs)}")
 
 
+def audit_operational_exports(canonical, operational, reliability_world, reliability_audit):
+    section = "Operational reliability"
+    section_header(section)
+
+    if operational is None or not operational:
+        skip(
+            section,
+            "operational export layer",
+            "data/operational not present or no exports resolved",
+        )
+        return
+
+    protected_datasets = [
+        "customers",
+        "accounts",
+        "cards",
+        "loans",
+        "branches",
+        "transactions",
+    ]
+
+    for name in protected_datasets:
+        source = canonical.get(name)
+        out = operational.get(name)
+
+        if source is None or out is None:
+            skip(
+                section,
+                f"{name} operational export",
+                "canonical or operational dataset not present",
+            )
+            continue
+
+        record(
+            section,
+            f"{name} operational row count preserved",
+            len(source) == len(out),
+            f"canonical={len(source)} operational={len(out)}",
+        )
+
+        if name == "transactions":
+            protected_cols = [
+                "transaction_id",
+                "account_id",
+                "amount",
+                "direction",
+                "transaction_status",
+                "failure_reason",
+                "transaction_type",
+            ]
+
+            left = source.sort_values("transaction_id").reset_index(drop=True)
+            right = out.sort_values("transaction_id").reset_index(drop=True)
+
+            protected_ok = True
+            changed = []
+
+            for col in protected_cols:
+                if col not in left.columns or col not in right.columns:
+                    continue
+
+                a = left[col]
+                b = right[col]
+
+                if pd.api.types.is_numeric_dtype(a):
+                    same = np.isclose(
+                        pd.to_numeric(a, errors="coerce"),
+                        pd.to_numeric(b, errors="coerce"),
+                        equal_nan=True,
+                    ).all()
+                else:
+                    same = a.fillna("<NA>").astype(str).equals(
+                        b.fillna("<NA>").astype(str)
+                    )
+
+                if not same:
+                    protected_ok = False
+                    changed.append(col)
+
+            record(
+                section,
+                "protected transaction truth preserved operationally",
+                protected_ok,
+                f"changed={changed}",
+            )
+
+    canonical_exp = canonical.get("campaign_exposures")
+    operational_exp = operational.get("campaign_exposures")
+
+    if canonical_exp is not None and operational_exp is not None:
+        record(
+            section,
+            "campaign exposure operational row count not reduced",
+            len(operational_exp) >= len(canonical_exp),
+            f"canonical={len(canonical_exp)} operational={len(operational_exp)}",
+        )
+
+    if reliability_world is not None:
+        required_cols = {
+            "world_seed",
+            "mode",
+            "reliability_level",
+            "incident_id",
+            "incident_family",
+            "affected_system",
+            "start_date",
+            "end_date",
+            "latent_severity",
+        }
+        record(
+            section,
+            "reliability world schema",
+            required_cols.issubset(reliability_world.columns),
+            f"missing={sorted(required_cols - set(reliability_world.columns))}",
+        )
+
+    if reliability_audit is not None:
+        required_cols = {
+            "dataset",
+            "anomaly_family",
+            "records_exposed",
+            "records_affected",
+            "realized_rate",
+        }
+        schema_ok = required_cols.issubset(reliability_audit.columns)
+
+        record(
+            section,
+            "reliability audit schema",
+            schema_ok,
+            f"missing={sorted(required_cols - set(reliability_audit.columns))}",
+        )
+
+        if schema_ok and not reliability_audit.empty:
+            exposed = numeric(reliability_audit["records_exposed"])
+            affected = numeric(reliability_audit["records_affected"])
+            rate = numeric(reliability_audit["realized_rate"])
+
+            record(
+                section,
+                "reliability audit counts coherent",
+                exposed.notna().all()
+                and affected.notna().all()
+                and (affected >= 0).all()
+                and (exposed >= 0).all()
+                and (affected <= exposed).all(),
+            )
+
+            record(
+                section,
+                "reliability realized rates bounded",
+                rate.notna().all() and rate.between(0, 1).all(),
+            )
+
+
 def main():
-    print("=" * 78)
-    print("BTYT FINAL CROSS-SYSTEM AUDIT — V1.0.2")
-    print("=" * 78)
+    print("=" * 92)
+    print("BTYT FINAL CROSS-SYSTEM AUDIT — V2.0.0")
+    print("=" * 92)
     print(f"Root: {ROOT}")
 
     paths = {
-        "customers": GENERATED_CORE / "customers.csv",
-        "accounts": GENERATED_CORE / "accounts.csv",
-        "cards": GENERATED_CREDIT / "cards.csv",
-        "loans": GENERATED_CREDIT / "loans.csv",
-        "loan_snapshot": GENERATED_CREDIT / "loan_monthly_snapshot.csv",
-        "transactions": GENERATED_TRANSACTIONS / "transactions.csv",
-        "balances": GENERATED_CORE / "account_balances.csv",
-        "branches": GENERATED_CORE / "branches.csv",
-        "branch_perf": GENERATED_PERFORMANCE / "branch_monthly_performance.csv",
-        "banks": GENERATED_CORE / "banks.csv",
-        "bank_market": GENERATED_PERFORMANCE / "bank_market_weights.csv",
-        "bank_financials": GENERATED_PERFORMANCE / "bank_financials.csv",
-        "bank_macro": GENERATED_PERFORMANCE / "bank_macro_environment.csv",
-        "bank_perf": GENERATED_PERFORMANCE / "bank_monthly_performance.csv",
-        "external_shocks": GENERATED_PERFORMANCE / "external_shocks.csv",
-        "external_customer_state": INTERIM_WORLD / "external_customer_monthly_state.csv",
-        "external_idio": INTERIM_WORLD / "external_idiosyncratic_events.csv",
-        "campaigns": GENERATED_CAMPAIGNS / "campaigns.csv",
-        "campaign_customers": GENERATED_CAMPAIGNS / "campaign_customers.csv",
-        "campaign_exposures": GENERATED_CAMPAIGNS / "campaign_exposures.csv",
+        "customers": resolve_dataset(
+            "customers",
+            GENERATED_CORE / "customers",
+            required=True,
+        ),
+        "accounts": resolve_dataset(
+            "accounts",
+            GENERATED_CORE / "accounts",
+            required=True,
+        ),
+        "cards": resolve_dataset(
+            "cards",
+            GENERATED_CORE / "cards",
+            GENERATED_CREDIT / "cards",
+        ),
+        "loans": resolve_dataset(
+            "loans",
+            GENERATED_CORE / "loans",
+            GENERATED_CREDIT / "loans",
+        ),
+        "loan_snapshot": resolve_dataset(
+            "loan_monthly_snapshot",
+            GENERATED_CREDIT / "loan_monthly_snapshot",
+            required=True,
+        ),
+        "transactions": resolve_dataset(
+            "transactions",
+            GENERATED_TRANSACTIONS / "transactions",
+            required=True,
+        ),
+        "balances": resolve_dataset(
+            "account_balances",
+            GENERATED_CORE / "account_balances",
+            GENERATED_TRANSACTIONS / "account_balances",
+            required=True,
+        ),
+        "branches": resolve_dataset(
+            "branches",
+            GENERATED_CORE / "branches",
+            required=True,
+        ),
+        "branch_perf": resolve_dataset(
+            "branch_monthly_performance",
+            GENERATED_PERFORMANCE / "branch_monthly_performance",
+            required=True,
+        ),
+        "bank_perf": resolve_dataset(
+            "bank_monthly_performance",
+            GENERATED_PERFORMANCE / "bank_monthly_performance",
+            required=True,
+        ),
+        "banks": resolve_dataset(
+            "banks",
+            GENERATED_CORE / "banks",
+            required=True,
+        ),
+        "bank_market": resolve_dataset(
+            "bank_market_weights",
+            GENERATED_PERFORMANCE / "bank_market_weights",
+            GENERATED_CORE / "bank_market_weights",
+        ),
+        "bank_financials": resolve_dataset(
+            "bank_financials",
+            GENERATED_PERFORMANCE / "bank_financials",
+            GENERATED_CORE / "bank_financials",
+        ),
+        "bank_macro": resolve_dataset(
+            "bank_macro_environment",
+            GENERATED_PERFORMANCE / "bank_macro_environment",
+            GENERATED_CORE / "bank_macro_environment",
+        ),
+        "external_shocks": resolve_dataset(
+            "external_shocks",
+            GENERATED_PERFORMANCE / "external_shocks",
+            GENERATED_CORE / "external_shocks",
+        ),
+        "external_customer_state": resolve_dataset(
+            "external_customer_monthly_state",
+            INTERIM_WORLD / "external_customer_monthly_state",
+        ),
+        "external_idio": resolve_dataset(
+            "external_idiosyncratic_events",
+            INTERIM_WORLD / "external_idiosyncratic_events",
+        ),
+        "campaigns": resolve_dataset(
+            "campaigns",
+            GENERATED_CAMPAIGNS / "campaigns",
+        ),
+        "campaign_customers": resolve_dataset(
+            "campaign_customers",
+            GENERATED_CAMPAIGNS / "campaign_customers",
+            required=True,
+        ),
+        "campaign_exposures": resolve_dataset(
+            "campaign_exposures",
+            GENERATED_CAMPAIGNS / "campaign_exposures",
+            required=True,
+        ),
+        "operational_customers": resolve_dataset(
+            "operational customers",
+            OPERATIONAL / "customers",
+        ),
+        "operational_accounts": resolve_dataset(
+            "operational accounts",
+            OPERATIONAL / "accounts",
+        ),
+        "operational_cards": resolve_dataset(
+            "operational cards",
+            OPERATIONAL / "cards",
+        ),
+        "operational_loans": resolve_dataset(
+            "operational loans",
+            OPERATIONAL / "loans",
+        ),
+        "operational_branches": resolve_dataset(
+            "operational branches",
+            OPERATIONAL / "branches",
+        ),
+        "operational_transactions": resolve_dataset(
+            "operational transactions",
+            OPERATIONAL / "transactions",
+        ),
+        "operational_campaign_customers": resolve_dataset(
+            "operational campaign_customers",
+            OPERATIONAL / "campaign_customers",
+        ),
+        "operational_campaign_exposures": resolve_dataset(
+            "operational campaign_exposures",
+            OPERATIONAL / "campaign_exposures",
+        ),
+        "reliability_world": resolve_dataset(
+            "data_reliability_world",
+            INTERIM / "data_reliability_world",
+        ),
+        "reliability_audit": resolve_dataset(
+            "data_reliability_audit",
+            INTERIM / "data_reliability_audit",
+        ),
+        "operational_lineage": resolve_dataset(
+            "operational_export_sources",
+            INTERIM / "operational_export_sources",
+        ),
     }
 
-    mandatory = ["customers", "accounts", "transactions", "balances", "branches", "banks"]
-    missing = [k for k in mandatory if paths[k] is None or not Path(paths[k]).exists()]
-    if missing:
-        raise FileNotFoundError(f"Missing mandatory BTYT datasets: {missing}")
+    print()
+    print("Resolved datasets")
+    print("-" * 92)
+    for name, path in paths.items():
+        print(
+            f"  {name:<34} "
+            f"{str(path) if path is not None else 'NOT FOUND / OPTIONAL'}"
+        )
+
+    data = {
+        name: load_table(path) if path is not None else None
+        for name, path in paths.items()
+    }
 
     print()
-    print("Datasets")
-    print("-" * 78)
-    for name, path in paths.items():
-        print(f"  {name:<28} {str(path) if path is not None else 'NOT FOUND'}")
-
-    data = {k: load_csv(v) if v is not None else None for k, v in paths.items()}
+    print("Resolved shapes")
+    print("-" * 92)
+    for name, df in data.items():
+        if df is None:
+            continue
+        print(
+            f"  {name:<34} rows={len(df):>10,}  "
+            f"cols={len(df.columns):>4}"
+        )
 
     for df in data.values():
-        normalize_id(df, [
-            "customer_id", "account_id", "linked_account_id", "card_id", "loan_id",
-            "branch_id", "transaction_branch_id", "bank_id", "counterparty_bank_id",
-            "campaign_id", "exposure_id",
-        ])
+        normalize_id(
+            df,
+            [
+                "customer_id",
+                "account_id",
+                "linked_account_id",
+                "card_id",
+                "loan_id",
+                "branch_id",
+                "transaction_branch_id",
+                "bank_id",
+                "counterparty_bank_id",
+                "campaign_id",
+                "exposure_id",
+                "shock_id",
+                "event_id",
+            ],
+        )
 
     audit_customers(data["customers"])
-    audit_accounts(data["accounts"], data["customers"], data["branches"])
-    audit_cards(data["cards"], data["customers"], data["accounts"])
-    audit_loans(data["loans"], data["loan_snapshot"], data["customers"], data["branches"])
-    audit_transactions(
-        data["transactions"], data["balances"], data["accounts"],
-        data["branches"], data["banks"],
+    audit_accounts(
+        data["accounts"],
+        data["customers"],
+        data["branches"],
     )
-    audit_branches(data["branches"], data["branch_perf"])
+    audit_cards(
+        data["cards"],
+        data["customers"],
+        data["accounts"],
+    )
+    audit_loans(
+        data["loans"],
+        data["loan_snapshot"],
+        data["customers"],
+        data["branches"],
+    )
+    audit_transactions(
+        data["transactions"],
+        data["balances"],
+        data["accounts"],
+        data["branches"],
+        data["banks"],
+    )
+    audit_branches(
+        data["branches"],
+        data["branch_perf"],
+    )
     audit_banks(
-        data["banks"], data["bank_market"], data["bank_financials"],
-        data["bank_macro"], data["bank_perf"],
+        data["banks"],
+        data["bank_market"],
+        data["bank_financials"],
+        data["bank_macro"],
+        data["bank_perf"],
     )
     audit_shocks(
-        data["external_shocks"], data["external_customer_state"], data["external_idio"]
+        data["external_shocks"],
+        data["external_customer_state"],
+        data["external_idio"],
     )
     audit_campaigns(
-        data["campaigns"], data["campaign_customers"],
-        data["campaign_exposures"], data["customers"],
+        data["campaigns"],
+        data["campaign_customers"],
+        data["campaign_exposures"],
+        data["customers"],
+    )
+
+    canonical_for_operational = {
+        "customers": data["customers"],
+        "accounts": data["accounts"],
+        "cards": data["cards"],
+        "loans": data["loans"],
+        "branches": data["branches"],
+        "transactions": data["transactions"],
+        "campaign_customers": data["campaign_customers"],
+        "campaign_exposures": data["campaign_exposures"],
+    }
+
+    operational = {
+        "customers": data["operational_customers"],
+        "accounts": data["operational_accounts"],
+        "cards": data["operational_cards"],
+        "loans": data["operational_loans"],
+        "branches": data["operational_branches"],
+        "transactions": data["operational_transactions"],
+        "campaign_customers": data["operational_campaign_customers"],
+        "campaign_exposures": data["operational_campaign_exposures"],
+    }
+
+    audit_operational_exports(
+        canonical_for_operational,
+        operational,
+        data["reliability_world"],
+        data["reliability_audit"],
     )
 
     print()
-    print("=" * 78)
+    print("=" * 92)
     print("BTYT FINAL CROSS-SYSTEM AUDIT — SUMMARY")
-    print("=" * 78)
+    print("=" * 92)
 
     sections = [
-        "Core banking", "Transactions", "Credit lifecycle", "Balances",
-        "Branch performance", "Bank performance", "External shocks",
+        "Core banking",
+        "Credit lifecycle",
+        "Transactions",
+        "Balances",
+        "Branch performance",
+        "Bank performance",
+        "External shocks",
         "Campaign behavior",
+        "Operational reliability",
     ]
 
     section_status = {}
     for section in sections:
-        vals = [p for s, _, p, _ in RESULTS if s == section and p is not None]
-        section_status[section] = bool(vals) and all(vals)
-        print(f"{section:<28} {'PASS' if section_status[section] else 'FAIL'}")
+        vals = [
+            passed
+            for result_section, _, passed, _ in RESULTS
+            if result_section == section and passed is not None
+        ]
 
-    hard_results = [p for _, _, p, _ in RESULTS if p is not None]
+        if not vals:
+            section_status[section] = None
+            label = "SKIP"
+        else:
+            section_status[section] = all(vals)
+            label = "PASS" if section_status[section] else "FAIL"
+
+        print(f"{section:<32} {label}")
+
+    hard_results = [
+        passed
+        for _, _, passed, _ in RESULTS
+        if passed is not None
+    ]
     final_pass = bool(hard_results) and all(hard_results)
 
-    print(f"{'Referential integrity':<28} {'PASS' if final_pass else 'CHECK ABOVE'}")
-    print(f"{'Temporal integrity':<28} {'PASS' if final_pass else 'CHECK ABOVE'}")
-    print(f"{'Reproducibility contract':<28} {'PASS' if final_pass else 'CHECK ABOVE'}")
-    print("-" * 78)
+    print("-" * 92)
+    print(
+        f"{'Referential integrity':<32} "
+        f"{'PASS' if final_pass else 'CHECK ABOVE'}"
+    )
+    print(
+        f"{'Temporal integrity':<32} "
+        f"{'PASS' if final_pass else 'CHECK ABOVE'}"
+    )
+    print(
+        f"{'Financial reconciliation':<32} "
+        f"{'PASS' if final_pass else 'CHECK ABOVE'}"
+    )
+    print(
+        f"{'Operational reliability contract':<32} "
+        f"{'PASS' if final_pass else 'CHECK ABOVE'}"
+    )
+    print("-" * 92)
     print(f"FINAL VALIDATION: {'PASS' if final_pass else 'FAIL'}")
 
     if DETAILS:
         print()
         print("Details / skipped checks")
-        print("-" * 78)
+        print("-" * 92)
         for section, check, status, detail in DETAILS:
-            print(f"[{status}] {section} / {check}: {detail}")
+            print(
+                f"[{status}] {section} / {check}: {detail}"
+            )
+
+    INTERIM_AUDITS.mkdir(parents=True, exist_ok=True)
+
+    results_df = pd.DataFrame(
+        RESULTS,
+        columns=["section", "check", "passed", "detail"],
+    )
+    results_df["status"] = results_df["passed"].map(
+        {True: "PASS", False: "FAIL"}
+    ).fillna("SKIP")
+
+    results_out = INTERIM_AUDITS / "cross_system_audit_results.csv"
+    results_df[
+        ["section", "check", "status", "detail"]
+    ].to_csv(
+        results_out,
+        index=False,
+    )
+
+    resolved_rows = []
+    for name, path in paths.items():
+        df = data.get(name)
+        resolved_rows.append(
+            {
+                "dataset": name,
+                "path": str(path) if path is not None else "",
+                "exists": path is not None,
+                "rows": len(df) if df is not None else np.nan,
+                "columns": (
+                    len(df.columns)
+                    if df is not None
+                    else np.nan
+                ),
+            }
+        )
+
+    resolved_out = (
+        INTERIM_AUDITS / "cross_system_resolved_sources.csv"
+    )
+    pd.DataFrame(resolved_rows).to_csv(
+        resolved_out,
+        index=False,
+    )
+
+    print()
+    print(f"Saved audit results:   {results_out}")
+    print(f"Saved source registry: {resolved_out}")
 
     if not final_pass:
         raise SystemExit(1)
+
+    print()
+    print("BTYT FINAL CROSS-SYSTEM AUDIT V2.0.0: PASS")
+    print("All canonical datasets remained read-only.")
 
 
 if __name__ == "__main__":

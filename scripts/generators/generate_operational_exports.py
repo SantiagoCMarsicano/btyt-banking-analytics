@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""BTYT Operational Data Reliability Layer — V1.0.3.
+"""BTYT Operational Data Reliability Layer — V2.0.1.
 
 Transforms the frozen BTYT ground-truth universe into operational exports with
 stochastic, reproducible, explainable data-quality degradation.
@@ -31,7 +29,7 @@ import pandas as pd
 # Paths and configuration
 # =============================================================================
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 GENERATED = ROOT / "data" / "generated"
 MASTER = ROOT / "data" / "master"
 INTERIM = ROOT / "data" / "interim"
@@ -63,7 +61,7 @@ LEVEL_MULTIPLIER = {
     "stress": 1.85,
 }
 
-# These columns are not intentionally corrupted by V1.0.3.
+# These columns are not intentionally corrupted by V2.0.0.
 PROTECTED_TRANSACTION_COLUMNS = {
     "transaction_id",
     "account_id",
@@ -84,25 +82,74 @@ PROTECTED_LOAN_COLUMNS = {
     "customer_id",
 }
 
-# Input / output names are intentionally explicit.
-FILES = {
-    "customers": GENERATED / "customers.csv",
-    "accounts": GENERATED / "accounts.csv",
-    "transactions": GENERATED / "transactions.csv",
-    "cards": GENERATED / "cards.csv",
-    "loans": GENERATED / "loans.csv",
-    "branches": GENERATED / "branches.csv",
-    "campaign_customers": GENERATED / "campaign_customers.csv",
-    "campaign_exposures": GENERATED / "campaign_exposures.csv",
+ENGINE_VERSION = "2.0.2"
+
+GENERATED_CORE = GENERATED / "core"
+GENERATED_TRANSACTIONS = GENERATED / "transactions"
+GENERATED_CAMPAIGNS = GENERATED / "campaigns"
+
+# Canonical-first source resolution. The first existing candidate wins.
+# Legacy root-level locations remain fallback-only to support transition states
+# without silently overriding the current canonical architecture.
+SOURCE_CANDIDATES = {
+    "customers": [
+        GENERATED_CORE / "customers.parquet",
+        GENERATED_CORE / "customers.csv",
+        GENERATED / "customers.parquet",
+        GENERATED / "customers.csv",
+    ],
+    "accounts": [
+        GENERATED_CORE / "accounts.parquet",
+        GENERATED_CORE / "accounts.csv",
+        GENERATED / "accounts.parquet",
+        GENERATED / "accounts.csv",
+    ],
+    "transactions": [
+        GENERATED_TRANSACTIONS / "transactions.parquet",
+        GENERATED_TRANSACTIONS / "transactions.csv",
+        GENERATED / "transactions.parquet",
+        GENERATED / "transactions.csv",
+    ],
+    "cards": [
+        GENERATED_CORE / "cards.parquet",
+        GENERATED_CORE / "cards.csv",
+        GENERATED / "cards.parquet",
+        GENERATED / "cards.csv",
+    ],
+    "loans": [
+        GENERATED_CORE / "loans.parquet",
+        GENERATED_CORE / "loans.csv",
+        GENERATED / "loans.parquet",
+        GENERATED / "loans.csv",
+    ],
+    "branches": [
+        GENERATED_CORE / "branches.parquet",
+        GENERATED_CORE / "branches.csv",
+        GENERATED / "branches.parquet",
+        GENERATED / "branches.csv",
+    ],
+    "campaign_customers": [
+        GENERATED_CAMPAIGNS / "campaign_customers.parquet",
+        GENERATED_CAMPAIGNS / "campaign_customers.csv",
+        GENERATED / "campaign_customers.parquet",
+        GENERATED / "campaign_customers.csv",
+    ],
+    "campaign_exposures": [
+        GENERATED_CAMPAIGNS / "campaign_exposures.parquet",
+        GENERATED_CAMPAIGNS / "campaign_exposures.csv",
+        GENERATED / "campaign_exposures.parquet",
+        GENERATED / "campaign_exposures.csv",
+    ],
 }
 
 OUT_FILES = {
     name: OPERATIONAL / f"{name}.csv"
-    for name in FILES
+    for name in SOURCE_CANDIDATES
 }
 
 WORLD_OUT = INTERIM / "data_reliability_world.csv"
 AUDIT_OUT = INTERIM / "data_reliability_audit.csv"
+SOURCE_AUDIT_OUT = INTERIM / "operational_export_sources.csv"
 
 
 # =============================================================================
@@ -125,9 +172,36 @@ def require(condition: bool, message: str) -> None:
         raise RuntimeError(message)
 
 
-def read_csv(path: Path) -> pd.DataFrame:
+def resolve_source(name: str) -> Path:
+    candidates = SOURCE_CANDIDATES[name]
+    for path in candidates:
+        if path.exists():
+            return path
+    searched = "\n  - ".join(str(path) for path in candidates)
+    raise RuntimeError(
+        f"Missing required canonical source for {name}. Searched:\n  - {searched}"
+    )
+
+
+def read_table(path: Path) -> pd.DataFrame:
     require(path.exists(), f"Missing required source file: {path}")
-    return pd.read_csv(path, low_memory=False)
+    suffix = path.suffix.lower()
+    if suffix == ".parquet":
+        return pd.read_parquet(path)
+    if suffix == ".csv":
+        return pd.read_csv(path, low_memory=False)
+    raise RuntimeError(f"Unsupported source format for {path}. Expected .parquet or .csv.")
+
+
+def file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def ensure_dirs() -> None:
@@ -893,14 +967,39 @@ def main() -> None:
     ensure_dirs()
 
     print("=" * 84)
-    print("BTYT OPERATIONAL DATA RELIABILITY LAYER — V1.0.3")
+    print(f"BTYT OPERATIONAL DATA RELIABILITY LAYER — V{ENGINE_VERSION}")
     print("=" * 84)
     print(f"Mode:              {DATA_RELIABILITY_MODE}")
     print(f"Reliability level: {DATA_RELIABILITY_LEVEL}")
     print(f"DQ seed:           {DATA_QUALITY_SEED}")
     print()
 
-    sources = {name: read_csv(path) for name, path in FILES.items()}
+    resolved_sources = {
+        name: resolve_source(name)
+        for name in SOURCE_CANDIDATES
+    }
+
+    print("Resolved canonical sources")
+    print("-" * 84)
+    for name, path in resolved_sources.items():
+        print(f"  {name:<24} {path}")
+    print()
+
+    source_hashes_before = {
+        name: file_sha256(path)
+        for name, path in resolved_sources.items()
+    }
+
+    sources = {
+        name: read_table(path)
+        for name, path in resolved_sources.items()
+    }
+
+    print("Canonical source shapes")
+    print("-" * 84)
+    for name, df in sources.items():
+        print(f"  {name:<24} rows={len(df):>10,}  cols={len(df.columns):>4,}")
+    print()
 
     incidents = build_incident_world(sources["branches"])
     world = incidents_to_frame(incidents)
@@ -923,7 +1022,6 @@ def main() -> None:
     print()
 
     audit_rows: List[dict] = []
-
     outputs: Dict[str, pd.DataFrame] = {}
 
     outputs["customers"] = lightly_degrade_customers(
@@ -958,8 +1056,13 @@ def main() -> None:
     if DATA_RELIABILITY_MODE == "clean":
         require(len(incidents) == 0, "Clean mode realized reliability incidents.")
 
-    # Write only after validation.
+    # Write only after in-memory validation. Operational exports are always
+    # separated from the frozen canonical ground-truth layer.
     for name, df in outputs.items():
+        require(
+            OUT_FILES[name].resolve() != resolved_sources[name].resolve(),
+            f"Operational output would overwrite canonical source for {name}.",
+        )
         df.to_csv(OUT_FILES[name], index=False)
 
     world.to_csv(WORLD_OUT, index=False)
@@ -974,6 +1077,38 @@ def main() -> None:
             "realized_rate",
         ])
     audit.to_csv(AUDIT_OUT, index=False)
+
+    # Verify byte-for-byte that no canonical source changed during the export.
+    source_hashes_after = {
+        name: file_sha256(path)
+        for name, path in resolved_sources.items()
+    }
+    changed_sources = [
+        name
+        for name in resolved_sources
+        if source_hashes_before[name] != source_hashes_after[name]
+    ]
+    require(
+        not changed_sources,
+        "Frozen canonical source files changed during operational export: "
+        + ", ".join(changed_sources),
+    )
+
+    source_audit = pd.DataFrame([
+        {
+            "engine_version": ENGINE_VERSION,
+            "dataset": name,
+            "source_path": str(path),
+            "source_format": path.suffix.lower().lstrip("."),
+            "source_rows": len(sources[name]),
+            "source_columns": len(sources[name].columns),
+            "source_sha256": source_hashes_after[name],
+            "operational_path": str(OUT_FILES[name]),
+            "operational_rows": len(outputs[name]),
+        }
+        for name, path in resolved_sources.items()
+    ])
+    source_audit.to_csv(SOURCE_AUDIT_OUT, index=False)
 
     print("Operational outputs")
     print("-" * 84)
@@ -996,16 +1131,23 @@ def main() -> None:
     print("=" * 84)
     print("VALIDATION")
     print("=" * 84)
-    print("Frozen source files unchanged                        PASS")
-    print("Protected transaction truth preserved               PASS")
-    print("Clean/imperfect mode contract                       PASS")
-    print("Operational exports written separately              PASS")
-    print("Reliability provenance written separately           PASS")
+    print("Canonical-first source resolution                    PASS")
+    print("Parquet/CSV canonical ingestion                      PASS")
+    print("Frozen source files byte-for-byte unchanged          PASS")
+    print("Protected transaction truth preserved                PASS")
+    print("Clean/imperfect mode contract                         PASS")
+    print("Operational exports written separately                PASS")
+    print("Reliability provenance written separately             PASS")
+    print("Source lineage audit written separately                PASS")
     print("VALIDATION: PASS")
     print()
     print(f"Saved operational exports: {OPERATIONAL}")
     print(f"Saved reliability world:    {WORLD_OUT}")
     print(f"Saved reliability audit:    {AUDIT_OUT}")
+    print(f"Saved source lineage audit: {SOURCE_AUDIT_OUT}")
+    print()
+    print(f"BTYT OPERATIONAL DATA RELIABILITY LAYER V{ENGINE_VERSION}: PASS")
+    print("No upstream canonical dataset was modified.")
 
 
 if __name__ == "__main__":

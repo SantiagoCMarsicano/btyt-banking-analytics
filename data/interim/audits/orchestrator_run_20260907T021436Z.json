@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "orchestrator_version": "1.0.0",
+  "run_id": "20260907T021436Z",
+  "status": "PASS",
+  "root": "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics",
+  "python_executable": "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+  "python_version": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "win32",
+  "started_at_utc": "2026-09-07T02:14:36+00:00",
+  "finished_at_utc": "2026-09-07T02:14:45+00:00",
+  "elapsed_seconds": 8.978,
+  "arguments": {
+    "check_only": false,
+    "list_stages": false,
+    "from_stage": null,
+    "to_stage": null,
+    "only": "cross_system_audit",
+    "skip": [],
+    "continue_on_error": false
+  },
+  "selected_stages": [
+    "cross_system_audit"
+  ],
+  "stage_results": [
+    {
+      "key": "cross_system_audit",
+      "label": "Final cross-system audit",
+      "module": "scripts.audits.audit_cross_system",
+      "category": "audit",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-07T02:14:36+00:00",
+      "finished_at_utc": "2026-09-07T02:14:45+00:00",
+      "elapsed_seconds": 8.978,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.audits.audit_cross_system"
+      ],
+      "reason": ""
+    }
+  ]
+}

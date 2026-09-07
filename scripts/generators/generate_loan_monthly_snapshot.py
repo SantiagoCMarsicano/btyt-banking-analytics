@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 
 """
-BTYT — Loan Monthly Snapshot generator V4.1 — Terminal Lifecycle Consistency
+BTYT — Loan Monthly Snapshot Generator — Centralized World Architecture
 ======================================
 
 Generates:
 
-    data/generated/loan_monthly_snapshot.csv
+    data/generated/credit/loan_monthly_snapshot.parquet
 
 Canonical grain:
     one row per loan per calendar month.
@@ -93,33 +93,53 @@ from typing import Deque, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 
 # =============================================================================
 # Paths and global configuration
 # =============================================================================
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA_GENERATED = ROOT / "data" / "generated"
-DATA_INTERIM = ROOT / "data" / "interim"
+from scripts.core.paths import (
+    GENERATED_CORE_DIR,
+    GENERATED_CREDIT_DIR,
+    INTERIM_CREDIT_DIR,
+    INTERIM_WORLD_DIR,
+)
+from scripts.core.rng import make_rng
+from scripts.core.world import load_world
 
-LOANS_PATH = DATA_GENERATED / "loans.csv"
-BRIDGE_PATH = DATA_INTERIM / "loan_lifecycle_bridge.csv"
-BRANCH_STATE_PATH = DATA_INTERIM / "branch_yearly_state.csv"
-CUSTOMERS_PATH = DATA_GENERATED / "customers.csv"
-ACCOUNTS_PATH = DATA_GENERATED / "accounts.csv"
-BRANCHES_PATH = DATA_GENERATED / "branches.csv"
+WORLD = load_world()
 
-OUTPUT_PATH = DATA_GENERATED / "loan_monthly_snapshot.csv"
-TEMP_OUTPUT_PATH = DATA_GENERATED / "loan_monthly_snapshot.tmp.csv"
+RNG_NAMESPACE = "loan_monthly_snapshot"
+RNG_STREAM_BRIDGE_BASE = 100_000
+RNG_STREAM_LOAN_BASE = 1_000_000
 
-SEED = 20260827
-SNAPSHOT_SEED = SEED + 22022
+LOANS_PARQUET_PATH = GENERATED_CORE_DIR / "loans.parquet"
+LOANS_CSV_PATH = GENERATED_CORE_DIR / "loans.csv"
+BRIDGE_PATH = INTERIM_CREDIT_DIR / "loan_lifecycle_bridge.csv"
+BRANCH_STATE_PATH = INTERIM_WORLD_DIR / "branch_yearly_state.csv"
 
-OBS_START_YEAR = 2021
-OBS_START_MONTH = 1
-CUTOFF_YEAR = 2026
-CUTOFF_MONTH = 12
+CUSTOMERS_PARQUET_PATH = GENERATED_CORE_DIR / "customers.parquet"
+CUSTOMERS_CSV_PATH = GENERATED_CORE_DIR / "customers.csv"
+ACCOUNTS_PARQUET_PATH = GENERATED_CORE_DIR / "accounts.parquet"
+ACCOUNTS_CSV_PATH = GENERATED_CORE_DIR / "accounts.csv"
+BRANCHES_PATH = GENERATED_CORE_DIR / "branches.csv"
+
+OUTPUT_PARQUET_PATH = GENERATED_CREDIT_DIR / "loan_monthly_snapshot.parquet"
+OUTPUT_CSV_PATH = GENERATED_CREDIT_DIR / "loan_monthly_snapshot.csv"
+TEMP_PARQUET_PATH = GENERATED_CREDIT_DIR / "loan_monthly_snapshot.tmp.parquet"
+TEMP_CSV_PATH = GENERATED_CREDIT_DIR / "loan_monthly_snapshot.tmp.csv"
+
+PARQUET_COMPRESSION = "zstd"
+PARQUET_BATCH_ROWS = 100_000
+WRITE_COMPATIBILITY_CSV = True
+
+OBS_START_YEAR = WORLD.start_date.year
+OBS_START_MONTH = WORLD.start_date.month
+CUTOFF_YEAR = WORLD.end_date.year
+CUTOFF_MONTH = WORLD.end_date.month
 
 OBS_START_IDX = OBS_START_YEAR * 12 + (OBS_START_MONTH - 1)
 CUTOFF_IDX = CUTOFF_YEAR * 12 + (CUTOFF_MONTH - 1)
@@ -137,6 +157,18 @@ OUTPUT_COLUMNS = [
     "delinquency_status",
     "arrears_amount",
 ]
+
+OUTPUT_SCHEMA = pa.schema([
+    ("loan_id", pa.string()),
+    ("year_month", pa.string()),
+    ("outstanding_balance", pa.float64()),
+    ("current_interest_rate", pa.float64()),
+    ("scheduled_payment", pa.float64()),
+    ("actual_payment", pa.float64()),
+    ("days_past_due", pa.int32()),
+    ("delinquency_status", pa.string()),
+    ("arrears_amount", pa.float64()),
+])
 
 REQUIRED_LOAN_COLUMNS = {
     "loan_id",
@@ -486,11 +518,9 @@ def build_lifecycle_bridge_from_master(loans: pd.DataFrame) -> pd.DataFrame:
         loan_id = str(loan.loan_id)
         orig_year = int(loan.origination_year)
 
-        seed = (
-            SNAPSHOT_SEED
-            + stable_hash(f"BRIDGE::{loan_id}")
-        ) % (2**32 - 1)
-        rng = np.random.default_rng(seed)
+        stream = RNG_STREAM_BRIDGE_BASE + stable_hash(f"BRIDGE::{loan_id}")
+        rng = make_rng(WORLD.seed, RNG_NAMESPACE, stream)
+        seed = int(stream)
 
         orig_month = int(rng.integers(1, 13))
         orig_idx = ym_to_idx(orig_year, orig_month)
@@ -572,41 +602,58 @@ def build_lifecycle_bridge_from_master(loans: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=sorted(REQUIRED_BRIDGE_COLUMNS))
 
 
+def _read_preferred(parquet_path: Path, csv_path: Path, dtype=None):
+    if parquet_path.exists():
+        df = pd.read_parquet(parquet_path)
+        source = parquet_path
+    elif csv_path.exists():
+        df = pd.read_csv(csv_path, dtype=dtype)
+        source = csv_path
+    else:
+        raise FileNotFoundError(
+            f"Missing required input. Expected either:\n"
+            f"  - {parquet_path}\n"
+            f"  - {csv_path}"
+        )
+    return df, source
+
+
 def load_inputs():
-    required = [
-        LOANS_PATH,
-        BRIDGE_PATH,
-        CUSTOMERS_PATH,
-        ACCOUNTS_PATH,
-        BRANCHES_PATH,
-        BRANCH_STATE_PATH,
-    ]
-    missing = [p for p in required if not p.exists()]
+    required_csv = [BRIDGE_PATH, BRANCHES_PATH, BRANCH_STATE_PATH]
+    missing = [p for p in required_csv if not p.exists()]
     if missing:
         raise FileNotFoundError(
             "Missing required input file(s):\n"
             + "\n".join(f"  - {p}" for p in missing)
         )
 
-    loans = pd.read_csv(
-        LOANS_PATH,
+    loans, loans_source = _read_preferred(
+        LOANS_PARQUET_PATH,
+        LOANS_CSV_PATH,
         dtype={"loan_id": str, "customer_id": str, "branch_id": str},
     )
-    bridge = pd.read_csv(BRIDGE_PATH, dtype={"loan_id": str})
-    customers = pd.read_csv(
-        CUSTOMERS_PATH,
+    customers, customers_source = _read_preferred(
+        CUSTOMERS_PARQUET_PATH,
+        CUSTOMERS_CSV_PATH,
         dtype={"customer_id": str, "primary_branch_id": str},
     )
-    accounts = pd.read_csv(
-        ACCOUNTS_PATH,
+    accounts, accounts_source = _read_preferred(
+        ACCOUNTS_PARQUET_PATH,
+        ACCOUNTS_CSV_PATH,
         dtype={"customer_id": str, "account_id": str},
     )
+
+    bridge = pd.read_csv(BRIDGE_PATH, dtype={"loan_id": str})
     branches = pd.read_csv(BRANCHES_PATH, dtype={"branch_id": str})
     branch_state = pd.read_csv(BRANCH_STATE_PATH, dtype={"branch_id": str})
 
+    print(f"Loan source:     {loans_source}")
+    print(f"Customer source: {customers_source}")
+    print(f"Account source:  {accounts_source}")
+
     missing_loan_cols = REQUIRED_LOAN_COLUMNS - set(loans.columns)
     if missing_loan_cols:
-        raise ValueError(f"loans.csv missing columns: {sorted(missing_loan_cols)}")
+        raise ValueError(f"loans input missing columns: {sorted(missing_loan_cols)}")
 
     missing_bridge_cols = REQUIRED_BRIDGE_COLUMNS - set(bridge.columns)
     if missing_bridge_cols:
@@ -622,7 +669,11 @@ def load_inputs():
             f"{sorted(missing_state_cols)}"
         )
 
+    loans["loan_id"] = loans["loan_id"].astype(str)
+    loans["customer_id"] = loans["customer_id"].astype(str)
     loans["branch_id"] = loans["branch_id"].astype(str).str.zfill(3)
+    customers["customer_id"] = customers["customer_id"].astype(str)
+    accounts["customer_id"] = accounts["customer_id"].astype(str)
     branches["branch_id"] = branches["branch_id"].astype(str).str.zfill(3)
     branch_state["branch_id"] = branch_state["branch_id"].astype(str).str.zfill(3)
     branch_state["year"] = pd.to_numeric(
@@ -637,7 +688,7 @@ def load_inputs():
         branch_state[col] = pd.to_numeric(branch_state[col], errors="raise")
 
     if loans["loan_id"].duplicated().any():
-        raise ValueError("loans.csv contains duplicate loan_id values.")
+        raise ValueError("Loans input contains duplicate loan_id values.")
     if bridge["loan_id"].duplicated().any():
         raise ValueError(
             "loan_lifecycle_bridge.csv contains duplicate loan_id values."
@@ -653,7 +704,7 @@ def load_inputs():
     if set(loans["loan_id"]) != set(bridge["loan_id"]):
         raise ValueError(
             "Master/bridge mismatch: loan_id sets are not identical. "
-            "Regenerate loans with the synchronized V4.0.3 lifecycle bridge "
+            "Regenerate loans with the synchronized lifecycle bridge "
             "before running the monthly snapshot."
         )
 
@@ -674,6 +725,7 @@ def load_inputs():
         )
 
     return loans, bridge, customers, accounts, branches, branch_state
+
 
 def zscore_log1p(series: pd.Series) -> pd.Series:
     s = pd.to_numeric(series, errors="coerce").fillna(0).clip(lower=0)
@@ -1033,6 +1085,55 @@ def terminal_mode(
 # =============================================================================
 # Loan simulation
 # =============================================================================
+
+class SnapshotRowWriter:
+    """Buffered canonical Parquet writer with optional compatibility CSV."""
+
+    def __init__(self):
+        self.buffer = []
+        self.parquet_writer = pq.ParquetWriter(
+            TEMP_PARQUET_PATH,
+            OUTPUT_SCHEMA,
+            compression=PARQUET_COMPRESSION,
+        )
+        self.csv_file = None
+        self.csv_writer = None
+
+        if WRITE_COMPATIBILITY_CSV:
+            self.csv_file = TEMP_CSV_PATH.open(
+                "w",
+                newline="",
+                encoding="utf-8",
+                buffering=1024 * 1024,
+            )
+            self.csv_writer = csv.writer(self.csv_file)
+            self.csv_writer.writerow(OUTPUT_COLUMNS)
+
+    def writerow(self, row):
+        self.buffer.append(row)
+        if self.csv_writer is not None:
+            self.csv_writer.writerow(row)
+        if len(self.buffer) >= PARQUET_BATCH_ROWS:
+            self.flush()
+
+    def flush(self):
+        if not self.buffer:
+            return
+        columns = list(zip(*self.buffer))
+        arrays = [
+            pa.array(columns[i], type=OUTPUT_SCHEMA.field(i).type)
+            for i in range(len(OUTPUT_COLUMNS))
+        ]
+        table = pa.Table.from_arrays(arrays, schema=OUTPUT_SCHEMA)
+        self.parquet_writer.write_table(table)
+        self.buffer.clear()
+
+    def close(self):
+        self.flush()
+        self.parquet_writer.close()
+        if self.csv_file is not None:
+            self.csv_file.close()
+
 
 @dataclass
 class LoanAudit:
@@ -1568,11 +1669,8 @@ class SnapshotGenerator:
             self.audit.skipped_pre2021 += 1
             return
 
-        seed = safe_int(
-            bridge_row.get("lifecycle_seed"),
-            SNAPSHOT_SEED + stable_hash(str(loan.loan_id)),
-        )
-        rng = np.random.default_rng((seed + SNAPSHOT_SEED) % (2**32 - 1))
+        stream = RNG_STREAM_LOAN_BASE + stable_hash(str(loan.loan_id))
+        rng = make_rng(WORLD.seed, RNG_NAMESPACE, stream)
 
         due_day = 5 + (stable_hash(f"DUE::{loan.loan_id}") % 21)
 
@@ -1947,20 +2045,14 @@ class SnapshotGenerator:
             }
 
     def generate(self) -> LoanAudit:
-        DATA_GENERATED.mkdir(parents=True, exist_ok=True)
+        GENERATED_CREDIT_DIR.mkdir(parents=True, exist_ok=True)
 
-        if TEMP_OUTPUT_PATH.exists():
-            TEMP_OUTPUT_PATH.unlink()
+        for temp_path in (TEMP_PARQUET_PATH, TEMP_CSV_PATH):
+            if temp_path.exists():
+                temp_path.unlink()
 
-        with TEMP_OUTPUT_PATH.open(
-            "w",
-            newline="",
-            encoding="utf-8",
-            buffering=1024 * 1024,
-        ) as f:
-            writer = csv.writer(f)
-            writer.writerow(OUTPUT_COLUMNS)
-
+        writer = SnapshotRowWriter()
+        try:
             total = len(self.loans)
             for i, loan in enumerate(self.loans.itertuples(index=False), start=1):
                 self._simulate_one(writer, loan)
@@ -1970,8 +2062,13 @@ class SnapshotGenerator:
                         f"  simulated {i:,}/{total:,} loans | "
                         f"rows={self.audit.rows:,}"
                     )
+        finally:
+            writer.close()
 
-        os.replace(TEMP_OUTPUT_PATH, OUTPUT_PATH)
+        os.replace(TEMP_PARQUET_PATH, OUTPUT_PARQUET_PATH)
+        if WRITE_COMPATIBILITY_CSV:
+            os.replace(TEMP_CSV_PATH, OUTPUT_CSV_PATH)
+
         return self.audit
 
 
@@ -2249,7 +2346,9 @@ def main():
     print("\nVALIDATION: PASS")
     print_audit(audit, loans, bridge)
 
-    print(f"\nSaved canonical: {OUTPUT_PATH}")
+    print(f"\nSaved canonical Parquet: {OUTPUT_PARQUET_PATH}")
+    if WRITE_COMPATIBILITY_CSV:
+        print(f"Saved compatibility CSV: {OUTPUT_CSV_PATH}")
     print(f"Rows: {audit.rows:,}")
     print("Columns:", ", ".join(OUTPUT_COLUMNS))
 
