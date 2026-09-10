@@ -1,0 +1,16 @@
+{
+    "world_name":  "SMOKE",
+    "variant":  33,
+    "world_id":  "SMOKE-33-3165889979",
+    "world_seed":  3165889979,
+    "canonical":  false,
+    "execution_mode":  "full",
+    "start_date":  "2021-01-01",
+    "end_date":  "2026-12-31",
+    "data_reliability_level":  "realistic",
+    "population":  {
+                       "customers":  50
+                   },
+    "updated_at_utc":  "2026-09-10T01:03:40+00:00",
+    "created_at_utc":  "2026-09-09T23:10:44+00:00"
+}

@@ -1,11 +1,10 @@
 {
   "world": {
-    "name": "BTYT33",
-    "seed": 606597249
+    "name": "SMOKE",
+    "seed": 3165889979
   },
   "population": {
-    "customers_min": 50000,
-    "customers_max": 91456
+    "customers": 50
   },
   "observation_period": {
     "start_date": "2021-01-01",
@@ -13,11 +12,11 @@
   },
   "execution": {
     "mode": "production",
-    "smoke_customers": 500
+    "smoke_customers": 50
   },
   "data_reliability": {
     "mode": "imperfect",
     "level": "realistic"
   },
-  "variant": 1
+  "variant": 33
 }

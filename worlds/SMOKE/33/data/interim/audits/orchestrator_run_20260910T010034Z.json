@@ -1,0 +1,218 @@
+{
+  "schema_version": 2,
+  "orchestrator_version": "1.1.0",
+  "run_id": "20260910T010034Z",
+  "status": "FAIL",
+  "repository_root": "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics",
+  "world_root": "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\worlds\\SMOKE\\33",
+  "python_executable": "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+  "python_version": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "win32",
+  "started_at_utc": "2026-09-10T01:00:34+00:00",
+  "finished_at_utc": "2026-09-10T01:00:52+00:00",
+  "elapsed_seconds": 17.995,
+  "arguments": {
+    "check_only": false,
+    "list_stages": false,
+    "from_stage": null,
+    "to_stage": null,
+    "only": null,
+    "skip": [],
+    "continue_on_error": false
+  },
+  "selected_stages": [
+    "macro",
+    "banks",
+    "financial_institutions",
+    "branches",
+    "customers",
+    "accounts",
+    "cards",
+    "loans",
+    "loan_snapshot",
+    "external_shocks",
+    "transactions",
+    "campaigns",
+    "branch_performance",
+    "operational_exports",
+    "cross_system_audit"
+  ],
+  "stage_results": [
+    {
+      "key": "macro",
+      "label": "Macro environment",
+      "module": "scripts.generators.generate_macro_environment",
+      "category": "generator",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-10T01:00:34+00:00",
+      "finished_at_utc": "2026-09-10T01:00:35+00:00",
+      "elapsed_seconds": 1.116,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_macro_environment"
+      ]
+    },
+    {
+      "key": "banks",
+      "label": "Banking market",
+      "module": "scripts.generators.generate_banks",
+      "category": "generator",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-10T01:00:35+00:00",
+      "finished_at_utc": "2026-09-10T01:00:37+00:00",
+      "elapsed_seconds": 1.327,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_banks"
+      ]
+    },
+    {
+      "key": "financial_institutions",
+      "label": "Financial institutions",
+      "module": "scripts.generators.generate_financial_institutions",
+      "category": "generator",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-10T01:00:37+00:00",
+      "finished_at_utc": "2026-09-10T01:00:38+00:00",
+      "elapsed_seconds": 1.109,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_financial_institutions"
+      ]
+    },
+    {
+      "key": "branches",
+      "label": "Branch network",
+      "module": "scripts.generators.generate_branches",
+      "category": "generator",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-10T01:00:38+00:00",
+      "finished_at_utc": "2026-09-10T01:00:39+00:00",
+      "elapsed_seconds": 1.228,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_branches"
+      ]
+    },
+    {
+      "key": "customers",
+      "label": "Customers",
+      "module": "scripts.generators.generate_customers",
+      "category": "generator",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-10T01:00:39+00:00",
+      "finished_at_utc": "2026-09-10T01:00:42+00:00",
+      "elapsed_seconds": 3.189,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_customers"
+      ]
+    },
+    {
+      "key": "accounts",
+      "label": "Accounts",
+      "module": "scripts.generators.generate_accounts",
+      "category": "generator",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-10T01:00:42+00:00",
+      "finished_at_utc": "2026-09-10T01:00:44+00:00",
+      "elapsed_seconds": 1.833,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_accounts"
+      ]
+    },
+    {
+      "key": "cards",
+      "label": "Cards",
+      "module": "scripts.generators.generate_cards",
+      "category": "generator",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-10T01:00:44+00:00",
+      "finished_at_utc": "2026-09-10T01:00:46+00:00",
+      "elapsed_seconds": 2.173,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_cards"
+      ]
+    },
+    {
+      "key": "loans",
+      "label": "Loans",
+      "module": "scripts.generators.generate_loans",
+      "category": "generator",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-10T01:00:46+00:00",
+      "finished_at_utc": "2026-09-10T01:00:48+00:00",
+      "elapsed_seconds": 1.501,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_loans"
+      ]
+    },
+    {
+      "key": "loan_snapshot",
+      "label": "Loan monthly snapshot",
+      "module": "scripts.generators.generate_loan_monthly_snapshot",
+      "category": "generator",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-10T01:00:48+00:00",
+      "finished_at_utc": "2026-09-10T01:00:49+00:00",
+      "elapsed_seconds": 1.486,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_loan_monthly_snapshot"
+      ]
+    },
+    {
+      "key": "external_shocks",
+      "label": "External shocks",
+      "module": "scripts.generators.generate_external_shocks",
+      "category": "generator",
+      "status": "PASS",
+      "returncode": 0,
+      "started_at_utc": "2026-09-10T01:00:49+00:00",
+      "finished_at_utc": "2026-09-10T01:00:51+00:00",
+      "elapsed_seconds": 1.422,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_external_shocks"
+      ]
+    },
+    {
+      "key": "transactions",
+      "label": "Transactions",
+      "module": "scripts.generators.generate_transactions",
+      "category": "generator",
+      "status": "FAIL",
+      "returncode": 1,
+      "started_at_utc": "2026-09-10T01:00:51+00:00",
+      "finished_at_utc": "2026-09-10T01:00:52+00:00",
+      "elapsed_seconds": 1.608,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_transactions"
+      ]
+    }
+  ]
+}

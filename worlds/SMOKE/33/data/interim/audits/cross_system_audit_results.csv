@@ -1,0 +1,71 @@
+section,check,status,detail
+Core banking,customer_id primary key,PASS,
+Core banking,customer registration year is valid,PASS,
+Core banking,customer status populated,PASS,
+Core banking,account_id primary key,PASS,
+Core banking,account -> customer foreign key,PASS,missing=0
+Core banking,account -> branch foreign key,PASS,missing=0
+Core banking,account opening year populated,PASS,
+Core banking,account closing year >= opening year,PASS,
+Core banking,closed accounts have closing year,PASS,
+Core banking,card_id primary key,PASS,
+Core banking,card -> customer foreign key,PASS,missing=0
+Core banking,card -> account foreign key,PASS,missing=0
+Core banking,linked card/account customer coherence,PASS,
+Credit lifecycle,loan_id primary key,PASS,
+Credit lifecycle,loan -> customer foreign key,PASS,missing=0
+Credit lifecycle,loan -> branch foreign key,PASS,missing=0
+Credit lifecycle,snapshot -> loan foreign key,PASS,missing=0
+Credit lifecycle,loan-month snapshot primary key,PASS,
+Credit lifecycle,snapshot balances non-negative,PASS,
+Credit lifecycle,snapshot payments non-negative,PASS,
+Transactions,transaction_id primary key,PASS,
+Transactions,transaction -> account foreign key,PASS,missing=0
+Transactions,transaction datetimes parse,PASS,
+Transactions,transaction dates within observation window,PASS,
+Transactions,transaction amounts non-negative,PASS,
+Transactions,transaction statuses recognized,PASS,
+Transactions,completed transactions have no failure reason,PASS,
+Transactions,failed transactions have failure reason,PASS,
+Transactions,transaction type/direction coherence,PASS,
+Transactions,transaction -> branch foreign key,PASS,missing=0
+Balances,account-month balance primary key,PASS,
+Balances,balance -> account foreign key,PASS,missing=0
+Balances,monthly balance identity,PASS,max_abs_diff=0.000000
+Balances,closing balances non-negative,PASS,
+Balances,month-to-month balance continuity,PASS,max_abs_diff=0.000000
+Balances,completed inflows reconcile to balances,PASS,max_abs_diff=0.000000
+Balances,completed outflows reconcile to balances,PASS,max_abs_diff=0.000000
+Branch performance,branch_id primary key,PASS,
+Branch performance,branch performance -> branch foreign key,PASS,missing=0
+Branch performance,branch-month performance primary key,PASS,
+Bank performance,bank_id primary key,PASS,
+Bank performance,bank market weights -> bank foreign key,PASS,missing=0
+Bank performance,bank financials -> bank foreign key,PASS,missing=0
+Bank performance,annual market weights reconcile,PASS,"year_sums={2021: 1.0, 2022: 1.0, 2023: 1.0, 2024: 1.0, 2025: 1.0, 2026: 1.0}"
+Bank performance,bank-month performance primary key,PASS,
+External shocks,external shock layer,SKIP,external_shocks.csv not present or empty
+Campaign behavior,campaign_id primary key,PASS,
+Campaign behavior,campaign start <= end,PASS,
+Campaign behavior,campaign-customer primary key,PASS,
+Campaign behavior,campaign customer -> campaign foreign key,PASS,missing=0
+Campaign behavior,campaign customer IDs belong to frozen customer universe,PASS,missing=0
+Campaign behavior,exposure occurs after selection,PASS,
+Campaign behavior,response occurs after exposure,PASS,
+Campaign behavior,exposure_id primary key,PASS,
+Campaign behavior,exposure -> campaign foreign key,PASS,missing=0
+Campaign behavior,every exposure belongs to selected relationship,PASS,missing_pairs=0
+Operational reliability,customers operational row count preserved,PASS,canonical=50 operational=50
+Operational reliability,accounts operational row count preserved,PASS,canonical=94 operational=94
+Operational reliability,cards operational row count preserved,PASS,canonical=136 operational=136
+Operational reliability,loans operational row count preserved,PASS,canonical=86 operational=86
+Operational reliability,branches operational row count preserved,PASS,canonical=37 operational=37
+Operational reliability,transactions operational export,SKIP,canonical or operational dataset not present
+Operational reliability,campaign exposure operational row count not reduced,PASS,canonical=130 operational=130
+Operational reliability,reliability world schema,PASS,missing=[]
+Operational reliability,reliability audit schema,PASS,missing=[]
+Operational reliability,reliability audit counts coherent,PASS,
+Operational reliability,reliability realized rates bounded,PASS,
+Operational reliability,transactions operational row count preserved,PASS,canonical_expected=27522 canonical_streamed=27522 operational=27522
+Operational reliability,operational transaction row order preserved,PASS,batches_checked=1
+Operational reliability,protected transaction truth preserved operationally,PASS,changed=[]

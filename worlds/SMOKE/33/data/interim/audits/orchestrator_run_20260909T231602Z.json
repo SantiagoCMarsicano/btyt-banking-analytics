@@ -1,0 +1,58 @@
+{
+  "schema_version": 2,
+  "orchestrator_version": "1.1.0",
+  "run_id": "20260909T231602Z",
+  "status": "FAIL",
+  "repository_root": "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics",
+  "world_root": "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\worlds\\SMOKE\\33",
+  "python_executable": "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+  "python_version": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "win32",
+  "started_at_utc": "2026-09-09T23:16:02+00:00",
+  "finished_at_utc": "2026-09-09T23:16:02+00:00",
+  "elapsed_seconds": 0.64,
+  "arguments": {
+    "check_only": false,
+    "list_stages": false,
+    "from_stage": null,
+    "to_stage": null,
+    "only": null,
+    "skip": [],
+    "continue_on_error": false
+  },
+  "selected_stages": [
+    "macro",
+    "banks",
+    "financial_institutions",
+    "branches",
+    "customers",
+    "accounts",
+    "cards",
+    "loans",
+    "loan_snapshot",
+    "external_shocks",
+    "transactions",
+    "campaigns",
+    "branch_performance",
+    "operational_exports",
+    "cross_system_audit"
+  ],
+  "stage_results": [
+    {
+      "key": "macro",
+      "label": "Macro environment",
+      "module": "scripts.generators.generate_macro_environment",
+      "category": "generator",
+      "status": "FAIL",
+      "returncode": 1,
+      "started_at_utc": "2026-09-09T23:16:02+00:00",
+      "finished_at_utc": "2026-09-09T23:16:02+00:00",
+      "elapsed_seconds": 0.64,
+      "command": [
+        "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+        "-m",
+        "scripts.generators.generate_macro_environment"
+      ]
+    }
+  ]
+}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """
 BTYT Banking Analytics
-Loan master generator (Phase 3)
+Loan master generator (Phase 3) — V5.0.0 EXACT FAST
 
 Creates:
     data/generated/core/loans.parquet
@@ -13,6 +13,7 @@ Canonical sources:
 
 Design principles:
 - reproducible stochastic generation
+- V5 exact-fast optimizations preserve production RNG draw order
 - 2021–2026 is the detailed observational window
 - pre-2021 history is compressed inherited state
 - loan status is derived from an internal lifecycle, not sampled as a final label
@@ -170,6 +171,41 @@ PRODUCT_SPREAD = {
     "P016": 4.8,
     "P017": 4.0,
     "P018": 4.6,
+}
+
+
+# =============================================================================
+# V5 exact-fast deterministic caches
+# =============================================================================
+
+# These values are deterministic and consume no RNG. Keeping them outside the
+# hot loop removes repeated Python/NumPy construction while preserving the
+# exact stochastic sequence used by V4.1.4.
+USD_NOMINAL_SCALE = 37.0 + 0.9 * max(0, CURRENT_YEAR - 2018)
+
+PRODUCT_UTILITY_MACRO = {
+    2020: -0.35,
+    2021: -0.10,
+    2022: 0.10,
+    2023: 0.05,
+    2024: 0.14,
+    2025: 0.18,
+    2026: 0.20,
+}
+
+LIFECYCLE_MACRO_STRESS = {
+    2021: 0.08,
+    2022: 0.10,
+    2023: 0.06,
+    2024: 0.02,
+    2025: 0.00,
+    2026: -0.02,
+}
+
+RATE_TYPE_ADJUSTMENT = {
+    "FIXED": 0.45,
+    "VARIABLE": -0.20,
+    "MIXED": 0.10,
 }
 
 
@@ -353,6 +389,52 @@ class LoanGenerator:
         self.bridge_rows = []
         self.next_loan_number = 1
 
+        # V5: O(1) repeated-borrowing lookup. This replaces the former scan
+        # across every loan generated so far. It is updated only after a
+        # contract is actually created, so stochastic behavior is unchanged.
+        self._existing_contract_counts = {}
+
+        # Deterministic hot-loop caches. None of these consume RNG.
+        self._eligible_products_by_customer_type = {
+            customer_type: [
+                product
+                for product in PRODUCTS.values()
+                if product.target == customer_type
+            ]
+            for customer_type in ("INDIVIDUAL", "BUSINESS")
+        }
+        self._valid_products_by_type_year = {
+            (customer_type, year): [
+                product
+                for product in products
+                if product.launch_year <= year
+            ]
+            for customer_type, products in self._eligible_products_by_customer_type.items()
+            for year in range(1990, CURRENT_YEAR + 1)
+        }
+        self._min_launch_year_by_customer_type = {
+            customer_type: min(product.launch_year for product in products)
+            for customer_type, products in self._eligible_products_by_customer_type.items()
+        }
+        self._saturation_factor_cache = {0: 1.0}
+        self._branch_weight_cache = {}
+        self._local_state_cache = {}
+        self._term_cache = {
+            product_id: {
+                "options": np.asarray(product.term_options, dtype=int),
+                "pos": np.linspace(-1.0, 1.0, len(product.term_options)),
+                "center": float(np.median(np.log1p([product.amount_median_uyu]))),
+            }
+            for product_id, product in PRODUCTS.items()
+        }
+        self._rate_weight_cache = {
+            product_id: np.asarray(
+                [product.fixed_weight, product.variable_weight, product.mixed_weight],
+                dtype=float,
+            )
+            for product_id, product in PRODUCTS.items()
+        }
+
         self.branch_lookup = self.branches.set_index("branch_id").to_dict("index")
         self._prepare_branch_state()
         self._prepare_branch_selection_cache()
@@ -405,7 +487,12 @@ class LoanGenerator:
         before an actual origination branch has been selected.
         """
         primary = str(row["primary_branch_id"]).zfill(3)
-        return self._get_branch_state(primary, year)
+        key = (primary, int(year))
+        state = self._local_state_cache.get(key)
+        if state is None:
+            state = self._get_branch_state(primary, year)
+            self._local_state_cache[key] = state
+        return state
 
     # ---------------------------------------------------------------------
     # Customer signals
@@ -572,16 +659,7 @@ class LoanGenerator:
             utility += {"MICRO": -0.20, "SMALL": 0.15, "MEDIUM": 0.50, "LARGE": 0.75}.get(size, 0)
 
         # Temporary macro demand shocks.
-        macro = {
-            2020: -0.35,
-            2021: -0.10,
-            2022: 0.10,
-            2023: 0.05,
-            2024: 0.14,
-            2025: 0.18,
-            2026: 0.20,
-        }.get(year, 0.0)
-        utility += macro
+        utility += PRODUCT_UTILITY_MACRO.get(year, 0.0)
 
         return float(utility)
 
@@ -669,48 +747,54 @@ class LoanGenerator:
             raise RuntimeError(f"No branches eligible in {year}")
 
         branch_ids = cached["branch_ids"]
-        departments = cached["departments"]
-        regions = cached["regions"]
-        branch_sizes = cached["branch_sizes"]
-
         primary = str(row["primary_branch_id"]).zfill(3)
-        weights = np.ones(branch_ids.size, dtype=float)
-
-        # Primary branch is likely but not guaranteed.
-        weights *= np.where(branch_ids == primary, 4.6, 1.0)
-
-        # Same department and region.
         cust_dept = str(row.get("residence_department", ""))
-        weights *= np.where(departments == cust_dept, 2.0, 1.0)
+        digital_high = bool(row["_digital_affinity"] > 0.65)
 
-        if primary in self.branch_lookup:
-            primary_region = str(self.branch_lookup[primary].get("region", ""))
-            weights *= np.where(regions == primary_region, 1.35, 1.0)
+        # Everything below, except the lognormal perturbation and final choice,
+        # is deterministic for this customer geography/product/year profile.
+        # Cache the structural vector and copy it before applying RNG noise.
+        weight_key = (int(year), primary, cust_dept, product_id, digital_high)
+        structural_weights = self._branch_weight_cache.get(weight_key)
 
-        # Larger offices have somewhat more lending volume.
-        weights *= cached["size_factor"]
+        if structural_weights is None:
+            departments = cached["departments"]
+            regions = cached["regions"]
+            branch_sizes = cached["branch_sizes"]
 
-        # Product-specific branch tendencies.
-        if product_id == "P017":
-            interior = departments != "Montevideo"
-            weights *= np.where(interior, 1.35, 0.75)
-            weights *= np.where(regions == "EAST", 1.22, 1.0)
+            weights = np.ones(branch_ids.size, dtype=float)
+            weights *= np.where(branch_ids == primary, 4.6, 1.0)
+            weights *= np.where(departments == cust_dept, 2.0, 1.0)
 
-        if product_id in {"P015", "P016", "P018"}:
-            weights *= np.where(branch_sizes == "LARGE", 1.18, 1.0)
+            if primary in self.branch_lookup:
+                primary_region = str(self.branch_lookup[primary].get("region", ""))
+                weights *= np.where(regions == primary_region, 1.35, 1.0)
 
-        # Digital affinity weakens geographic concentration.
-        if row["_digital_affinity"] > 0.65:
-            weights = np.power(weights, 0.78)
+            weights *= cached["size_factor"]
 
-        if year >= OBSERVATION_START_YEAR:
-            # Higher credit pressure modestly reduces the branch's origination
-            # attractiveness while preserving geography, size, and product
-            # specialization as the dominant branch-selection drivers.
-            weights *= np.exp(
-                -0.16 * np.clip(cached["credit_pressure"], -2.5, 2.5)
-            )
+            if product_id == "P017":
+                interior = departments != "Montevideo"
+                weights *= np.where(interior, 1.35, 0.75)
+                weights *= np.where(regions == "EAST", 1.22, 1.0)
 
+            if product_id in {"P015", "P016", "P018"}:
+                weights *= np.where(branch_sizes == "LARGE", 1.18, 1.0)
+
+            if digital_high:
+                weights = np.power(weights, 0.78)
+
+            if year >= OBSERVATION_START_YEAR:
+                weights *= np.exp(
+                    -0.16 * np.clip(cached["credit_pressure"], -2.5, 2.5)
+                )
+
+            structural_weights = weights
+            self._branch_weight_cache[weight_key] = structural_weights
+
+        weights = structural_weights.copy()
+
+        # Preserve the V4.1.4 RNG order exactly: one vector lognormal draw,
+        # followed by one weighted branch choice for every generated contract.
         weights *= self.rng.lognormal(mean=0.0, sigma=0.18, size=len(weights))
         weights /= weights.sum()
 
@@ -755,25 +839,22 @@ class LoanGenerator:
 
         if currency == "USD":
             # Synthetic conversion anchor only for nominal scale generation.
-            usd_rate = {
-                year: 37.0 + 0.9 * max(0, year - 2018)
-                for year in range(1990, CURRENT_YEAR + 1)
-            }
-            # Use current-ish anchor for scale, not an accounting conversion.
-            fx = usd_rate[CURRENT_YEAR]
-            amount = amount_uyu / fx
+            # V5 precomputes the current-world anchor once instead of rebuilding
+            # a year dictionary for every USD contract.
+            amount = amount_uyu / USD_NOMINAL_SCALE
         else:
             amount = amount_uyu
 
         return round_money(float(amount))
 
     def _choose_term(self, row, product: LoanProduct, amount: float) -> int:
-        options = np.array(product.term_options, dtype=int)
+        term_cache = self._term_cache[product.product_id]
+        options = term_cache["options"]
 
         # Larger loans mildly shift probability toward longer terms.
-        pos = np.linspace(-1.0, 1.0, len(options))
+        pos = term_cache["pos"]
         amount_scale = np.log1p(amount)
-        center = np.median(np.log1p([product.amount_median_uyu]))
+        center = term_cache["center"]
         score = 0.35 * pos * (amount_scale - center)
         score += self.rng.normal(0, 0.22, len(options))
 
@@ -785,11 +866,7 @@ class LoanGenerator:
         return int(self.rng.choice(options, p=probs))
 
     def _choose_rate_type(self, row, product: LoanProduct, currency: str, term: int) -> str:
-        weights = np.array([
-            product.fixed_weight,
-            product.variable_weight,
-            product.mixed_weight,
-        ], dtype=float)
+        weights = self._rate_weight_cache[product.product_id].copy()
 
         if term >= 120:
             weights *= np.array([0.78, 1.16, 1.22])
@@ -819,7 +896,7 @@ class LoanGenerator:
         capacity_adjustment = -2.0 * (row["_capacity"] - 0.5)
         relationship_adjustment = -0.9 * (row["_relationship"] - 0.5)
         term_adjustment = 0.55 * np.log1p(term / 12)
-        type_adjustment = {"FIXED": 0.45, "VARIABLE": -0.20, "MIXED": 0.10}[rate_type]
+        type_adjustment = RATE_TYPE_ADJUSTMENT[rate_type]
         noise = self.rng.normal(0, 1.15 if currency == "UYU" else 0.65)
 
         rate = (
@@ -901,14 +978,7 @@ class LoanGenerator:
         # Annual deterioration/recovery dynamics.
         start_year = max(origination_year, OBSERVATION_START_YEAR)
         for year in range(start_year, CURRENT_YEAR + 1):
-            macro_stress = {
-                2021: 0.08,
-                2022: 0.10,
-                2023: 0.06,
-                2024: 0.02,
-                2025: 0.00,
-                2026: -0.02,
-            }.get(year, 0.0)
+            macro_stress = LIFECYCLE_MACRO_STRESS.get(year, 0.0)
 
             p_deteriorate = sigmoid(
                 -4.00
@@ -1257,6 +1327,11 @@ class LoanGenerator:
             "closing_year": closing_year,
         })
 
+        count_key = (row["customer_id"], product.product_id)
+        self._existing_contract_counts[count_key] = (
+            self._existing_contract_counts.get(count_key, 0) + 1
+        )
+
         self.bridge_rows.append(
             self._build_bridge_row(
                 loan_id=loan_id,
@@ -1285,17 +1360,15 @@ class LoanGenerator:
                 else CURRENT_YEAR
             )
 
-            eligible_products = [
-                p for p in PRODUCTS.values()
-                if p.target == row["customer_type"]
-            ]
+            customer_type = row["customer_type"]
+            eligible_products = self._eligible_products_by_customer_type[customer_type]
 
             # -------------------------
             # Pre-2021 historical hazard
             # -------------------------
             pre_start = max(
                 registration_year,
-                min(p.launch_year for p in eligible_products),
+                self._min_launch_year_by_customer_type[customer_type],
             )
             pre_end = min(
                 OBSERVATION_START_YEAR - 1,
@@ -1303,7 +1376,7 @@ class LoanGenerator:
             )
 
             if pre_start <= pre_end:
-                # V4.1.4 replaces the compressed count-plus-year allocator with
+                # V5.0.0 retains the compressed count-plus-year allocator with
                 # an annual origination hazard. Exposure is therefore handled
                 # naturally: a customer registered in 2019 is exposed only to
                 # 2019 and 2020, while a long-tenure customer is exposed to every
@@ -1317,10 +1390,8 @@ class LoanGenerator:
 
                 try:
                     for year in range(pre_start, pre_end + 1):
-                        valid_products = [
-                            p
-                            for p in eligible_products
-                            if p.launch_year <= year
+                        valid_products = self._valid_products_by_type_year[
+                            (customer_type, year)
                         ]
                         if not valid_products:
                             continue
@@ -1398,13 +1469,13 @@ class LoanGenerator:
 
                     # Repeated borrowing in the same product remains possible,
                     # but existing contracts create a mild saturation effect.
-                    existing_same = sum(
-                        1 for r in self.rows
-                        if r["customer_id"] == row["customer_id"]
-                        and r["product_id"] == product.product_id
-                        and r["origination_year"] <= year
-                    )
-                    p *= np.exp(-0.32 * existing_same)
+                    count_key = (row["customer_id"], product.product_id)
+                    existing_same = self._existing_contract_counts.get(count_key, 0)
+                    saturation = self._saturation_factor_cache.get(existing_same)
+                    if saturation is None:
+                        saturation = float(np.exp(-0.32 * existing_same))
+                        self._saturation_factor_cache[existing_same] = saturation
+                    p *= saturation
 
                     if self.rng.random() < p:
                         self._generate_contract(row, product, year)
@@ -1536,7 +1607,7 @@ def validate_output(loans, customers, branches):
 
 def audit(loans, customers):
     print("\n" + "=" * 72)
-    print("BTYT LOANS AUDIT — V4.1.4 FINAL BRANCH-STATE INTEGRATED")
+    print("BTYT LOANS AUDIT — V5.0.0 EXACT FAST BRANCH-STATE INTEGRATED")
     print("=" * 72)
 
     print(f"\nCustomers in dev population: {len(customers):,}")
@@ -1629,7 +1700,7 @@ def audit_history_observation_seam(loans):
     )
 
     print("\n" + "=" * 72)
-    print("HISTORY / OBSERVATION SEAM AUDIT — LOANS V4.1.4")
+    print("HISTORY / OBSERVATION SEAM AUDIT — LOANS V5.0.0")
     print("=" * 72)
     print("\nOriginations 2018-2022:")
     print(counts.to_string())
@@ -1703,7 +1774,7 @@ def audit_branch_state_integration(
     )
 
     print("\n" + "=" * 72)
-    print("BRANCH-STATE INTEGRATION AUDIT — LOANS V4.1.4")
+    print("BRANCH-STATE INTEGRATION AUDIT — LOANS V5.0.0")
     print("=" * 72)
     print(
         "Observed originations linked to branch state: "

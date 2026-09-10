@@ -13,6 +13,8 @@ Architecture changes:
 - stages loan-linked intents in compact Parquet and account-local generation in deterministic chunk files with month-level row groups;
 - replays internal BTYT transfers month by month to preserve atomic ledger semantics;
 - writes canonical Parquet outputs without holding the full transaction universe in memory.
+- V4.1 EXACT FAST adds deterministic-only caches and a one-time Parquet row-group index; no stochastic draw, event ordering rule, ledger rule, schema, or business mechanic is changed.
+- V5.0 EXACT FAST removes additional repeated account/month validation work, caches immutable service/calendar decisions, and reuses Parquet readers without changing semantic RNG keys or ledger rules.
 """
 from __future__ import annotations
 
@@ -50,7 +52,7 @@ from scripts.core.world import load_world
 
 WORLD_CONFIG = load_world()
 RNG_NAMESPACE = "transactions"
-ENGINE_VERSION = "4.0.0"
+ENGINE_VERSION = "5.0.0 EXACT FAST"
 
 CUSTOMERS_PARQUET_PATH = GENERATED_CORE_DIR / "customers.parquet"
 CUSTOMERS_CSV_PATH = GENERATED_CORE_DIR / "customers.csv"
@@ -141,6 +143,42 @@ MERCHANT_BASE_CACHE = {}
 CUSTOMER_BANK_FIT_CACHE = {}
 LOAN_ACCOUNT_PICK_CACHE = {}
 ACCOUNT_META_CACHE = {}
+
+# V4.1/V5 EXACT FAST caches. These hold deterministic values only and never
+# replace, reorder, or consume stochastic draws.
+TX_BRANCH_WEIGHT_CACHE = {}
+EVENT_DAY_PROB_CACHE = {}
+ACTIVE_IEDE_CACHE = {}
+LOAN_INTENT_DATASET_CACHE = {}
+MONTH_STAGE_INDEX_CACHE = {}
+ANCHOR_UYU_CACHE = {}
+
+# V5.0 exact-safe caches. These store deterministic values only.
+ACCOUNT_PERIOD_RANGE_CACHE = {}
+RECURRING_SERVICE_COUNT_CACHE = {}
+SALARY_DAY_CACHE = {}
+SERVICE_DAY_CACHE = {}
+INSTITUTION_ACTIVE_CACHE = {}
+PARQUET_FILE_CACHE = {}
+
+EVENT_OUTPUT_KEYS = (
+    "account_id", "transaction_datetime", "transaction_type", "direction",
+    "channel", "amount", "counterparty_type", "transfer_scope",
+    "counterparty_institution_id", "transaction_branch_id", "merchant_category",
+)
+
+FIXED_TERM_RATES = {
+    "P007": {2021:.055, 2022:.070, 2023:.090, 2024:.075, 2025:.065, 2026:.060},
+    "P008": {2021:.012, 2022:.018, 2023:.025, 2024:.028, 2025:.030, 2026:.030},
+}
+
+DEBIT_PURCHASE_FACTOR = {
+    "GROCERIES": .035, "RESTAURANTS": .022, "FUEL": .030, "RETAIL": .045,
+    "HEALTHCARE": .050, "PHARMACY": .020, "TRANSPORT": .012, "TRAVEL": .120,
+    "ENTERTAINMENT": .020, "EDUCATION": .045, "UTILITIES": .035,
+    "TELECOMMUNICATIONS": .020, "ECOMMERCE": .035, "HOME": .055,
+    "AUTOMOTIVE": .100, "PROFESSIONAL_SERVICES": .070, "OTHER": .030,
+}
 
 
 
@@ -377,11 +415,22 @@ def build_traits(customers, accounts):
 
 
 def anchor_uyu(c):
+    customer_id = str(c.get("customer_id", ""))
+    if customer_id:
+        cached = ANCHOR_UYU_CACHE.get(customer_id)
+        if cached is not None:
+            return cached
+
     if str(c.get("customer_type","INDIVIDUAL")).upper()=="BUSINESS":
         x=pd.to_numeric(pd.Series([c.get("annual_revenue",np.nan)]),errors="coerce").iloc[0]
-        return 1_000_000.0 if pd.isna(x) or x<=0 else float(x)/12
-    x=pd.to_numeric(pd.Series([c.get("monthly_income",np.nan)]),errors="coerce").iloc[0]
-    return 55_000.0 if pd.isna(x) or x<=0 else float(x)
+        value = 1_000_000.0 if pd.isna(x) or x<=0 else float(x)/12
+    else:
+        x=pd.to_numeric(pd.Series([c.get("monthly_income",np.nan)]),errors="coerce").iloc[0]
+        value = 55_000.0 if pd.isna(x) or x<=0 else float(x)
+
+    if customer_id:
+        ANCHOR_UYU_CACHE[customer_id] = value
+    return value
 
 
 def monthly_scale(c,t,period):
@@ -634,11 +683,32 @@ def bank_selection_score(bank_id, base_weight, currency, ctype, amount_uyu, cust
 
 
 def institution_is_active(institution_id, transaction_datetime):
-    meta = INSTITUTION_CONTEXT["institution_meta"][str(institution_id)]
+    institution_id = str(institution_id)
     dt = pd.Timestamp(transaction_datetime).normalize()
+    key = (institution_id, dt.value)
+    cached = INSTITUTION_ACTIVE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    meta = INSTITUTION_CONTEXT["institution_meta"][institution_id]
     start = meta["active_from"]
     end = meta["active_to"]
-    return (pd.isna(start) or dt >= start) and (pd.isna(end) or dt <= end)
+    value = bool((pd.isna(start) or dt >= start) and (pd.isna(end) or dt <= end))
+    INSTITUTION_ACTIVE_CACHE[key] = value
+    return value
+
+
+def active_iede_for_datetime(transaction_datetime):
+    dt = pd.Timestamp(transaction_datetime).normalize()
+    key = dt.value
+    cached = ACTIVE_IEDE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    active = tuple(
+        institution_id for institution_id in INSTITUTION_CONTEXT["iede_ids"]
+        if institution_is_active(institution_id, dt)
+    )
+    ACTIVE_IEDE_CACHE[key] = active
+    return active
 
 
 def choose_external_bank_institution(r, scope, ctype, period, currency, amount, customer_id):
@@ -665,10 +735,7 @@ def choose_external_bank_institution(r, scope, ctype, period, currency, amount, 
 
 def choose_domestic_institution(r, ctype, traits, period, currency, amount, customer_id, transaction_datetime):
     """Choose a domestic bank or active IEDE without forcing an ex-post target share."""
-    active_iede = [
-        institution_id for institution_id in INSTITUTION_CONTEXT["iede_ids"]
-        if institution_is_active(institution_id, transaction_datetime)
-    ]
+    active_iede = active_iede_for_datetime(transaction_datetime)
     if not active_iede:
         return choose_external_bank_institution(r, "DOMESTIC_EXTERNAL", ctype, period, currency, amount, customer_id)
 
@@ -796,7 +863,7 @@ def amount(r,tt,ctype,currency,scale,t,period,cat=None,recurring=False):
     v=float(t["financial_volatility"]); business=ctype=="BUSINESS"
 
     if tt=="DEBIT_PURCHASE":
-        f={"GROCERIES":.035,"RESTAURANTS":.022,"FUEL":.030,"RETAIL":.045,"HEALTHCARE":.050,"PHARMACY":.020,"TRANSPORT":.012,"TRAVEL":.120,"ENTERTAINMENT":.020,"EDUCATION":.045,"UTILITIES":.035,"TELECOMMUNICATIONS":.020,"ECOMMERCE":.035,"HOME":.055,"AUTOMOTIVE":.100,"PROFESSIONAL_SERVICES":.070,"OTHER":.030}[cat]
+        f=DEBIT_PURCHASE_FACTOR[cat]
         shape=max(1.8,3.5/(1.0+.22*v))
         uyu=scale*f*positive_multiplier(r,shape,0.00035,2.0,4.5)
     elif tt=="SERVICE_PAYMENT":
@@ -837,16 +904,22 @@ def month_calendar(period):
 
 
 def event_datetime(r,period,tt,cp,ch,ctype,preferred=None):
-    nd,days,weekdays=month_calendar(period); w=np.ones(nd,float)
-    if ctype=="BUSINESS":
-        w *= np.where(weekdays < 5, 1.7, .35)
-    elif tt=="DEBIT_PURCHASE":
-        w *= np.where(weekdays >= 5, 1.2, 1.0)
-    if cp=="EMPLOYER":
-        w *= np.where((days<=5)|(days>=nd-2),5.0,.55)
-    if preferred is not None:
-        w *= np.exp(-.35*np.abs(days-preferred))+.05
-    day=int(r.choice(days,p=w/w.sum()))
+    nd,days,weekdays=month_calendar(period)
+    prob_key = (str(period), str(tt), str(cp), str(ctype), None if preferred is None else int(preferred))
+    probs = EVENT_DAY_PROB_CACHE.get(prob_key)
+    if probs is None:
+        w=np.ones(nd,float)
+        if ctype=="BUSINESS":
+            w *= np.where(weekdays < 5, 1.7, .35)
+        elif tt=="DEBIT_PURCHASE":
+            w *= np.where(weekdays >= 5, 1.2, 1.0)
+        if cp=="EMPLOYER":
+            w *= np.where((days<=5)|(days>=nd-2),5.0,.55)
+        if preferred is not None:
+            w *= np.exp(-.35*np.abs(days-preferred))+.05
+        probs = w/w.sum()
+        EVENT_DAY_PROB_CACHE[prob_key] = probs
+    day=int(r.choice(days,p=probs))
     if ch=="BRANCH":
         if datetime(period.year,period.month,day).weekday()>=5:
             prev_day=day
@@ -876,22 +949,33 @@ def branch_open(row,period):
 
 
 def tx_branch(r,a,c,branches,period):
-    key=str(period)
-    e=OPEN_BRANCH_CACHE.get(key)
+    # Branch availability changes only by year in this model.
+    open_key=int(period.year)
+    e=OPEN_BRANCH_CACHE.get(open_key)
     if e is None:
         mask=(pd.to_numeric(branches["opening_year"],errors="coerce")<=period.year)
         closing=pd.to_numeric(branches["closing_year"],errors="coerce")
         mask &= closing.isna() | (closing>=period.year)
         e=branches.loc[mask].copy()
-        OPEN_BRANCH_CACHE[key]=e
-    w=np.ones(len(e))*.15
-    for i,b in enumerate(e.itertuples(index=False)):
-        if b.branch_id==a["branch_id"]:w[i]+=3.2
-        if str(b.branch_id)==str(c.get("primary_branch_id","")):w[i]+=2.1
-        if str(b.department)==str(c.get("residence_department","")):w[i]+=1.3
-        if str(b.locality)==str(c.get("residence_locality","")):w[i]+=1.8
-        w[i]+=.55 if str(b.branch_size).upper()=="LARGE" else (.25 if str(b.branch_size).upper()=="MEDIUM" else 0)
-    return str(r.choice(e["branch_id"].astype(str),p=w/w.sum()))
+        OPEN_BRANCH_CACHE[open_key]=e
+
+    weight_key=(
+        open_key, str(a["branch_id"]), str(c.get("primary_branch_id","")),
+        str(c.get("residence_department","")), str(c.get("residence_locality","")),
+    )
+    cached=TX_BRANCH_WEIGHT_CACHE.get(weight_key)
+    if cached is None:
+        w=np.ones(len(e))*.15
+        for i,b in enumerate(e.itertuples(index=False)):
+            if b.branch_id==a["branch_id"]:w[i]+=3.2
+            if str(b.branch_id)==str(c.get("primary_branch_id","")):w[i]+=2.1
+            if str(b.department)==str(c.get("residence_department","")):w[i]+=1.3
+            if str(b.locality)==str(c.get("residence_locality","")):w[i]+=1.8
+            w[i]+=.55 if str(b.branch_size).upper()=="LARGE" else (.25 if str(b.branch_size).upper()=="MEDIUM" else 0)
+        cached=(e["branch_id"].astype(str).to_numpy(), w/w.sum())
+        TX_BRANCH_WEIGHT_CACHE[weight_key]=cached
+    branch_ids, probs=cached
+    return str(r.choice(branch_ids,p=probs))
 
 
 def debit_links(cards):
@@ -1144,7 +1228,11 @@ def load_loan_intents_for_accounts(path, account_ids):
     if not account_ids:
         return {}
 
-    dataset = ds.dataset(path, format="parquet")
+    dataset_key = str(path.resolve())
+    dataset = LOAN_INTENT_DATASET_CACHE.get(dataset_key)
+    if dataset is None:
+        dataset = ds.dataset(path, format="parquet")
+        LOAN_INTENT_DATASET_CACHE[dataset_key] = dataset
     table = dataset.to_table(
         filter=ds.field("account_id").isin(account_ids),
         columns=["account_id", "year_month", "event_type", "amount", "loan_id"],
@@ -1171,6 +1259,42 @@ def op_failure(r,event):
     return choose(r,["TECHNICAL_ERROR","LIMIT_EXCEEDED","OTHER"],[1.8,.8,.4])
 
 
+def account_period_range(first_obs_month, last_obs_month):
+    key = (str(first_obs_month), str(last_obs_month))
+    cached = ACCOUNT_PERIOD_RANGE_CACHE.get(key)
+    if cached is None:
+        cached = pd.period_range(first_obs_month, last_obs_month, freq="M")
+        ACCOUNT_PERIOD_RANGE_CACHE[key] = cached
+    return cached
+
+
+def recurring_service_count(account_id):
+    account_id = str(account_id)
+    cached = RECURRING_SERVICE_COUNT_CACHE.get(account_id)
+    if cached is None:
+        cached = int(rng_for("services", account_id).choice([0,1,2,3,4], p=[.08,.22,.34,.25,.11]))
+        RECURRING_SERVICE_COUNT_CACHE[account_id] = cached
+    return cached
+
+
+def salary_preferred_day(customer_id):
+    customer_id = str(customer_id)
+    cached = SALARY_DAY_CACHE.get(customer_id)
+    if cached is None:
+        cached = int(rng_for("salary-day", customer_id).choice([1,2,3,4,5,28]))
+        SALARY_DAY_CACHE[customer_id] = cached
+    return cached
+
+
+def service_preferred_day(account_id, sequence):
+    key = (str(account_id), int(sequence))
+    cached = SERVICE_DAY_CACHE.get(key)
+    if cached is None:
+        cached = int(rng_for("service-day", key[0], key[1]).integers(3,27))
+        SERVICE_DAY_CACHE[key] = cached
+    return cached
+
+
 def make_event(a,c,t,role,period,tt,amt,branches,source,recurring=False,preferred=None):
     r=rng_for("event",a["account_id"],period,tt,source,amt);ctype=str(c["customer_type"]).upper();cp=counterparty(r,tt,ctype,t,role);ch=channel(r,tt,t,ctype,period,recurring,amt,CURRENCY[a["product_id"]]);dt=event_datetime(r,period,tt,cp,ch,ctype,preferred);bid=tx_branch(r,a,c,branches,period) if ch=="BRANCH" else None
     return {"account_id":a["account_id"],"transaction_datetime":dt,"transaction_type":tt,"direction":"CREDIT" if tt in CREDIT else "DEBIT","channel":ch,"amount":money(amt),"counterparty_type":cp,"transaction_branch_id":bid,"merchant_category":None,"source":source}
@@ -1178,8 +1302,12 @@ def make_event(a,c,t,role,period,tt,amt,branches,source,recurring=False,preferre
 
 def process_account(a,c,t,role,branches,debit_set,lidx):
     balance=inherited_balance(a,c,t);tx=[];bals=[];p=a["product_id"];curr=CURRENCY[p];ctype=str(c["customer_type"]).upper();has_debit=a["account_id"] in debit_set
-    for period in pd.period_range(a["first_obs_month"],a["last_obs_month"],freq="M"):
-        opening=balance;scale=monthly_scale(c,t,period);events=[]
+    account_id=a["account_id"];customer_id=c["customer_id"]
+    periods=account_period_range(a["first_obs_month"],a["last_obs_month"])
+    recurring_services=recurring_service_count(account_id) if role in {"PRIMARY_TRANSACTIONAL","PAYROLL","BUSINESS_OPERATING"} else 0
+    payroll_day=salary_preferred_day(customer_id) if role=="PAYROLL" and ctype=="INDIVIDUAL" else None
+    for period in periods:
+        period_str=str(period);opening=balance;scale=monthly_scale(c,t,period);events=[]
         # observed funding for post-2021 openings
         if period==a["first_obs_month"] and int(a["opening_year"])>=2021:
             r=rng_for("initial",a["account_id"]);mult=r.lognormal(.8,.7) if p in FIXED else r.lognormal(-.4,.65);uyu=scale*float(t["liquidity_buffer"])*mult*(1.4 if ctype=="BUSINESS" else 1);amt=uyu/FX[period.year] if curr=="USD" else uyu
@@ -1188,14 +1316,14 @@ def process_account(a,c,t,role,branches,debit_set,lidx):
         if role=="PAYROLL" and ctype=="INDIVIDUAL":
             r=rng_for("salary",a["account_id"],period)
             if r.random()<.88+.09*float(t["recurring_behavior"]):
-                ev=make_event(a,c,t,role,period,"TRANSFER_IN",scale*r.lognormal(0,.045),branches,"RECURRING_SALARY",True,int(rng_for("salary-day",c["customer_id"]).choice([1,2,3,4,5,28])));ev["counterparty_type"]="EMPLOYER";events.append(ev)
+                ev=make_event(a,c,t,role,period,"TRANSFER_IN",scale*r.lognormal(0,.045),branches,"RECURRING_SALARY",True,payroll_day);ev["counterparty_type"]="EMPLOYER";events.append(ev)
         # recurring services
         if role in {"PRIMARY_TRANSACTIONAL","PAYROLL","BUSINESS_OPERATING"}:
-            nt=int(rng_for("services",a["account_id"]).choice([0,1,2,3,4],p=[.08,.22,.34,.25,.11]))
+            nt=recurring_services
             for j in range(nt):
                 r=rng_for("service",a["account_id"],period,j)
                 if r.random()<.52+.35*float(t["recurring_behavior"]):
-                    amt=amount(r,"SERVICE_PAYMENT",ctype,curr,scale,t,period,recurring=True);events.append(make_event(a,c,t,role,period,"SERVICE_PAYMENT",amt,branches,"RECURRING_SERVICE",True,int(rng_for("service-day",a["account_id"],j).integers(3,27))))
+                    amt=amount(r,"SERVICE_PAYMENT",ctype,curr,scale,t,period,recurring=True);events.append(make_event(a,c,t,role,period,"SERVICE_PAYMENT",amt,branches,"RECURRING_SERVICE",True,service_preferred_day(account_id,j)))
         # behavioral
         ratio,low_liq,excess_liq=liquidity_state(balance,curr,scale,t,role)
         n=event_count(a,t,ctype,period,role)
@@ -1217,10 +1345,10 @@ def process_account(a,c,t,role,branches,debit_set,lidx):
             ev["counterparty_type"]="MERCHANT" if tt=="DEBIT_PURCHASE" else ev["counterparty_type"]
             events.append(ev)
         # loans
-        for tt,amt,lid in lidx.get((a["account_id"],str(period)),[]):events.append(make_event(a,c,t,role,period,tt,amt,branches,f"LOAN:{lid}",tt=="LOAN_PAYMENT"))
+        for tt,amt,lid in lidx.get((account_id,period_str),[]):events.append(make_event(a,c,t,role,period,tt,amt,branches,f"LOAN:{lid}",tt=="LOAN_PAYMENT"))
         # fixed-term interest based on start-of-month/live balance
         if p in FIXED and balance>0:
-            rate=({2021:.055,2022:.070,2023:.090,2024:.075,2025:.065,2026:.060} if p=="P007" else {2021:.012,2022:.018,2023:.025,2024:.028,2025:.030,2026:.030})[period.year];amt=money(balance*rate/12*rng_for("interest",a["account_id"],period).normal(1,.04));ev=make_event(a,c,t,role,period,"INTEREST_CREDIT",amt,branches,"FIXED_TERM_INTEREST");ev["channel"]="AUTOMATIC";ev["transaction_branch_id"]=None;events.append(ev)
+            rate=FIXED_TERM_RATES[p][period.year];amt=money(balance*rate/12*rng_for("interest",a["account_id"],period).normal(1,.04));ev=make_event(a,c,t,role,period,"INTEREST_CREDIT",amt,branches,"FIXED_TERM_INTEREST");ev["channel"]="AUTOMATIC";ev["transaction_branch_id"]=None;events.append(ev)
         events.sort(key=lambda e:e["transaction_datetime"]);inflow=outflow=0.0
         for j,e in enumerate(events):
             scope, institution_id = resolve_transfer_institution(e, a, c, t, period, j)
@@ -1232,11 +1360,11 @@ def process_account(a,c,t,role,branches,debit_set,lidx):
             if status=="COMPLETED":
                 if e["direction"]=="CREDIT":balance=money(balance+e["amount"]);inflow=money(inflow+e["amount"])
                 else:balance=money(balance-e["amount"]);outflow=money(outflow+e["amount"])
-            tx.append({k:e.get(k) for k in ["account_id","transaction_datetime","transaction_type","direction","channel","amount","counterparty_type","transfer_scope","counterparty_institution_id","transaction_branch_id","merchant_category"]}|{"transaction_status":status,"failure_reason":reason,"_month":str(period),"_source":e["source"]})
+            tx.append({k:e.get(k) for k in EVENT_OUTPUT_KEYS}|{"transaction_status":status,"failure_reason":reason,"_month":period_str,"_source":e["source"]})
         # closure sweep
         if str(a["account_status"]).upper()=="CLOSED" and period==a["last_obs_month"] and balance>.005:
-            ev=make_event(a,c,t,role,period,"TRANSFER_OUT",balance,branches,"ACCOUNT_CLOSURE_SWEEP");ev["transaction_datetime"]=pd.Timestamp(datetime(period.year,period.month,calendar.monthrange(period.year,period.month)[1],15,45,0));scope,institution_id=resolve_transfer_institution(ev,a,c,t,period,"closure");ev["transfer_scope"]=scope;ev["counterparty_institution_id"]=institution_id;tx.append({k:ev.get(k) for k in ["account_id","transaction_datetime","transaction_type","direction","channel","amount","counterparty_type","transfer_scope","counterparty_institution_id","transaction_branch_id","merchant_category"]}|{"transaction_status":"COMPLETED","failure_reason":None,"_month":str(period),"_source":ev["source"]});outflow=money(outflow+balance);balance=0.0
-        bals.append({"account_id":a["account_id"],"year_month":str(period),"opening_balance":money(opening),"total_inflows":money(inflow),"total_outflows":money(outflow),"closing_balance":money(balance)})
+            ev=make_event(a,c,t,role,period,"TRANSFER_OUT",balance,branches,"ACCOUNT_CLOSURE_SWEEP");ev["transaction_datetime"]=pd.Timestamp(datetime(period.year,period.month,calendar.monthrange(period.year,period.month)[1],15,45,0));scope,institution_id=resolve_transfer_institution(ev,a,c,t,period,"closure");ev["transfer_scope"]=scope;ev["counterparty_institution_id"]=institution_id;tx.append({k:ev.get(k) for k in ["account_id","transaction_datetime","transaction_type","direction","channel","amount","counterparty_type","transfer_scope","counterparty_institution_id","transaction_branch_id","merchant_category"]}|{"transaction_status":"COMPLETED","failure_reason":None,"_month":period_str,"_source":ev["source"]});outflow=money(outflow+balance);balance=0.0
+        bals.append({"account_id":a["account_id"],"year_month":period_str,"opening_balance":money(opening),"total_inflows":money(inflow),"total_outflows":money(outflow),"closing_balance":money(balance)})
     return tx,bals
 
 
@@ -1484,6 +1612,17 @@ def pick_internal_counterpart(
     weights = weights / weights.sum()
     return str(r.choice(ids, p=weights))
 
+def account_validation_maps(accounts):
+    cache_key = id(accounts)
+    cached = ACCOUNT_META_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    account_meta = accounts.set_index("account_id")[["customer_id", "product_id"]]
+    cached = (account_meta["customer_id"].astype(str).to_dict(), account_meta["product_id"].map(CURRENCY).to_dict())
+    ACCOUNT_META_CACHE[cache_key] = cached
+    return cached
+
+
 def internal_transfer_validation(tx, accounts):
     metrics = {}
     completed_internal = tx[
@@ -1491,9 +1630,7 @@ def internal_transfer_validation(tx, accounts):
         & tx["_internal_id"].notna()
     ].copy()
 
-    account_meta = accounts.set_index("account_id")[["customer_id", "product_id"]]
-    customer_map = account_meta["customer_id"].astype(str).to_dict()
-    currency_map = account_meta["product_id"].map(CURRENCY).to_dict()
+    customer_map, currency_map = account_validation_maps(accounts)
 
     bad_size = bad_direction = bad_amount = bad_timing = 0
     bad_self_account = bad_self_customer = bad_currency = 0
@@ -1539,7 +1676,7 @@ def internal_transfer_validation(tx, accounts):
     return metrics
 
 
-def build_internal_pair_audit(tx, accounts):
+def build_internal_pair_audit(tx, accounts, currency_map=None):
     completed = tx[
         (tx["transaction_status"] == "COMPLETED")
         & tx["_internal_id"].notna()
@@ -1552,7 +1689,8 @@ def build_internal_pair_audit(tx, accounts):
     if completed.empty:
         return pd.DataFrame(columns=cols)
 
-    currency_map = accounts.set_index("account_id")["product_id"].map(CURRENCY).to_dict()
+    if currency_map is None:
+        _, currency_map = account_validation_maps(accounts)
     rows = []
     for internal_id, g in completed.groupby("_internal_id", sort=False):
         out_row = g[g["transaction_type"] == "TRANSFER_OUT"].iloc[0]
@@ -1625,7 +1763,11 @@ def validate(tx,bals,accounts,branches):
     agg=completed.groupby(["account_id","ym"],as_index=False).agg(tx_in=("cin","sum"),tx_out=("cout","sum")).rename(columns={"ym":"year_month"});r=bals.merge(agg,on=["account_id","year_month"],how="left").fillna({"tx_in":0,"tx_out":0})
     tests={"inflow_reconciliation":(r["total_inflows"]-r["tx_in"]).abs(),"outflow_reconciliation":(r["total_outflows"]-r["tx_out"]).abs(),"balance_identity":(r["closing_balance"]-(r["opening_balance"]+r["total_inflows"]-r["total_outflows"])).abs()}
     for k,s in tests.items():m[k]=int((s>.011).sum());errs+=([k] if m[k] else [])
-    b=bals.sort_values(["account_id","year_month"]).copy();b["prev"]=b.groupby("account_id")["closing_balance"].shift();m["continuity"]=int(((b["prev"].notna())&((b["opening_balance"]-b["prev"]).abs()>.011)).sum());m["negative_balances"]=int((bals["closing_balance"]<-.005).sum())
+    if bals["year_month"].nunique(dropna=False) <= 1:
+        m["continuity"] = 0
+    else:
+        b=bals.sort_values(["account_id","year_month"]).copy();b["prev"]=b.groupby("account_id")["closing_balance"].shift();m["continuity"]=int(((b["prev"].notna())&((b["opening_balance"]-b["prev"]).abs()>.011)).sum())
+    m["negative_balances"]=int((bals["closing_balance"]<-.005).sum())
     m["duplicate_tx_id"]=int(tx["transaction_id"].duplicated().sum());m["duplicate_balance_pk"]=int(bals.duplicated(["account_id","year_month"]).sum());m["bad_nonbranch_fk"]=int(tx.loc[tx["channel"]!="BRANCH","transaction_branch_id"].notna().sum());m["bad_branch_missing"]=int(tx.loc[tx["channel"]=="BRANCH","transaction_branch_id"].isna().sum())
     expected=tx["transaction_type"].map({**{x:"CREDIT" for x in CREDIT},**{x:"DEBIT" for x in DEBIT}});m["bad_direction"]=int((expected!=tx["direction"]).sum());m["completed_with_reason"]=int(tx.loc[tx["transaction_status"]=="COMPLETED","failure_reason"].notna().sum());m["failed_without_reason"]=int(tx.loc[tx["transaction_status"]=="FAILED","failure_reason"].isna().sum())
     m.update(internal_transfer_validation(tx,accounts))
@@ -1776,15 +1918,25 @@ def _stat_value(value):
     return str(value)
 
 
-def load_month_stage(root, month, month_col):
-    """Read only row groups belonging to the requested month."""
-    files = sorted(root.glob("chunk_*.parquet"))
-    if not files:
-        return pd.DataFrame()
+def cached_parquet_file(path):
+    key = str(Path(path).resolve())
+    cached = PARQUET_FILE_CACHE.get(key)
+    if cached is None:
+        cached = pq.ParquetFile(path)
+        PARQUET_FILE_CACHE[key] = cached
+    return cached
 
-    tables = []
+
+def _build_month_stage_index(root, month_col):
+    cache_key = (str(Path(root).resolve()), str(month_col))
+    cached = MONTH_STAGE_INDEX_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    index = defaultdict(list)
+    files = sorted(root.glob("chunk_*.parquet"))
     for path in files:
-        parquet_file = pq.ParquetFile(path)
+        parquet_file = cached_parquet_file(path)
         schema = parquet_file.schema_arrow
         column_index = schema.get_field_index(month_col)
         if column_index < 0:
@@ -1793,18 +1945,53 @@ def load_month_stage(root, month, month_col):
         for row_group in range(parquet_file.num_row_groups):
             stats = parquet_file.metadata.row_group(row_group).column(column_index).statistics
             if stats is None or not stats.has_min_max:
-                # Defensive fallback. Current staging writes one month per row group,
-                # so statistics should normally always be available.
                 table = parquet_file.read_row_group(row_group)
                 values = table.column(month_col).to_pylist()
-                if values and str(values[0]) == month:
-                    tables.append(table)
+                if values:
+                    index[str(values[0])].append((path, row_group))
                 continue
 
             minimum = _stat_value(stats.min)
             maximum = _stat_value(stats.max)
-            if minimum == month and maximum == month:
-                tables.append(parquet_file.read_row_group(row_group))
+            if minimum == maximum:
+                index[minimum].append((path, row_group))
+            else:
+                # Defensive fallback for a row group containing more than one month.
+                table = parquet_file.read_row_group(row_group)
+                month_values = table.column(month_col).to_pylist()
+                for value in dict.fromkeys(str(x) for x in month_values):
+                    index[value].append((path, row_group))
+
+    cached = dict(index)
+    MONTH_STAGE_INDEX_CACHE[cache_key] = cached
+    return cached
+
+
+def load_month_stage(root, month, month_col):
+    """Read only row groups belonging to the requested month.
+
+    V4.1 builds the Parquet metadata index once, rather than rescanning every
+    chunk file and every row group for each of the 72 replay months. Row-group
+    read order is kept identical to the original sorted-file/row-group order.
+    """
+    index = _build_month_stage_index(root, month_col)
+    locations = index.get(str(month), ())
+    if not locations:
+        return pd.DataFrame()
+
+    tables = []
+    for path, row_group in locations:
+        table = cached_parquet_file(path).read_row_group(row_group)
+        # Normal staging writes exactly one month per row group. The filter below
+        # preserves original semantics in the defensive mixed-month fallback.
+        column = table.column(month_col).to_pylist()
+        if column and all(str(value) == str(month) for value in column):
+            tables.append(table)
+        else:
+            frame = table.to_pandas()
+            frame = frame[frame[month_col].astype(str).eq(str(month))]
+            if not frame.empty:
+                tables.append(pa.Table.from_pandas(frame, preserve_index=False))
 
     if not tables:
         return pd.DataFrame()
@@ -2126,7 +2313,7 @@ def replay_stage(d, accounts, roles, checkpoint):
         REPLAY_PAIR_DIR.mkdir(parents=True, exist_ok=True)
         replayed.to_parquet(REPLAY_TX_DIR / f"{month}.parquet", index=False, compression=PARQUET_COMPRESSION)
         bals.to_parquet(REPLAY_BAL_DIR / f"{month}.parquet", index=False, compression=PARQUET_COMPRESSION)
-        pairs = build_internal_pair_audit(replayed, accounts)
+        pairs = build_internal_pair_audit(replayed, accounts, replay_context["account_currency"])
         pairs.to_parquet(REPLAY_PAIR_DIR / f"{month}.parquet", index=False, compression=PARQUET_COMPRESSION)
         pd.DataFrame({"account_id": list(live_balance), "balance": list(live_balance.values())}).to_parquet(
             LIVE_BALANCE_PATH, index=False, compression=PARQUET_COMPRESSION

@@ -1,0 +1,38 @@
+{
+    "world_name":  "SMOKE",
+    "variant":  33,
+    "world_id":  "SMOKE-33-3165889979",
+    "seed":  3165889979,
+    "canonical":  false,
+    "active":  true,
+    "updated_at_utc":  "2026-09-10T01:04:53+00:00",
+    "status":  "FROZEN",
+    "created_at_utc":  "2026-09-09T23:10:44+00:00",
+    "generation_started_at_utc":  "2026-09-10T01:03:40+00:00",
+    "generation_finished_at_utc":  "2026-09-10T01:04:53+00:00",
+    "status_detail":  "World generation, audit, manifest and verification completed successfully.",
+    "builder_state":  {
+                          "completed_stages":  [
+                                                   "macro",
+                                                   "banks",
+                                                   "financial_institutions",
+                                                   "branches",
+                                                   "customers",
+                                                   "accounts",
+                                                   "cards",
+                                                   "loans",
+                                                   "loan_snapshot",
+                                                   "external_shocks",
+                                                   "transactions",
+                                                   "campaigns",
+                                                   "branch_performance",
+                                                   "operational_exports",
+                                                   "cross_system_audit"
+                                               ],
+                          "manifest_pass":  true,
+                          "verification_pass":  true,
+                          "frozen":  true,
+                          "fingerprint":  "50f5f1c5cbbe59409647882271bdcce26d3d9aa54b3f62d9c401bb9bbf2acb64",
+                          "updated_at_utc":  "2026-09-10T01:04:53+00:00"
+                      }
+}

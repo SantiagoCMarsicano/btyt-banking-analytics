@@ -94,6 +94,16 @@ worlds/*/*/database/
 worlds/*/*/audit/
 worlds/*/*/manifests/
 
+# World datasets are local by default.
+worlds/*/*/data/
+
+# Production BTYT worlds are local and may contain very large datasets.
+worlds/BTYT/
+
+# Keep the small smoke world as a reproducible repository example.
+!worlds/SMOKE/
+!worlds/SMOKE/33/
+!worlds/SMOKE/33/**
 
 # -----------------------------------------------------------------------------
 # Runtime / diagnostic artifacts

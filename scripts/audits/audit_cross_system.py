@@ -1,4 +1,4 @@
-"""BTYT final cross-system audit — V2.1.0.
+"""BTYT final cross-system audit — V2.3.0 STREAMING.
 
 Read-only integrity audit for the frozen Part I synthetic banking universe.
 It does not modify generated datasets and does not recalibrate any DGP.
@@ -754,9 +754,194 @@ def audit_operational_exports(canonical, operational, reliability_world, reliabi
             )
 
 
+
+def table_shape(path):
+    """Return (rows, columns) without materializing a large CSV."""
+    if path is None or not Path(path).exists():
+        return None, None
+    path = Path(path)
+    if path.suffix.lower() == ".parquet":
+        import pyarrow.parquet as pq
+        metadata = pq.ParquetFile(path).metadata
+        return int(metadata.num_rows), int(metadata.num_columns)
+    if path.suffix.lower() == ".csv":
+        columns = list(pd.read_csv(path, nrows=0).columns)
+        rows = 0
+        with path.open("rb") as fh:
+            for block in iter(lambda: fh.read(8 * 1024 * 1024), b""):
+                rows += block.count(b"\n")
+        return max(0, rows - 1), len(columns)
+    raise ValueError(f"Unsupported dataset format: {path}")
+
+
+def audit_operational_transactions_streaming(
+    canonical_path,
+    operational_path,
+    canonical_rows,
+    chunksize=250_000,
+):
+    """Compare canonical Parquet and operational CSV in bounded-memory row batches.
+
+    The operational reliability layer preserves transaction row order. Therefore
+    the audit can compare both exports sequentially without building a global
+    transaction-id index or sorting tens of millions of rows in memory.
+    """
+    section = "Operational reliability"
+
+    if canonical_path is None or operational_path is None:
+        skip(
+            section,
+            "transactions operational export",
+            "canonical or operational dataset not present",
+        )
+        return
+
+    protected_cols = [
+        "transaction_id",
+        "account_id",
+        "amount",
+        "direction",
+        "transaction_status",
+        "failure_reason",
+        "transaction_type",
+    ]
+
+    operational_header = list(pd.read_csv(operational_path, nrows=0).columns)
+    available = [c for c in protected_cols if c in operational_header]
+
+    if "transaction_id" not in available:
+        record(
+            section,
+            "protected transaction truth preserved operationally",
+            False,
+            "transaction_id missing from operational transactions",
+        )
+        return
+
+    import pyarrow.parquet as pq
+
+    parquet_file = pq.ParquetFile(canonical_path)
+    canonical_columns = set(parquet_file.schema_arrow.names)
+    available = [c for c in available if c in canonical_columns]
+
+    csv_iter = pd.read_csv(
+        operational_path,
+        usecols=available,
+        chunksize=chunksize,
+        low_memory=False,
+    )
+
+    parquet_iter = parquet_file.iter_batches(
+        batch_size=chunksize,
+        columns=available,
+    )
+
+    operational_rows = 0
+    canonical_streamed_rows = 0
+    protected_ok = True
+    changed = set()
+    row_order_ok = True
+    batch_count = 0
+
+    for batch_count, (arrow_batch, csv_chunk) in enumerate(
+        zip(parquet_iter, csv_iter),
+        start=1,
+    ):
+        canonical_chunk = arrow_batch.to_pandas()
+        canonical_streamed_rows += len(canonical_chunk)
+        operational_rows += len(csv_chunk)
+
+        if len(canonical_chunk) != len(csv_chunk):
+            protected_ok = False
+            changed.add("__row_count_within_batch__")
+            break
+
+        left_ids = canonical_chunk["transaction_id"].astype("string").reset_index(drop=True)
+        right_ids = csv_chunk["transaction_id"].astype("string").reset_index(drop=True)
+
+        if not left_ids.equals(right_ids):
+            row_order_ok = False
+            protected_ok = False
+            changed.add("transaction_id")
+            break
+
+        for col in available:
+            if col == "transaction_id":
+                continue
+
+            a = canonical_chunk[col].reset_index(drop=True)
+            b = csv_chunk[col].reset_index(drop=True)
+
+            if pd.api.types.is_numeric_dtype(a):
+                same = np.isclose(
+                    pd.to_numeric(a, errors="coerce"),
+                    pd.to_numeric(b, errors="coerce"),
+                    equal_nan=True,
+                ).all()
+            else:
+                same = (
+                    a.fillna("<NA>").astype(str).reset_index(drop=True)
+                    .equals(
+                        b.fillna("<NA>").astype(str).reset_index(drop=True)
+                    )
+                )
+
+            if not same:
+                protected_ok = False
+                changed.add(col)
+
+        if batch_count % 20 == 0:
+            print(
+                f"  operational transaction audit: "
+                f"{operational_rows:,} rows checked"
+            )
+
+    # Detect unequal iterator lengths without materializing more than one batch.
+    if protected_ok:
+        extra_parquet = next(parquet_iter, None)
+        extra_csv = next(csv_iter, None)
+
+        if extra_parquet is not None:
+            canonical_streamed_rows += len(extra_parquet)
+            protected_ok = False
+            changed.add("__extra_canonical_rows__")
+
+        if extra_csv is not None:
+            operational_rows += len(extra_csv)
+            protected_ok = False
+            changed.add("__extra_operational_rows__")
+
+    record(
+        section,
+        "transactions operational row count preserved",
+        operational_rows == canonical_rows
+        and canonical_streamed_rows == canonical_rows,
+        (
+            f"canonical_expected={canonical_rows} "
+            f"canonical_streamed={canonical_streamed_rows} "
+            f"operational={operational_rows}"
+        ),
+    )
+
+    record(
+        section,
+        "operational transaction row order preserved",
+        row_order_ok,
+        f"batches_checked={batch_count}",
+    )
+
+    record(
+        section,
+        "protected transaction truth preserved operationally",
+        protected_ok,
+        f"changed={sorted(changed)}",
+    )
+
+
+
 def main():
     print("=" * 92)
-    print("BTYT FINAL CROSS-SYSTEM AUDIT — V2.1.0")
+    print("BTYT FINAL CROSS-SYSTEM AUDIT — V2.3.0 STREAMING")
     print("=" * 92)
     print(f"Root: {ROOT}")
 
@@ -914,21 +1099,34 @@ def main():
             f"{str(path) if path is not None else 'NOT FOUND / OPTIONAL'}"
         )
 
+    large_streamed = {"operational_transactions"}
     data = {
-        name: load_table(path) if path is not None else None
+        name: (None if name in large_streamed
+               else load_table(path) if path is not None else None)
         for name, path in paths.items()
     }
+
+    source_shapes = {}
+    for name, path in paths.items():
+        if path is None:
+            source_shapes[name] = (None, None)
+        elif name in large_streamed:
+            source_shapes[name] = table_shape(path)
+        else:
+            df = data.get(name)
+            source_shapes[name] = (
+                (len(df), len(df.columns)) if df is not None else (None, None)
+            )
 
     print()
     print("Resolved shapes")
     print("-" * 92)
-    for name, df in data.items():
-        if df is None:
+    for name, path in paths.items():
+        rows, cols = source_shapes.get(name, (None, None))
+        if rows is None:
             continue
-        print(
-            f"  {name:<34} rows={len(df):>10,}  "
-            f"cols={len(df.columns):>4}"
-        )
+        mode = " [streamed]" if name in large_streamed else ""
+        print(f"  {name:<34} rows={rows:>10,}  cols={cols:>4}{mode}")
 
     for df in data.values():
         normalize_id(
@@ -1003,7 +1201,7 @@ def main():
         "cards": data["cards"],
         "loans": data["loans"],
         "branches": data["branches"],
-        "transactions": data["transactions"],
+        "transactions": None,
         "campaign_customers": data["campaign_customers"],
         "campaign_exposures": data["campaign_exposures"],
     }
@@ -1014,7 +1212,7 @@ def main():
         "cards": data["operational_cards"],
         "loans": data["operational_loans"],
         "branches": data["operational_branches"],
-        "transactions": data["operational_transactions"],
+        "transactions": None,
         "campaign_customers": data["operational_campaign_customers"],
         "campaign_exposures": data["operational_campaign_exposures"],
     }
@@ -1024,6 +1222,13 @@ def main():
         operational,
         data["reliability_world"],
         data["reliability_audit"],
+    )
+
+    canonical_tx_rows, _ = source_shapes["transactions"]
+    audit_operational_transactions_streaming(
+        paths["transactions"],
+        paths["operational_transactions"],
+        canonical_tx_rows,
     )
 
     print()
@@ -1122,12 +1327,8 @@ def main():
                 "dataset": name,
                 "path": str(path) if path is not None else "",
                 "exists": path is not None,
-                "rows": len(df) if df is not None else np.nan,
-                "columns": (
-                    len(df.columns)
-                    if df is not None
-                    else np.nan
-                ),
+                "rows": source_shapes.get(name, (np.nan, np.nan))[0],
+                "columns": source_shapes.get(name, (np.nan, np.nan))[1],
             }
         )
 
@@ -1147,7 +1348,7 @@ def main():
         raise SystemExit(1)
 
     print()
-    print("BTYT FINAL CROSS-SYSTEM AUDIT V2.1.0: PASS")
+    print("BTYT FINAL CROSS-SYSTEM AUDIT V2.3.0 STREAMING: PASS")
     print("All canonical datasets remained read-only.")
 
 

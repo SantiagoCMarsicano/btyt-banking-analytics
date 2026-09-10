@@ -1,0 +1,368 @@
+{
+  "schema_version": 1,
+  "manifest_generator_version": "1.1.0",
+  "dataset_name": "BTYT Banking Analytics â€” Part I",
+  "dataset_state": "FROZEN",
+  "created_at_utc": "2026-09-10T01:04:52+00:00",
+  "repository_root_name": "btyt-banking-analytics",
+  "world_root_name": "33",
+  "world": {
+    "world_seed": null,
+    "customer_count": null,
+    "start_date": null,
+    "end_date": null,
+    "raw_config_sha256": "36a161be8ba4802da5eac051b29af1af6e85cfba85aa4dcd21447178766d5cce"
+  },
+  "validation": {
+    "cross_system_audit": {
+      "available": true,
+      "final_status": "PASS",
+      "failed_checks": 0,
+      "skipped_checks": 2
+    },
+    "latest_orchestrator_run": {
+      "available": true,
+      "status": "PASS",
+      "run_id": "20260910T010340Z",
+      "orchestrator_version": "1.1.0",
+      "selected_stages": [
+        "macro",
+        "banks",
+        "financial_institutions",
+        "branches",
+        "customers",
+        "accounts",
+        "cards",
+        "loans",
+        "loan_snapshot",
+        "external_shocks",
+        "transactions",
+        "campaigns",
+        "branch_performance",
+        "operational_exports",
+        "cross_system_audit"
+      ]
+    }
+  },
+  "inventory_summary": {
+    "canonical_files": 20,
+    "operational_files": 8,
+    "provenance_files": 5,
+    "total_files": 33,
+    "canonical_size_bytes": 1303465,
+    "operational_size_bytes": 3188042,
+    "provenance_size_bytes": 15626
+  },
+  "runtime": {
+    "python_version": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+    "python_executable": "C:\\Users\\santi\\Proyectos\\BTYT\\Part I — Business Intelligence & Performance Management\\btyt-banking-analytics\\.venv\\Scripts\\python.exe",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "git": {
+    "available": true,
+    "commit": "d5efb14885098e9419df9594203f2e1203f6213e",
+    "branch": "main",
+    "working_tree_dirty": true
+  },
+  "dataset_fingerprint_sha256": "50f5f1c5cbbe59409647882271bdcce26d3d9aa54b3f62d9c401bb9bbf2acb64",
+  "fingerprint_scope": "canonical + operational files; deterministic over relative path, role, file size, table shape, and SHA-256",
+  "files": [
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/world/macro_environment.csv",
+      "format": "csv",
+      "size_bytes": 1078,
+      "rows": 6,
+      "columns": 10,
+      "sha256": "181b1e0926e34ceb395e30db1f2199abc22fe9964cb8683e1c57a548460d48c3"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/core/banks.csv",
+      "format": "csv",
+      "size_bytes": 1995,
+      "rows": 19,
+      "columns": 10,
+      "sha256": "0fbd1c406b56d1c48b6c06b62b90179ffff3747ddcc2a027f0ea5115c14ce176"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/performance/bank_market_weights.csv",
+      "format": "csv",
+      "size_bytes": 13311,
+      "rows": 72,
+      "columns": 15,
+      "sha256": "105b17cc54d9e2b0de2f1546ce3b2a100d35ec04813501a73828af9f311ce624"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/performance/bank_financials.csv",
+      "format": "csv",
+      "size_bytes": 14179,
+      "rows": 114,
+      "columns": 11,
+      "sha256": "7077b19c86a14bceecd65b25668d93562463575106ce1c3d5bb4d94958340eaf"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/performance/bank_world_parameters.csv",
+      "format": "csv",
+      "size_bytes": 2973,
+      "rows": 19,
+      "columns": 11,
+      "sha256": "d07bdffbbca4a7bc647848a1e0270399ff3ada97f772641b01189b63a3567f18"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/world/financial_institutions.csv",
+      "format": "csv",
+      "size_bytes": 1746,
+      "rows": 23,
+      "columns": 9,
+      "sha256": "b0cd4bc4f197013b7ed73cabd7405d365c6d4c7b0d4dcf7244bc05e94ccea50d"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/core/branches.csv",
+      "format": "csv",
+      "size_bytes": 3723,
+      "rows": 37,
+      "columns": 15,
+      "sha256": "e946dce57dd5fdc5ebd2f47928a253c063cd77a2d89ad97494e7c0a5ae37ed90"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/core/customers.parquet",
+      "format": "parquet",
+      "size_bytes": 17130,
+      "rows": 50,
+      "columns": 23,
+      "sha256": "5cbb0ba1450439660c38bb6b826112c2e140fe6f8eb5d54f87f31f6e05835489"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/core/accounts.parquet",
+      "format": "parquet",
+      "size_bytes": 6150,
+      "rows": 94,
+      "columns": 8,
+      "sha256": "0561ee5e38c2f6f235aecdd2fae83789ed6107d1957458f92ea247e0d29ed8a9"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/core/cards.parquet",
+      "format": "parquet",
+      "size_bytes": 6286,
+      "rows": 136,
+      "columns": 8,
+      "sha256": "177ffe9870eb506040d73fead20d5185722930a858a20de3fda469533c0e2ebd"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/core/loans.parquet",
+      "format": "parquet",
+      "size_bytes": 9516,
+      "rows": 86,
+      "columns": 12,
+      "sha256": "28269517d72d3a5184a3a1a15156a83028edd9e9025dcd251365623616a0311e"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/credit/loan_monthly_snapshot.parquet",
+      "format": "parquet",
+      "size_bytes": 38040,
+      "rows": 2019,
+      "columns": 9,
+      "sha256": "3fbfda958ff5ae7432625cc4e831d3f37b6462821f2a80ed2126cd1dc451d18d"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/world/external_shocks.csv",
+      "format": "csv",
+      "size_bytes": 1033,
+      "rows": 5,
+      "columns": 17,
+      "sha256": "b49661bcfedbcdd8f483230b64ccfde0113f5738e1ea9d128a1ce1399ee9e5d9"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/transactions/transactions.parquet",
+      "format": "parquet",
+      "size_bytes": 718184,
+      "rows": 27522,
+      "columns": 14,
+      "sha256": "cdc5a96c00095e965ce70f7c325c0aadc5db73f8910c2e4051e0b36a3128b1c6"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/core/account_balances.parquet",
+      "format": "parquet",
+      "size_bytes": 198449,
+      "rows": 3051,
+      "columns": 6,
+      "sha256": "489e79e49656ca0e79cffeee9ac55af902c3247c7d1d4c79317799d8900e1b5d"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/campaigns/campaigns.csv",
+      "format": "csv",
+      "size_bytes": 1549,
+      "rows": 20,
+      "columns": 7,
+      "sha256": "931b3faa3fa7cfa213d7d285da18e8a963405cd859d11ab821ce257741bb3500"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/campaigns/campaign_customers.parquet",
+      "format": "parquet",
+      "size_bytes": 6561,
+      "rows": 81,
+      "columns": 7,
+      "sha256": "b9d7c7e59c965bb8b6a3d7e476749a089ceec058e4b09d0b27815b5a9b72de1c"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/campaigns/campaign_exposures.parquet",
+      "format": "parquet",
+      "size_bytes": 5497,
+      "rows": 130,
+      "columns": 5,
+      "sha256": "53c2d85905e4f23587aaa3fefcb607af999a3bf1d0e31fdebb5c80760e793edf"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/performance/branch_monthly_performance.parquet",
+      "format": "parquet",
+      "size_bytes": 232013,
+      "rows": 2664,
+      "columns": 22,
+      "sha256": "b8ee7fb4774e45967658757c9985077b296346c50ad09a0fa71aa37a13795e07"
+    },
+    {
+      "role": "canonical",
+      "relative_path": "data/generated/performance/bank_monthly_performance.parquet",
+      "format": "parquet",
+      "size_bytes": 24052,
+      "rows": 72,
+      "columns": 21,
+      "sha256": "cf3dbd2548dac220279f68046cc0fdd48d58a1e63c4b77084215aceea01ae23f"
+    },
+    {
+      "role": "operational",
+      "relative_path": "data/operational/customers.csv",
+      "format": "csv",
+      "size_bytes": 7401,
+      "rows": 50,
+      "columns": 23,
+      "sha256": "706bd26d98cd6db3307c1fefd1c0795ecf35cb5a88556235c876531086a55746"
+    },
+    {
+      "role": "operational",
+      "relative_path": "data/operational/accounts.csv",
+      "format": "csv",
+      "size_bytes": 4937,
+      "rows": 94,
+      "columns": 8,
+      "sha256": "f1d70a4a0c0282a82bea2d9c957479986e131c64cca3d5179f397c9d36c6b396"
+    },
+    {
+      "role": "operational",
+      "relative_path": "data/operational/cards.csv",
+      "format": "csv",
+      "size_bytes": 7337,
+      "rows": 136,
+      "columns": 8,
+      "sha256": "bcaa79b9d277be4162e5c1f7eeba841afd315026d4adcc4ee74bab52c75e487a"
+    },
+    {
+      "role": "operational",
+      "relative_path": "data/operational/loans.csv",
+      "format": "csv",
+      "size_bytes": 6638,
+      "rows": 86,
+      "columns": 12,
+      "sha256": "fefeb80bab6497fc68f01b4e258d1d138b8475030cba9bd4bc4477acaedbaa93"
+    },
+    {
+      "role": "operational",
+      "relative_path": "data/operational/branches.csv",
+      "format": "csv",
+      "size_bytes": 3691,
+      "rows": 37,
+      "columns": 15,
+      "sha256": "70b28aef21092534b5887aee4e62d9d67a4ef9afc382f697c17312c39a6c4fc9"
+    },
+    {
+      "role": "operational",
+      "relative_path": "data/operational/transactions.csv",
+      "format": "csv",
+      "size_bytes": 3145303,
+      "rows": 27522,
+      "columns": 14,
+      "sha256": "9158160decf7e2591bd4e704ff177eeccd0895177370f0e08a70a98759bdcc2e"
+    },
+    {
+      "role": "operational",
+      "relative_path": "data/operational/campaign_customers.csv",
+      "format": "csv",
+      "size_bytes": 4768,
+      "rows": 81,
+      "columns": 7,
+      "sha256": "b11e7b2cdc3f626f701b4481f9f187c5f3689ae7618392085090ac2f630cdadc"
+    },
+    {
+      "role": "operational",
+      "relative_path": "data/operational/campaign_exposures.csv",
+      "format": "csv",
+      "size_bytes": 7967,
+      "rows": 130,
+      "columns": 5,
+      "sha256": "8df12b8cfcb7605513a3685b58774b8331f55b2f463bda8ad28901870debd5b5"
+    },
+    {
+      "role": "provenance",
+      "relative_path": "data/interim/data_reliability_world.csv",
+      "format": "csv",
+      "size_bytes": 1129,
+      "rows": 6,
+      "columns": 11,
+      "sha256": "e738115225930fa21ca0b5388cfca84e0522e079ffb43275bee88ac2afc116b9"
+    },
+    {
+      "role": "provenance",
+      "relative_path": "data/interim/data_reliability_audit.csv",
+      "format": "csv",
+      "size_bytes": 336,
+      "rows": 5,
+      "columns": 5,
+      "sha256": "83d2d42e5f28a95c04843f37459b2d2531258255a46f8cff7d814745ea5b5335"
+    },
+    {
+      "role": "provenance",
+      "relative_path": "data/interim/operational_export_sources.csv",
+      "format": "csv",
+      "size_bytes": 3550,
+      "rows": 8,
+      "columns": 9,
+      "sha256": "d2307aacc87412f3ec02d475b9c976419ee528a0cb7ace381b89ce02bb3232ed"
+    },
+    {
+      "role": "provenance",
+      "relative_path": "data/interim/audits/cross_system_audit_results.csv",
+      "format": "csv",
+      "size_bytes": 4709,
+      "rows": 70,
+      "columns": 4,
+      "sha256": "d055f2cfa87258f0d161cbbac3b43594a138cf5cb6877cc5864fcbf5a14821a5"
+    },
+    {
+      "role": "provenance",
+      "relative_path": "data/interim/audits/cross_system_resolved_sources.csv",
+      "format": "csv",
+      "size_bytes": 5902,
+      "rows": 31,
+      "columns": 5,
+      "sha256": "6cee02ab2f90e288284514521450a2973fc65ed3c0613b91ccd2a279a2a33983"
+    }
+  ]
+}
