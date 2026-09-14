@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="BTYT Banking Analytics" width="240">
+  <img src="docs/assets/logo.png" alt="BTYT Banking Analytics" width="240">
 </p>
 
 <h1 align="center">BTYT Banking Analytics</h1>
