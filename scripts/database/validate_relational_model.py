@@ -4,6 +4,10 @@ Validates constraints that were previously created as NOT VALID:
 - 28 foreign keys
 - 27 check constraints
 
+Final architecture:
+- 7 schemas
+- 23 tables
+
 This script does not create, modify, or delete data.
 It only validates existing constraints against historical rows.
 
@@ -27,8 +31,100 @@ DB_PORT = 5432
 DB_NAME = "BTYT"
 DB_USER = "postgres"
 
-BTYT_SCHEMAS = ["core", "banking", "marketing", "market", "reference"]
+BTYT_SCHEMAS = [
+    "core",
+    "banking",
+    "marketing",
+    "reference",
+    "market",
+    "macro",
+    "performance",
+]
 
+FINAL_SCHEMA_LAYOUT = {
+    "core": ["branches", "customers", "accounts", "products"],
+    "banking": [
+        "cards",
+        "loans",
+        "transactions",
+        "account_balances",
+        "loan_monthly_snapshot",
+    ],
+    "marketing": ["campaigns", "campaign_customers", "campaign_exposures"],
+    "reference": ["campaign_channels", "campaign_geography"],
+    "market": [
+        "banks",
+        "bank_financials",
+        "bank_market_weights",
+        "bank_world_parameters",
+        "financial_institutions",
+    ],
+    "macro": ["macro_environment", "external_shocks"],
+    "performance": ["bank_monthly_performance", "branch_monthly_performance"],
+}
+
+
+
+def inspect_schema_layout(engine):
+    """Inspect the exact final 7-schema / 23-table architecture."""
+
+    sql = text("""
+        SELECT table_schema AS schema_name, table_name
+        FROM information_schema.tables
+        WHERE table_schema = ANY(:schemas)
+          AND table_type = 'BASE TABLE'
+        ORDER BY table_schema, table_name;
+    """)
+
+    with engine.connect() as connection:
+        rows = connection.execute(
+            sql,
+            {"schemas": BTYT_SCHEMAS},
+        ).mappings().all()
+
+    observed = {}
+    for row in rows:
+        observed.setdefault(row["schema_name"], []).append(row["table_name"])
+
+    print("\n" + "=" * 72)
+    print("FINAL SCHEMA LAYOUT INSPECTION")
+    print("=" * 72)
+
+    total_observed = 0
+    all_pass = True
+
+    for schema in BTYT_SCHEMAS:
+        expected = set(FINAL_SCHEMA_LAYOUT[schema])
+        actual = set(observed.get(schema, []))
+
+        missing = sorted(expected - actual)
+        unexpected = sorted(actual - expected)
+
+        passed = not missing and not unexpected
+        all_pass = all_pass and passed
+        total_observed += len(actual)
+
+        status = "PASS" if passed else "FAIL"
+
+        print(
+            f"[{status}] {schema:<12} "
+            f"{len(actual)} / {len(expected)} tables"
+        )
+
+        if missing:
+            print(f"       Missing    : {', '.join(missing)}")
+
+        if unexpected:
+            print(f"       Unexpected : {', '.join(unexpected)}")
+
+    total_status = "PASS" if all_pass and total_observed == 23 else "FAIL"
+
+    print(
+        f"\n[{total_status}] Observed BTYT tables: "
+        f"{total_observed} / 23"
+    )
+
+    return all_pass and total_observed == 23
 
 def create_db_engine():
     password = getpass("PostgreSQL password: ")
@@ -139,7 +235,7 @@ FOREIGN_KEYS = [
     ("market", "bank_financials", "fk_bank_financials_bank"),
     ("market", "bank_market_weights", "fk_bank_market_weights_bank"),
     ("market", "bank_world_parameters", "fk_bank_world_parameters_bank"),
-    ("market", "branch_monthly_performance", "fk_branch_monthly_performance_branch"),
+    ("performance", "branch_monthly_performance", "fk_branch_monthly_performance_branch"),
     ("market", "financial_institutions", "fk_financial_institutions_bank"),
 
     # Largest table last.
@@ -174,9 +270,9 @@ CHECK_CONSTRAINTS = [
     ("marketing", "campaign_customers", "ck_campaign_customers_response_date"),
 
     ("market", "financial_institutions", "ck_financial_institutions_active_period"),
-    ("market", "external_shocks", "ck_external_shocks_start_peak"),
-    ("market", "external_shocks", "ck_external_shocks_peak_end"),
-    ("market", "external_shocks", "ck_external_shocks_end_recovery"),
+    ("macro", "external_shocks", "ck_external_shocks_start_peak"),
+    ("macro", "external_shocks", "ck_external_shocks_peak_end"),
+    ("macro", "external_shocks", "ck_external_shocks_end_recovery"),
 
     # Largest table last.
     ("banking", "transactions", "ck_transactions_amount_nonnegative"),
@@ -213,75 +309,143 @@ def validate_checks(engine):
 
 
 def inspect_validation(engine):
-    sql = text("""
-        SELECT
-            n.nspname AS schema_name,
-            c.relname AS table_name,
-            con.conname AS constraint_name,
-            con.contype AS constraint_type,
-            con.convalidated AS validated
-        FROM pg_constraint con
-        JOIN pg_class c
-          ON c.oid = con.conrelid
-        JOIN pg_namespace n
-          ON n.oid = c.relnamespace
-        WHERE n.nspname = ANY(:schemas)
-          AND con.contype IN ('f', 'c')
-        ORDER BY
-            n.nspname,
-            c.relname,
-            con.contype,
-            con.conname;
-    """)
-
-    with engine.connect() as connection:
-        rows = connection.execute(
-            sql,
-            {"schemas": BTYT_SCHEMAS},
-        ).mappings().all()
+    """Inspect the exact FK/CHECK validation plan and current state."""
 
     print("\n" + "=" * 72)
     print("HISTORICAL VALIDATION INSPECTION")
     print("=" * 72)
 
-    for row in rows:
-        kind = "FK" if row["constraint_type"] == "f" else "CHECK"
+    tracked = []
+
+    for schema, table, name in FOREIGN_KEYS:
+        state = constraint_state(engine, schema, table, name)
+
+        if state is None:
+            tracked.append({
+                "schema": schema,
+                "table": table,
+                "name": name,
+                "kind": "FK",
+                "exists": False,
+                "validated": False,
+                "type_ok": False,
+            })
+            continue
+
+        tracked.append({
+            "schema": schema,
+            "table": table,
+            "name": name,
+            "kind": "FK",
+            "exists": True,
+            "validated": bool(state["convalidated"]),
+            "type_ok": state["contype"] == "f",
+        })
+
+    for schema, table, name in CHECK_CONSTRAINTS:
+        state = constraint_state(engine, schema, table, name)
+
+        if state is None:
+            tracked.append({
+                "schema": schema,
+                "table": table,
+                "name": name,
+                "kind": "CHECK",
+                "exists": False,
+                "validated": False,
+                "type_ok": False,
+            })
+            continue
+
+        tracked.append({
+            "schema": schema,
+            "table": table,
+            "name": name,
+            "kind": "CHECK",
+            "exists": True,
+            "validated": bool(state["convalidated"]),
+            "type_ok": state["contype"] == "c",
+        })
+
+    for row in tracked:
+        if not row["exists"]:
+            status = "MISSING"
+        elif not row["type_ok"]:
+            status = "TYPE_MISMATCH"
+        elif row["validated"]:
+            status = "VALIDATED"
+        else:
+            status = "NOT_VALIDATED"
+
         print(
-            f'{row["schema_name"]}.{row["table_name"]:<38} '
-            f'{kind:<5} '
-            f'{row["constraint_name"]:<55} '
-            f'validated={row["validated"]}'
+            f'{row["schema"]}.{row["table"]:<38} '
+            f'{row["kind"]:<6} '
+            f'{row["name"]:<55} '
+            f'{status}'
         )
 
-    fk_rows = [row for row in rows if row["constraint_type"] == "f"]
-    ck_rows = [row for row in rows if row["constraint_type"] == "c"]
+    fk_rows = [row for row in tracked if row["kind"] == "FK"]
+    ck_rows = [row for row in tracked if row["kind"] == "CHECK"]
 
-    fk_valid = sum(bool(row["validated"]) for row in fk_rows)
-    ck_valid = sum(bool(row["validated"]) for row in ck_rows)
+    fk_valid = sum(
+        row["exists"] and row["type_ok"] and row["validated"]
+        for row in fk_rows
+    )
+    ck_valid = sum(
+        row["exists"] and row["type_ok"] and row["validated"]
+        for row in ck_rows
+    )
+
+    fk_missing = sum(not row["exists"] for row in fk_rows)
+    ck_missing = sum(not row["exists"] for row in ck_rows)
+
+    fk_type_mismatch = sum(
+        row["exists"] and not row["type_ok"]
+        for row in fk_rows
+    )
+    ck_type_mismatch = sum(
+        row["exists"] and not row["type_ok"]
+        for row in ck_rows
+    )
 
     print("\nSummary:")
-    print(f"Foreign keys validated : {fk_valid} / {len(FOREIGN_KEYS)}")
-    print(f"Check constraints validated : {ck_valid} / {len(CHECK_CONSTRAINTS)}")
+    print(
+        f"Foreign keys validated        : "
+        f"{fk_valid} / {len(FOREIGN_KEYS)}"
+    )
+    print(
+        f"Check constraints validated   : "
+        f"{ck_valid} / {len(CHECK_CONSTRAINTS)}"
+    )
 
     expected_total = len(FOREIGN_KEYS) + len(CHECK_CONSTRAINTS)
-    actual_total = len(fk_rows) + len(ck_rows)
+    valid_total = fk_valid + ck_valid
 
-    print(f"Tracked historical constraints : {actual_total} / {expected_total}")
+    print(
+        f"Tracked historical constraints: "
+        f"{valid_total} / {expected_total}"
+    )
 
-    if len(fk_rows) != len(FOREIGN_KEYS):
-        print(
-            f"[WARN ] PostgreSQL reports {len(fk_rows)} FK constraints in BTYT schemas; "
-            f"the validation plan expects {len(FOREIGN_KEYS)}."
-        )
+    print(f"Missing foreign keys          : {fk_missing}")
+    print(f"Missing CHECK constraints     : {ck_missing}")
+    print(f"FK type mismatches            : {fk_type_mismatch}")
+    print(f"CHECK type mismatches         : {ck_type_mismatch}")
 
-    if len(ck_rows) != len(CHECK_CONSTRAINTS):
-        print(
-            f"[WARN ] PostgreSQL reports {len(ck_rows)} CHECK constraints in BTYT schemas; "
-            f"the validation plan expects {len(CHECK_CONSTRAINTS)}."
-        )
+    overall_pass = (
+        fk_valid == len(FOREIGN_KEYS)
+        and ck_valid == len(CHECK_CONSTRAINTS)
+        and fk_missing == 0
+        and ck_missing == 0
+        and fk_type_mismatch == 0
+        and ck_type_mismatch == 0
+    )
 
-    return fk_valid, ck_valid
+    print(
+        f"\n[{'PASS' if overall_pass else 'FAIL'}] "
+        f"Historical relational validation"
+    )
 
+    return fk_valid, ck_valid, overall_pass
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -298,9 +462,14 @@ def parse_args():
         help="Validate the 27 existing CHECK constraints.",
     )
     parser.add_argument(
+        "--schema-layout",
+        action="store_true",
+        help="Inspect the final 7-schema / 23-table architecture.",
+    )
+    parser.add_argument(
         "--inspect",
         action="store_true",
-        help="Inspect FK/CHECK validation state without modifying anything.",
+        help="Inspect schema layout and FK/CHECK validation state without modifying anything.",
     )
     parser.add_argument(
         "--all",
@@ -313,10 +482,17 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if not any([args.fk, args.check, args.inspect, args.all]):
+    if not any([
+        args.fk,
+        args.check,
+        args.schema_layout,
+        args.inspect,
+        args.all,
+    ]):
         print(
             "No action selected. Nothing changed.\n\n"
             "Use one of:\n"
+            "  --schema-layout\n"
             "  --inspect\n"
             "  --check\n"
             "  --fk\n"
@@ -330,10 +506,14 @@ def main():
         verify_connection(engine)
 
         if args.all:
+            inspect_schema_layout(engine)
             validate_checks(engine)
             validate_foreign_keys(engine)
             inspect_validation(engine)
             return
+
+        if args.schema_layout:
+            inspect_schema_layout(engine)
 
         if args.check:
             validate_checks(engine)
@@ -341,7 +521,10 @@ def main():
         if args.fk:
             validate_foreign_keys(engine)
 
-        if args.inspect or args.check or args.fk:
+        if args.inspect:
+            inspect_schema_layout(engine)
+            inspect_validation(engine)
+        elif args.check or args.fk:
             inspect_validation(engine)
 
     finally:

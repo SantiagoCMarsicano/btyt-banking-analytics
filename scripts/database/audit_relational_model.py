@@ -5,13 +5,15 @@ BTYT Relational Model Audit
 Read-only audit of the PostgreSQL BTYT database.
 
 This script inspects:
-    1. Database structure
-    2. Current PostgreSQL data types
-    3. Expected semantic data types
-    4. Actual values in columns requiring review
-    5. Financial precision and numeric semantics
-    6. Whether proposed conversions appear safe
-    7. Candidate primary key integrity
+    1. Final 7-schema / 23-table architecture
+    2. Current applied relational state
+    3. Database structure
+    4. Current PostgreSQL data types
+    5. Expected semantic data types
+    6. Actual values in columns requiring review
+    7. Financial precision and numeric semantics
+    8. Candidate primary key integrity
+    9. Constraint candidates and business rules
 
 It does not modify tables, data, constraints, or indexes.
 """
@@ -26,7 +28,57 @@ DB_HOST = "localhost"
 DB_PORT = 5432
 DB_NAME = "BTYT"
 DB_USER = "postgres"
-BTYT_SCHEMAS = ["core", "banking", "marketing", "market", "reference"]
+BTYT_SCHEMAS = [
+    "core",
+    "banking",
+    "marketing",
+    "reference",
+    "market",
+    "macro",
+    "performance",
+]
+
+FINAL_SCHEMA_LAYOUT = {
+    "core": ["branches", "customers", "accounts", "products"],
+    "banking": [
+        "cards",
+        "loans",
+        "transactions",
+        "account_balances",
+        "loan_monthly_snapshot",
+    ],
+    "marketing": ["campaigns", "campaign_customers", "campaign_exposures"],
+    "reference": ["campaign_channels", "campaign_geography"],
+    "market": [
+        "banks",
+        "bank_financials",
+        "bank_market_weights",
+        "bank_world_parameters",
+        "financial_institutions",
+    ],
+    "macro": ["macro_environment", "external_shocks"],
+    "performance": ["bank_monthly_performance", "branch_monthly_performance"],
+}
+
+EXPECTED_RELATIONAL_COUNTS = {
+    "primary_keys": 23,
+    "foreign_keys": 28,
+    "check_constraints": 27,
+}
+
+AUDITED_NOT_NULL_COLUMNS = [
+    ("core", "accounts", "customer_id"),
+    ("core", "accounts", "product_id"),
+    ("core", "accounts", "branch_id"),
+    ("banking", "cards", "customer_id"),
+    ("banking", "cards", "product_id"),
+    ("banking", "loans", "customer_id"),
+    ("banking", "loans", "product_id"),
+    ("banking", "loans", "branch_id"),
+    ("banking", "transactions", "account_id"),
+    ("marketing", "campaign_exposures", "campaign_id"),
+    ("marketing", "campaign_exposures", "customer_id"),
+]
 
 EXPECTED_TYPES = {
     ("core", "branches", "opening_year"): {"expected": "integer", "severity": "REVIEW"},
@@ -50,17 +102,17 @@ EXPECTED_TYPES = {
     ("marketing", "campaigns", "end_date"): {"expected": "date", "severity": "REVIEW"},
     ("market", "bank_financials", "year"): {"expected": "integer", "severity": "REVIEW"},
     ("market", "bank_market_weights", "year"): {"expected": "integer", "severity": "REVIEW"},
-    ("market", "bank_monthly_performance", "year_month"): {"expected": "date", "severity": "REVIEW"},
-    ("market", "branch_monthly_performance", "year_month"): {"expected": "date", "severity": "REVIEW"},
-    ("market", "external_shocks", "start_month"): {"expected": "date", "severity": "REVIEW"},
-    ("market", "external_shocks", "peak_month"): {"expected": "date", "severity": "REVIEW"},
-    ("market", "external_shocks", "end_month"): {"expected": "date", "severity": "REVIEW"},
-    ("market", "external_shocks", "recovery_end_month"): {"expected": "date", "severity": "REVIEW"},
-    ("market", "external_shocks", "duration_months"): {"expected": "integer", "severity": "REVIEW"},
-    ("market", "external_shocks", "recovery_months"): {"expected": "integer", "severity": "REVIEW"},
+    ("performance", "bank_monthly_performance", "year_month"): {"expected": "date", "severity": "REVIEW"},
+    ("performance", "branch_monthly_performance", "year_month"): {"expected": "date", "severity": "REVIEW"},
+    ("macro", "external_shocks", "start_month"): {"expected": "date", "severity": "REVIEW"},
+    ("macro", "external_shocks", "peak_month"): {"expected": "date", "severity": "REVIEW"},
+    ("macro", "external_shocks", "end_month"): {"expected": "date", "severity": "REVIEW"},
+    ("macro", "external_shocks", "recovery_end_month"): {"expected": "date", "severity": "REVIEW"},
+    ("macro", "external_shocks", "duration_months"): {"expected": "integer", "severity": "REVIEW"},
+    ("macro", "external_shocks", "recovery_months"): {"expected": "integer", "severity": "REVIEW"},
     ("market", "financial_institutions", "active_from"): {"expected": "date", "severity": "REVIEW"},
     ("market", "financial_institutions", "active_to"): {"expected": "date", "severity": "FAIL"},
-    ("market", "macro_environment", "year"): {"expected": "integer", "severity": "REVIEW"},
+    ("macro", "macro_environment", "year"): {"expected": "integer", "severity": "REVIEW"},
 }
 
 FINANCIAL_PRECISION_RULES = {
@@ -98,33 +150,40 @@ for table_name in ["bank_monthly_performance", "branch_monthly_performance"]:
         "operational_cost", "total_operating_cost", "credit_loss",
         "pre_provision_profit", "net_income",
     ]:
-        FINANCIAL_PRECISION_RULES[("market", table_name, column_name)] = (
+        FINANCIAL_PRECISION_RULES[("performance", table_name, column_name)] = (
             "money" if column_name in {"average_deposits", "average_loan_balance"}
             else "money_large"
         )
 
-for table_name, columns in {
-    "bank_market_weights": [
+for (schema_name, table_name), columns in {
+    ("market", "bank_market_weights"): [
         "latent_competitive_state", "long_run_anchor", "persistence", "macro_effect",
         "systemic_shock_effect", "bank_shock_effect", "persistent_strategic_effect",
         "idiosyncratic_innovation",
     ],
-    "bank_world_parameters": [
+    ("market", "bank_world_parameters"): [
         "realized_usd_affinity", "realized_business_affinity",
         "realized_large_transfer_affinity", "foreign_selection_weight",
         "foreign_dirichlet_alpha", "affinity_noise_sd", "market_persistence",
         "market_innovation_sd",
     ],
-    "banks": ["usd_affinity", "business_affinity", "large_transfer_affinity"],
-    "external_shocks": ["peak_magnitude", "signed_peak_intensity", "persistence", "recovery_shape"],
-    "macro_environment": [
+    ("market", "banks"): [
+        "usd_affinity", "business_affinity", "large_transfer_affinity"
+    ],
+    ("macro", "external_shocks"): [
+        "peak_magnitude", "signed_peak_intensity", "persistence", "recovery_shape"
+    ],
+    ("macro", "macro_environment"): [
         "macro_growth_factor", "credit_cycle_factor", "usd_pressure_factor",
         "financial_stress_factor", "digitalization_factor", "cross_border_factor",
         "systemic_shock",
     ],
 }.items():
     for column_name in columns:
-        FINANCIAL_PRECISION_RULES[("market", table_name, column_name)] = "simulation"
+        FINANCIAL_PRECISION_RULES[
+            (schema_name, table_name, column_name)
+        ] = "simulation"
+
 
 PRECISION_TARGETS = {
     "money": "numeric(18,2)",
@@ -158,6 +217,185 @@ def audit_connection(engine):
     print(f"Database : {db}")
     print(f"Server   : {version}\n")
 
+
+
+def audit_schema_layout(engine):
+    """Audit the exact final 7-schema / 23-table architecture."""
+
+    query = text("""
+        SELECT table_schema AS schema_name, table_name
+        FROM information_schema.tables
+        WHERE table_schema = ANY(:schemas)
+          AND table_type = 'BASE TABLE'
+        ORDER BY table_schema, table_name;
+    """)
+
+    with engine.connect() as connection:
+        rows = connection.execute(
+            query,
+            {"schemas": BTYT_SCHEMAS},
+        ).mappings().all()
+
+    observed = {}
+    for row in rows:
+        observed.setdefault(row["schema_name"], []).append(row["table_name"])
+
+    results = []
+    total_observed = 0
+
+    print("-" * 72)
+    print("SCHEMA LAYOUT AUDIT")
+    print("-" * 72)
+
+    for schema_name in BTYT_SCHEMAS:
+        expected = set(FINAL_SCHEMA_LAYOUT[schema_name])
+        actual = set(observed.get(schema_name, []))
+
+        missing = sorted(expected - actual)
+        unexpected = sorted(actual - expected)
+        decision = "PASS" if not missing and not unexpected else "FAIL"
+
+        total_observed += len(actual)
+
+        results.append({
+            "schema_name": schema_name,
+            "expected_tables": len(expected),
+            "observed_tables": len(actual),
+            "missing_tables": missing,
+            "unexpected_tables": unexpected,
+            "decision": decision,
+        })
+
+        print(
+            f"\n[{decision}] {schema_name:<12} "
+            f"{len(actual)} / {len(expected)} tables"
+        )
+
+        if missing:
+            print(f"  Missing    : {', '.join(missing)}")
+
+        if unexpected:
+            print(f"  Unexpected : {', '.join(unexpected)}")
+
+    overall = (
+        "PASS"
+        if total_observed == 23
+        and all(result["decision"] == "PASS" for result in results)
+        else "FAIL"
+    )
+
+    print(f"\n[{overall}] Total BTYT tables: {total_observed} / 23")
+
+    return results
+
+
+def audit_applied_relational_state(engine):
+    """Audit the currently applied PK/FK/CHECK/NOT NULL state."""
+
+    constraint_query = text("""
+        SELECT con.contype, con.convalidated
+        FROM pg_constraint AS con
+        JOIN pg_class AS c
+          ON c.oid = con.conrelid
+        JOIN pg_namespace AS n
+          ON n.oid = c.relnamespace
+        WHERE n.nspname = ANY(:schemas)
+          AND con.contype IN ('p', 'f', 'c');
+    """)
+
+    with engine.connect() as connection:
+        rows = connection.execute(
+            constraint_query,
+            {"schemas": BTYT_SCHEMAS},
+        ).mappings().all()
+
+    counts = {
+        "primary_keys": sum(row["contype"] == "p" for row in rows),
+        "foreign_keys": sum(row["contype"] == "f" for row in rows),
+        "check_constraints": sum(row["contype"] == "c" for row in rows),
+        "unvalidated_foreign_keys": sum(
+            row["contype"] == "f" and not row["convalidated"]
+            for row in rows
+        ),
+        "unvalidated_checks": sum(
+            row["contype"] == "c" and not row["convalidated"]
+            for row in rows
+        ),
+    }
+
+    print("\n" + "-" * 72)
+    print("APPLIED RELATIONAL STATE")
+    print("-" * 72)
+
+    for key, expected in EXPECTED_RELATIONAL_COUNTS.items():
+        observed = counts[key]
+        status = "PASS" if observed == expected else "FAIL"
+        label = key.replace("_", " ").title()
+
+        print(
+            f"  [{status}] {label:<20}: "
+            f"{observed} / {expected}"
+        )
+
+    fk_status = (
+        "PASS"
+        if counts["unvalidated_foreign_keys"] == 0
+        else "FAIL"
+    )
+    check_status = (
+        "PASS"
+        if counts["unvalidated_checks"] == 0
+        else "FAIL"
+    )
+
+    print(
+        f"  [{fk_status}] Unvalidated FKs       : "
+        f"{counts['unvalidated_foreign_keys']}"
+    )
+    print(
+        f"  [{check_status}] Unvalidated CHECKs    : "
+        f"{counts['unvalidated_checks']}"
+    )
+
+    applied_not_null = 0
+
+    for schema_name, table_name, column_name in AUDITED_NOT_NULL_COLUMNS:
+        query = text("""
+            SELECT is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = :schema_name
+              AND table_name = :table_name
+              AND column_name = :column_name;
+        """)
+
+        with engine.connect() as connection:
+            is_nullable = connection.execute(
+                query,
+                {
+                    "schema_name": schema_name,
+                    "table_name": table_name,
+                    "column_name": column_name,
+                },
+            ).scalar_one_or_none()
+
+        applied_not_null += int(is_nullable == "NO")
+
+    nn_status = (
+        "PASS"
+        if applied_not_null == len(AUDITED_NOT_NULL_COLUMNS)
+        else "FAIL"
+    )
+
+    print(
+        f"  [{nn_status}] Audited NOT NULL      : "
+        f"{applied_not_null} / {len(AUDITED_NOT_NULL_COLUMNS)}"
+    )
+
+    return {
+        **counts,
+        "audited_not_null": applied_not_null,
+        "audited_not_null_expected": len(AUDITED_NOT_NULL_COLUMNS),
+    }
 
 def get_table_inventory(engine):
     query = text("""
@@ -397,59 +635,191 @@ def get_decimal_profile(engine, schema_name, table_name, column_name):
         return dict(connection.execute(query).mappings().one())
 
 
-def build_financial_precision_audit(engine, columns):
+def normalize_postgresql_type(
+    data_type,
+    numeric_precision=None,
+    numeric_scale=None,
+):
+    """Return a comparable PostgreSQL type label."""
+
+    if (
+        data_type == "numeric"
+        and numeric_precision is not None
+        and numeric_scale is not None
+    ):
+        return (
+            f"numeric({int(numeric_precision)},"
+            f"{int(numeric_scale)})"
+        )
+
+    return data_type
+
+
+def get_precision_column_inventory(engine):
+    """Read type metadata needed for precision validation."""
+
+    query = text("""
+        SELECT
+            table_schema AS schema_name,
+            table_name,
+            column_name,
+            data_type,
+            numeric_precision,
+            numeric_scale
+        FROM information_schema.columns
+        WHERE table_schema = ANY(:schemas);
+    """)
+
+    with engine.connect() as connection:
+        return pd.read_sql(
+            query,
+            connection,
+            params={"schemas": BTYT_SCHEMAS},
+        )
+
+
+def build_financial_precision_audit(engine, columns=None):
+    """Audit every configured precision rule in the final model."""
+
     results = []
+
     print("\n" + "-" * 72)
     print("FINANCIAL PRECISION AUDIT")
     print("-" * 72)
-    for row in columns[columns["data_type"] == "double precision"].itertuples(index=False):
-        key = (row.schema_name, row.table_name, row.column_name)
-        category = FINANCIAL_PRECISION_RULES.get(key)
-        if category is None:
-            continue
+
+    inventory = get_precision_column_inventory(engine)
+
+    lookup = {
+        (row.schema_name, row.table_name, row.column_name): row
+        for row in inventory.itertuples(index=False)
+    }
+
+    for key, category in FINANCIAL_PRECISION_RULES.items():
+        schema_name, table_name, column_name = key
         target_type = PRECISION_TARGETS[category]
+        row = lookup.get(key)
+
+        if row is None:
+            results.append({
+                "schema_name": schema_name,
+                "table_name": table_name,
+                "column_name": column_name,
+                "category": category,
+                "current_type": "MISSING",
+                "target_type": target_type,
+                "recommendation": "FAIL",
+                "total_rows": None,
+                "null_rows": None,
+                "min_value": None,
+                "max_value": None,
+                "beyond_two_decimals": None,
+            })
+            continue
+
+        current_type = normalize_postgresql_type(
+            row.data_type,
+            row.numeric_precision,
+            row.numeric_scale,
+        )
+
         if category in {"money", "money_large"}:
-            print(f"\nAuditing monetary precision {row.schema_name}.{row.table_name}.{row.column_name}...")
-            profile = get_decimal_profile(engine, row.schema_name, row.table_name, row.column_name)
-            recommendation = "CONVERT"
+            print(
+                f"\nAuditing monetary precision "
+                f"{schema_name}.{table_name}.{column_name}..."
+            )
+
+            profile = get_decimal_profile(
+                engine,
+                schema_name,
+                table_name,
+                column_name,
+            )
+
+            recommendation = (
+                "PASS"
+                if current_type == target_type
+                else "CONVERT"
+            )
+
         else:
-            profile = {"total_rows": None, "null_rows": None, "min_value": None, "max_value": None, "beyond_two_decimals": None}
-            recommendation = "KEEP"
+            profile = {
+                "total_rows": None,
+                "null_rows": None,
+                "min_value": None,
+                "max_value": None,
+                "beyond_two_decimals": None,
+            }
+
+            recommendation = (
+                "PASS"
+                if current_type == target_type
+                else "REVIEW"
+            )
+
         results.append({
-            "schema_name": row.schema_name, "table_name": row.table_name, "column_name": row.column_name,
-            "category": category, "current_type": row.data_type, "target_type": target_type,
-            "recommendation": recommendation, **profile,
+            "schema_name": schema_name,
+            "table_name": table_name,
+            "column_name": column_name,
+            "category": category,
+            "current_type": current_type,
+            "target_type": target_type,
+            "recommendation": recommendation,
+            **profile,
         })
+
     return results
 
-
 def print_financial_precision_audit(results):
+    """Print precision-audit details."""
+
     print("\n" + "=" * 72)
     print("FINANCIAL PRECISION AUDIT RESULTS")
     print("=" * 72)
-    for r in results:
-        print(f"\n{r['schema_name']}.{r['table_name']}.{r['column_name']}")
-        print(f"  Category       : {r['category']}")
-        print(f"  Current type   : {r['current_type']}")
-        print(f"  Target type    : {r['target_type']}")
-        print(f"  Recommendation : {r['recommendation']}")
-        if r["category"] in {"money", "money_large"}:
-            print(f"  Rows           : {r['total_rows']:,}")
-            print(f"  NULL rows      : {r['null_rows']:,}")
-            print(f"  Min            : {r['min_value']}")
-            print(f"  Max            : {r['max_value']}")
-            print(f"  > 2 decimals   : {r['beyond_two_decimals']:,}")
 
+    for result in results:
+        print(
+            f"\n{result['schema_name']}."
+            f"{result['table_name']}."
+            f"{result['column_name']}"
+        )
+        print(f"  Category       : {result['category']}")
+        print(f"  Current type   : {result['current_type']}")
+        print(f"  Target type    : {result['target_type']}")
+        print(f"  Decision       : {result['recommendation']}")
+
+        if (
+            result["category"] in {"money", "money_large"}
+            and result["total_rows"] is not None
+        ):
+            print(f"  Rows           : {result['total_rows']:,}")
+            print(f"  NULL rows      : {result['null_rows']:,}")
+            print(f"  Min            : {result['min_value']}")
+            print(f"  Max            : {result['max_value']}")
+            print(
+                f"  > 2 decimals   : "
+                f"{result['beyond_two_decimals']:,}"
+            )
 
 def print_financial_precision_summary(results):
+    """Print the precision-audit summary."""
+
     frame = pd.DataFrame(results)
+
     print("\n" + "-" * 72)
     print("FINANCIAL PRECISION SUMMARY")
     print("-" * 72)
+
     for category, count in frame.groupby("category").size().sort_index().items():
         print(f"  {category:<15}: {count}")
-    print(f"\n  CONVERT : {(frame['recommendation'] == 'CONVERT').sum()}")
-    print(f"  KEEP    : {(frame['recommendation'] == 'KEEP').sum()}")
+
+    print()
+
+    for decision in ["PASS", "CONVERT", "REVIEW", "FAIL"]:
+        print(
+            f"  {decision:<7}: "
+            f"{(frame['recommendation'] == decision).sum()}"
+        )
+
     print(f"  TOTAL   : {len(frame)}")
 
 
@@ -482,11 +852,11 @@ PRIMARY_KEY_CANDIDATES = {
     ("market", "bank_financials"): ["bank_id", "year"],
     ("market", "bank_market_weights"): ["bank_id", "year"],
     ("market", "bank_world_parameters"): ["world_seed", "bank_id"],
-    ("market", "bank_monthly_performance"): ["year_month"],
-    ("market", "branch_monthly_performance"): ["branch_id", "year_month"],
+    ("performance", "bank_monthly_performance"): ["year_month"],
+    ("performance", "branch_monthly_performance"): ["branch_id", "year_month"],
     ("market", "financial_institutions"): ["institution_id"],
-    ("market", "macro_environment"): ["year"],
-    ("market", "external_shocks"): ["shock_id"],
+    ("macro", "macro_environment"): ["year"],
+    ("macro", "external_shocks"): ["shock_id"],
 
     # Reference tables
     ("reference", "campaign_channels"): ["campaign_id", "channel"],
@@ -720,9 +1090,9 @@ CATEGORY_COLUMNS = [
     ("market", "banks", "bank_profile"),
     ("market", "banks", "bank_status"),
     ("market", "financial_institutions", "institution_type"),
-    ("market", "external_shocks", "shock_type"),
-    ("market", "external_shocks", "shock_scale"),
-    ("market", "external_shocks", "direction"),
+    ("macro", "external_shocks", "shock_type"),
+    ("macro", "external_shocks", "shock_scale"),
+    ("macro", "external_shocks", "direction"),
     ("reference", "campaign_channels", "channel"),
     ("reference", "campaign_geography", "geography_level"),
 ]
@@ -753,11 +1123,11 @@ TEMPORAL_CHECKS = [
      '"end_date" IS NOT NULL AND "start_date" IS NOT NULL AND "end_date" < "start_date"'),
     ("market", "financial_institutions", "active_to >= active_from",
      '"active_to" IS NOT NULL AND "active_from" IS NOT NULL AND "active_to" < "active_from"'),
-    ("market", "external_shocks", "start_month <= peak_month",
+    ("macro", "external_shocks", "start_month <= peak_month",
      '"start_month" IS NOT NULL AND "peak_month" IS NOT NULL AND "peak_month" < "start_month"'),
-    ("market", "external_shocks", "peak_month <= end_month",
+    ("macro", "external_shocks", "peak_month <= end_month",
      '"peak_month" IS NOT NULL AND "end_month" IS NOT NULL AND "end_month" < "peak_month"'),
-    ("market", "external_shocks", "end_month <= recovery_end_month",
+    ("macro", "external_shocks", "end_month <= recovery_end_month",
      '"end_month" IS NOT NULL AND "recovery_end_month" IS NOT NULL AND "recovery_end_month" < "end_month"'),
 ]
 
@@ -1126,6 +1496,16 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        "--schema-layout",
+        action="store_true",
+        help="Audit the exact final 7-schema / 23-table architecture.",
+    )
+    parser.add_argument(
+        "--state",
+        action="store_true",
+        help="Audit the applied PK/FK/CHECK/NOT NULL state.",
+    )
+    parser.add_argument(
         "--structure",
         action="store_true",
         help="Run table and column inventory only.",
@@ -1171,6 +1551,8 @@ def main():
 
     requested_phases = any(
         [
+            args.schema_layout,
+            args.state,
             args.structure,
             args.types,
             args.values,
@@ -1190,6 +1572,12 @@ def main():
 
         column_inventory = None
         data_type_audit = None
+
+        if run_all or args.schema_layout:
+            audit_schema_layout(engine)
+
+        if run_all or args.state:
+            audit_applied_relational_state(engine)
 
         if run_all or args.structure:
             table_inventory = get_table_inventory(engine)

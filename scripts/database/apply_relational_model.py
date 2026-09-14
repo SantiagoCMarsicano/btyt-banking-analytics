@@ -1,12 +1,22 @@
 """BTYT relational-model application script.
 
-Applies only decisions already audited and approved:
+Applies the BTYT PostgreSQL relational model in explicit phases:
+- approved schema reorganization
 - semantic type conversions
 - monetary precision conversions
 - 23 primary keys
 - 28 foreign keys (NOT VALID)
 - audited NOT NULL constraints
 - audited CHECK constraints (NOT VALID)
+
+Final logical architecture:
+- core: 4 tables
+- banking: 5 tables
+- marketing: 3 tables
+- reference: 2 tables
+- market: 5 tables
+- macro: 2 tables
+- performance: 2 tables
 
 No arguments means no changes. Extra indexes and historical validation
 remain separate phases.
@@ -20,7 +30,38 @@ DB_HOST = "localhost"
 DB_PORT = 5432
 DB_NAME = "BTYT"
 DB_USER = "postgres"
-BTYT_SCHEMAS = ["core", "banking", "marketing", "market", "reference"]
+BTYT_SCHEMAS = [
+    "core",
+    "banking",
+    "marketing",
+    "reference",
+    "market",
+    "macro",
+    "performance",
+]
+
+FINAL_SCHEMA_LAYOUT = {
+    "core": ["branches", "customers", "accounts", "products"],
+    "banking": ["cards", "loans", "transactions", "account_balances", "loan_monthly_snapshot"],
+    "marketing": ["campaigns", "campaign_customers", "campaign_exposures"],
+    "reference": ["campaign_channels", "campaign_geography"],
+    "market": [
+        "banks",
+        "bank_financials",
+        "bank_market_weights",
+        "bank_world_parameters",
+        "financial_institutions",
+    ],
+    "macro": ["macro_environment", "external_shocks"],
+    "performance": ["bank_monthly_performance", "branch_monthly_performance"],
+}
+
+SCHEMA_REORGANIZATION = [
+    ("market", "macro_environment", "macro"),
+    ("market", "external_shocks", "macro"),
+    ("market", "bank_monthly_performance", "performance"),
+    ("market", "branch_monthly_performance", "performance"),
+]
 
 
 def create_db_engine():
@@ -64,6 +105,136 @@ def constraint_exists(engine, schema, table, name):
     with engine.connect() as connection:
         return bool(connection.execute(sql, {"schema": schema, "table": table, "name": name}).scalar_one())
 
+
+
+def table_exists(engine, schema, table):
+    sql = text("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = :schema
+              AND table_name = :table
+              AND table_type = 'BASE TABLE'
+        );
+    """)
+    with engine.connect() as connection:
+        return bool(
+            connection.execute(
+                sql,
+                {"schema": schema, "table": table},
+            ).scalar_one()
+        )
+
+
+def apply_schema_reorganization(engine):
+    print("\n--- SCHEMA REORGANIZATION ---")
+    print("Target architecture: 7 schemas / 23 tables.")
+    print(
+        "Approved moves: "
+        "market -> macro/performance. "
+        "The migration is pre-checked and applied atomically."
+    )
+
+    moves_to_apply = []
+
+    # Preflight: classify the current state before modifying PostgreSQL.
+    for source_schema, table, target_schema in SCHEMA_REORGANIZATION:
+        source_exists = table_exists(engine, source_schema, table)
+        target_exists = table_exists(engine, target_schema, table)
+
+        if source_exists and target_exists:
+            raise RuntimeError(
+                f"Schema move collision: {source_schema}.{table} and "
+                f"{target_schema}.{table} both exist. Aborting before changes."
+            )
+
+        if not source_exists and not target_exists:
+            raise RuntimeError(
+                f"Table missing from both source and target schemas: "
+                f"{source_schema}.{table} -> {target_schema}.{table}. "
+                "Aborting before changes."
+            )
+
+        if target_exists:
+            print(
+                f"\n[SKIP ] {target_schema}.{table} already in final schema"
+            )
+            continue
+
+        moves_to_apply.append((source_schema, table, target_schema))
+
+    if not moves_to_apply:
+        print("\n[SKIP ] Schema architecture already matches the final model.")
+        return
+
+    # Apply every required schema change in one transaction.
+    with engine.begin() as connection:
+        connection.execute(text('CREATE SCHEMA IF NOT EXISTS "macro";'))
+        connection.execute(text('CREATE SCHEMA IF NOT EXISTS "performance";'))
+
+        for source_schema, table, target_schema in moves_to_apply:
+            print(
+                f"\n[APPLY] {source_schema}.{table} "
+                f"-> {target_schema}.{table}"
+            )
+            connection.execute(
+                text(
+                    f'ALTER TABLE "{source_schema}"."{table}" '
+                    f'SET SCHEMA "{target_schema}";'
+                )
+            )
+            print(
+                f"[DONE ] {source_schema}.{table} "
+                f"-> {target_schema}.{table}"
+            )
+
+    print(
+        f"\n[DONE ] Schema reorganization complete: "
+        f"{len(moves_to_apply)} table(s) moved."
+    )
+
+def inspect_schema_layout(engine):
+    sql = text("""
+        SELECT table_schema, table_name
+        FROM information_schema.tables
+        WHERE table_schema = ANY(:schemas)
+          AND table_type = 'BASE TABLE'
+        ORDER BY table_schema, table_name;
+    """)
+
+    with engine.connect() as connection:
+        rows = connection.execute(
+            sql,
+            {"schemas": BTYT_SCHEMAS},
+        ).mappings().all()
+
+    actual = {}
+    for row in rows:
+        actual.setdefault(row["table_schema"], []).append(row["table_name"])
+
+    print("\nFinal schema layout:")
+    total = 0
+
+    for schema in BTYT_SCHEMAS:
+        expected = set(FINAL_SCHEMA_LAYOUT[schema])
+        observed = set(actual.get(schema, []))
+        missing = sorted(expected - observed)
+        unexpected = sorted(observed - expected)
+
+        status = "PASS" if not missing and not unexpected else "REVIEW"
+        print(
+            f"  {schema:<12} "
+            f"{len(observed):>2}/{len(expected):<2} tables  [{status}]"
+        )
+
+        if missing:
+            print(f"    Missing   : {', '.join(missing)}")
+        if unexpected:
+            print(f"    Unexpected: {', '.join(unexpected)}")
+
+        total += len(observed)
+
+    print(f"\nObserved BTYT tables: {total} / 23")
 
 def current_column_type(engine, schema, table, column):
     sql = text("""
@@ -121,16 +292,16 @@ SEMANTIC_TYPES = [
     ("marketing","campaigns","end_date","date",'"end_date"::date'),
     ("market","bank_financials","year","integer",'"year"::integer'),
     ("market","bank_market_weights","year","integer",'"year"::integer'),
-    ("market","bank_monthly_performance","year_month","date",'to_date("year_month", \'YYYY-MM\')'),
-    ("market","branch_monthly_performance","year_month","date",'to_date("year_month", \'YYYY-MM\')'),
-    ("market","external_shocks","start_month","date",'to_date("start_month", \'YYYY-MM\')'),
-    ("market","external_shocks","peak_month","date",'to_date("peak_month", \'YYYY-MM\')'),
-    ("market","external_shocks","end_month","date",'to_date("end_month", \'YYYY-MM\')'),
-    ("market","external_shocks","recovery_end_month","date",'to_date("recovery_end_month", \'YYYY-MM\')'),
-    ("market","external_shocks","duration_months","integer",'"duration_months"::integer'),
-    ("market","external_shocks","recovery_months","integer",'"recovery_months"::integer'),
+    ("performance","bank_monthly_performance","year_month","date",'to_date("year_month", \'YYYY-MM\')'),
+    ("performance","branch_monthly_performance","year_month","date",'to_date("year_month", \'YYYY-MM\')'),
+    ("macro","external_shocks","start_month","date",'to_date("start_month", \'YYYY-MM\')'),
+    ("macro","external_shocks","peak_month","date",'to_date("peak_month", \'YYYY-MM\')'),
+    ("macro","external_shocks","end_month","date",'to_date("end_month", \'YYYY-MM\')'),
+    ("macro","external_shocks","recovery_end_month","date",'to_date("recovery_end_month", \'YYYY-MM\')'),
+    ("macro","external_shocks","duration_months","integer",'"duration_months"::integer'),
+    ("macro","external_shocks","recovery_months","integer",'"recovery_months"::integer'),
     ("market","financial_institutions","active_from","date",'"active_from"::date'),
-    ("market","macro_environment","year","integer",'"year"::integer'),
+    ("macro","macro_environment","year","integer",'"year"::integer'),
 ]
 
 MONEY_18_2 = [
@@ -140,15 +311,15 @@ MONEY_18_2 = [
     ("banking","loan_monthly_snapshot","actual_payment"),("banking","loan_monthly_snapshot","arrears_amount"),
     ("banking","loans","original_amount"),("banking","transactions","amount"),
     ("core","customers","monthly_income"),("core","customers","annual_revenue"),
-    ("market","bank_monthly_performance","average_deposits"),("market","bank_monthly_performance","average_loan_balance"),
-    ("market","branch_monthly_performance","average_deposits"),("market","branch_monthly_performance","average_loan_balance"),
+    ("performance","bank_monthly_performance","average_deposits"),("performance","bank_monthly_performance","average_loan_balance"),
+    ("performance","branch_monthly_performance","average_deposits"),("performance","branch_monthly_performance","average_loan_balance"),
 ]
 
 LARGE_COLUMNS = ["transaction_volume","interest_income","interest_expense","net_interest_income","fee_income","total_revenue","personnel_cost","fixed_cost","variable_cost","operational_cost","total_operating_cost","credit_loss","pre_provision_profit","net_income"]
 MONEY_20_2 = [
     ("market","bank_financials",c) for c in ["revenue","operating_costs","net_income","total_assets","total_deposits","total_loans","equity"]
 ] + [
-    ("market",t,c) for t in ["bank_monthly_performance","branch_monthly_performance"] for c in LARGE_COLUMNS
+    ("performance",t,c) for t in ["bank_monthly_performance","branch_monthly_performance"] for c in LARGE_COLUMNS
 ]
 
 
@@ -186,10 +357,10 @@ PRIMARY_KEYS = [
     ("market","banks","pk_banks",["bank_id"]),("market","bank_financials","pk_bank_financials",["bank_id","year"]),
     ("market","bank_market_weights","pk_bank_market_weights",["bank_id","year"]),
     ("market","bank_world_parameters","pk_bank_world_parameters",["world_seed","bank_id"]),
-    ("market","bank_monthly_performance","pk_bank_monthly_performance",["year_month"]),
-    ("market","branch_monthly_performance","pk_branch_monthly_performance",["branch_id","year_month"]),
+    ("performance","bank_monthly_performance","pk_bank_monthly_performance",["year_month"]),
+    ("performance","branch_monthly_performance","pk_branch_monthly_performance",["branch_id","year_month"]),
     ("market","financial_institutions","pk_financial_institutions",["institution_id"]),
-    ("market","macro_environment","pk_macro_environment",["year"]),("market","external_shocks","pk_external_shocks",["shock_id"]),
+    ("macro","macro_environment","pk_macro_environment",["year"]),("macro","external_shocks","pk_external_shocks",["shock_id"]),
     ("reference","campaign_channels","pk_campaign_channels",["campaign_id","channel"]),
     ("reference","campaign_geography","pk_campaign_geography",["campaign_id","geography_level","geography_value"]),
 ]
@@ -234,7 +405,7 @@ FOREIGN_KEYS = [
     ("market","bank_financials","fk_bank_financials_bank","bank_id","market","banks","bank_id"),
     ("market","bank_market_weights","fk_bank_market_weights_bank","bank_id","market","banks","bank_id"),
     ("market","bank_world_parameters","fk_bank_world_parameters_bank","bank_id","market","banks","bank_id"),
-    ("market","branch_monthly_performance","fk_branch_monthly_performance_branch","branch_id","core","branches","branch_id"),
+    ("performance","branch_monthly_performance","fk_branch_monthly_performance_branch","branch_id","core","branches","branch_id"),
     ("market","financial_institutions","fk_financial_institutions_bank","bank_id","market","banks","bank_id"),
 ]
 
@@ -330,15 +501,15 @@ CHECK_CONSTRAINTS = [
      "ck_financial_institutions_active_period",
      '"active_to" IS NULL OR "active_from" IS NULL OR "active_to" >= "active_from"'),
 
-    ("market", "external_shocks",
+    ("macro", "external_shocks",
      "ck_external_shocks_start_peak",
      '"start_month" IS NULL OR "peak_month" IS NULL OR "start_month" <= "peak_month"'),
 
-    ("market", "external_shocks",
+    ("macro", "external_shocks",
      "ck_external_shocks_peak_end",
      '"peak_month" IS NULL OR "end_month" IS NULL OR "peak_month" <= "end_month"'),
 
-    ("market", "external_shocks",
+    ("macro", "external_shocks",
      "ck_external_shocks_end_recovery",
      '"end_month" IS NULL OR "recovery_end_month" IS NULL OR "end_month" <= "recovery_end_month"'),
 
@@ -502,9 +673,16 @@ def inspect_model(engine):
         f"{not_null_applied} / {len(NOT_NULL_COLUMNS)}"
     )
 
+    inspect_schema_layout(engine)
+
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Apply approved BTYT PostgreSQL relational-model changes."
+        description="Apply the final BTYT PostgreSQL relational-model changes."
+    )
+    parser.add_argument(
+        "--schemas",
+        action="store_true",
+        help="Create macro/performance schemas and move the four approved tables.",
     )
     parser.add_argument("--types", action="store_true", help="Apply audited semantic type conversions.")
     parser.add_argument("--precision", action="store_true", help="Apply audited monetary precision conversions.")
@@ -512,7 +690,11 @@ def parse_arguments():
     parser.add_argument("--fk", action="store_true", help="Create the 28 approved foreign keys as NOT VALID.")
     parser.add_argument("--constraints", action="store_true", help="Apply audited NOT NULL and CHECK constraints.")
     parser.add_argument("--inspect", action="store_true", help="Inspect current PK/FK/CHECK/NOT NULL state without modifying it.")
-    parser.add_argument("--all", action="store_true", help="Apply types, precision, PKs, FKs and constraints in that order.")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Apply schemas, types, precision, PKs, FKs and constraints in that order.",
+    )
     return parser.parse_args()
 
 
@@ -520,6 +702,7 @@ def main():
     args = parse_arguments()
 
     if not any([
+        args.schemas,
         args.types,
         args.precision,
         args.pk,
@@ -530,7 +713,7 @@ def main():
     ]):
         print("No phase selected. Nothing was modified.")
         print(
-            "Use --types, --precision, --pk, --fk, "
+            "Use --schemas, --types, --precision, --pk, --fk, "
             "--constraints, --inspect, or --all."
         )
         return
@@ -539,6 +722,9 @@ def main():
 
     try:
         verify_connection(engine)
+
+        if args.all or args.schemas:
+            apply_schema_reorganization(engine)
 
         if args.all or args.types:
             apply_semantic_types(engine)
