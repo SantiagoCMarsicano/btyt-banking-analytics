@@ -16,27 +16,9 @@ Overview
 
 Banco de Treinta y Tres (BTYT) is a fictional Uruguayan commercial bank created as the analytical universe for an end-to-end data project.
 
-The project combines:
+The project combines synthetic data generation, banking-domain modeling, reproducible simulation, relational database design, PostgreSQL, SQL analytics, business intelligence, and later credit-risk modeling and machine learning.
 
-synthetic data generation;
-
-banking-domain modeling;
-
-reproducible simulation;
-
-relational database design;
-
-PostgreSQL;
-
-SQL analytics;
-
-business intelligence;
-
-later credit-risk modeling and machine learning.
-
-The goal is not to generate disconnected random tables.
-
-BTYT builds a coherent synthetic banking system in which customers, branches, products, accounts, cards, loans, transactions, campaigns, external shocks, market dynamics, and profitability evolve together over time.
+BTYT is not a collection of disconnected random tables. It builds a coherent synthetic banking system in which customers, branches, products, accounts, cards, loans, transactions, campaigns, external shocks, market dynamics, and profitability evolve together over time.
 
 Fiction, yes. Fantasy, no.
 
@@ -46,39 +28,41 @@ Project Status
 
 Completed
 
-reproducible synthetic banking world;
+Reproducible synthetic banking world
 
-deterministic world identity and configuration;
+Deterministic world identity and configuration
 
-isolated world storage;
+Isolated world storage
 
-15-stage generation pipeline;
+15-stage generation pipeline
 
-cross-system validation;
+Cross-system validation
 
-operational data-reliability layer;
+Operational data-reliability layer
 
-manifest and dataset fingerprinting;
+Manifest and dataset fingerprinting
 
-PostgreSQL ingestion pipeline;
+PostgreSQL ingestion pipeline
 
-final relational database architecture;
+Final seven-schema relational architecture
 
-semantic PostgreSQL types;
+Semantic PostgreSQL types
 
-accounting-oriented monetary precision;
+Accounting-oriented monetary precision
 
-23 primary keys;
+23 primary keys
 
-28 foreign keys;
+28 foreign keys
 
-11 audited NOT NULL rules;
+11 audited NOT NULL rules
 
-27 CHECK constraints;
+27 CHECK constraints
 
-historical relational validation;
+55 / 55 historical constraints validated
 
-SQL-process documentation.
+SQL-process documentation
+
+Portfolio-ready relational model
 
 Current milestone
 
@@ -86,6 +70,7 @@ The PostgreSQL relational-model phase is complete.
 
 7 schemas
 23 tables
+251 columns
 23 primary keys
 28 foreign keys
 27 CHECK constraints
@@ -108,63 +93,59 @@ Part I — Business Intelligence & Performance Management
 
 Part I builds, validates, stores, and analyzes the synthetic banking universe through:
 
-Python data generation;
+Python data generation
 
-PostgreSQL relational modeling;
+PostgreSQL relational modeling
 
-SQL analytics;
+SQL analytics
 
-banking KPIs;
+Banking KPIs
 
-customer analysis;
+Customer, product, branch, lending, transaction, channel, and profitability analysis
 
-product analysis;
+Power BI
 
-branch analysis;
+Power Query
 
-lending analysis;
+DAX
 
-transaction and channel analysis;
+Tableau
 
-profitability analysis;
-
-Power BI;
-
-Power Query;
-
-DAX;
-
-Tableau;
-
-Apache Superset.
+Apache Superset
 
 Part II — Credit Risk Analytics & Machine Learning
 
 Part II will reuse the same frozen banking universe for:
 
-SQL-based feature extraction;
+SQL-based feature extraction
 
-exploratory credit-risk analysis;
+Exploratory credit-risk analysis
 
-feature engineering;
+Feature engineering
 
-statistical modeling;
+Statistical modeling
 
-machine learning;
+Machine learning
 
-model evaluation;
+Model evaluation
 
-explainability;
+Explainability
 
-experiment tracking;
+Experiment tracking
 
-scoring infrastructure.
+Scoring infrastructure
 
 No disconnected replacement dataset will be created for Part II.
 
 PostgreSQL Relational Model
 
-The final PostgreSQL model contains 7 schemas and 23 tables.
+The final PostgreSQL model contains 7 schemas, 23 tables, 251 columns, 23 primary keys, and 28 foreign keys.
+
+<p align="center">
+  <img src="docs/architecture/relational_model_btyt.png" alt="BTYT PostgreSQL relational model" width="100%">
+</p>
+
+The portfolio ERD intentionally shows a maximum of ten representative fields per table while preserving the full schema structure, PK/FK relationships, and table-level grain. The complete PostgreSQL model contains all 251 columns.
 
 Schema
 
@@ -222,14 +203,17 @@ Total
 
 core
 
-Central entities around which the rest of the model is organized.
+Central entities around which the rest of the model is organized:
 
 branches
+
 customers
+
 accounts
+
 products
 
-Examples of questions supported:
+This layer answers questions such as:
 
 Who is the customer?
 
@@ -241,12 +225,16 @@ Which account connects the customer to banking activity?
 
 banking
 
-Operational banking activity and contract-level financial state.
+Operational banking activity and contract-level financial state:
 
 cards
+
 loans
+
 transactions
+
 account_balances
+
 loan_monthly_snapshot
 
 Typical grains:
@@ -260,38 +248,41 @@ account_balances
 loan_monthly_snapshot
 → one loan × month
 
-Monthly frequency alone does not make a table a performance table.
-
-loan_monthly_snapshot and account_balances remain in banking because they describe individual banking relationships.
+Monthly frequency alone does not make a table a performance table. account_balances and loan_monthly_snapshot remain in banking because they describe individual banking relationships.
 
 marketing
 
-Commercial campaigns, targeting, exposure, and response.
+Commercial campaigns, targeting, exposure, and response:
 
 campaigns
+
 campaign_customers
+
 campaign_exposures
 
 reference
 
-Auxiliary campaign dimensions.
+Auxiliary campaign dimensions:
 
 campaign_channels
+
 campaign_geography
 
 market
 
-Competitive and institutional banking environment.
+Competitive and institutional banking environment:
 
 banks
+
 bank_financials
+
 bank_market_weights
+
 bank_world_parameters
+
 financial_institutions
 
-bank_financials remains in market even though it contains revenue, costs, assets, deposits, loans, equity, and net income.
-
-Its grain is:
+bank_financials remains in market because its grain is:
 
 bank_id × year
 
@@ -299,18 +290,18 @@ It describes banks in the competitive environment rather than BTYT's internal op
 
 macro
 
-Exogenous conditions affecting the synthetic banking world.
+Exogenous conditions affecting the synthetic banking world:
 
 macro_environment
-external_shocks
 
-These tables describe macroeconomic context and discrete external events rather than banking entities or internal operations.
+external_shocks
 
 performance
 
-Aggregated BTYT management and profitability indicators.
+Aggregated BTYT management and profitability indicators:
 
 bank_monthly_performance
+
 branch_monthly_performance
 
 Grains:
@@ -321,51 +312,11 @@ bank_monthly_performance
 branch_monthly_performance
 → one branch × month
 
-These tables aggregate measures such as:
+Why Seven Schemas?
 
-active customers;
+The first PostgreSQL ingestion architecture used five schemas. At that stage, market temporarily contained competitive banks, financial institutions, macroeconomic conditions, external shocks, and BTYT performance.
 
-active accounts;
-
-deposits;
-
-loan balances;
-
-transaction count;
-
-transaction volume;
-
-interest income;
-
-interest expense;
-
-fee income;
-
-operating costs;
-
-credit loss;
-
-net income.
-
-Why the Final Model Uses 7 Schemas
-
-The first PostgreSQL ingestion architecture used five schemas.
-
-At that stage, market temporarily contained:
-
-competitive banks
-+
-financial institutions
-+
-macroeconomic conditions
-+
-external shocks
-+
-BTYT performance
-
-That structure was technically valid but semantically overloaded.
-
-The final model separates:
+The final architecture separates:
 
 market
 → competitive and institutional banking environment
@@ -390,15 +341,11 @@ market.bank_monthly_performance
 market.branch_monthly_performance
 → performance.branch_monthly_performance
 
-No analytical grain changed.
-
-No table was deleted.
-
-The database remains at 23 tables.
+No analytical grain changed and no table was deleted.
 
 Relational Integrity
 
-The implemented model contains:
+The implemented PostgreSQL model contains:
 
 23 primary keys
 28 foreign keys
@@ -443,7 +390,7 @@ bank_financials.bank_id
 branch_monthly_performance.branch_id
 → branches.branch_id
 
-Transaction Counterparties
+Transaction counterparties
 
 External transaction counterparties use a two-level institution model:
 
@@ -453,25 +400,11 @@ market.financial_institutions.institution_id
         ↓
 market.banks.bank_id
 
-This is intentional.
+This is intentional: not every operational financial counterparty must be a bank.
 
-Not every operational financial counterparty must be a bank.
+PostgreSQL Types and Precision
 
-The model can therefore represent:
-
-banks;
-
-international financial counterparties;
-
-electronic-money institutions;
-
-other modeled financial institutions.
-
-PostgreSQL Data Types and Precision
-
-The generated files are optimized for reproducible data generation and interoperability.
-
-PostgreSQL adds stronger semantic typing.
+The generated files are optimized for reproducible data generation and interoperability. PostgreSQL adds stronger semantic typing.
 
 Examples:
 
@@ -493,39 +426,31 @@ external-shock timeline fields
 transaction_datetime
 → TIMESTAMP
 
-Accounting-style monetary values use fixed decimal precision.
+Accounting-style monetary values use fixed decimal precision:
 
-Typical measures:
+Typical monetary measures
+→ NUMERIC(18,2)
 
-NUMERIC(18,2)
+Large aggregates
+→ NUMERIC(20,2)
 
-Large aggregates:
-
-NUMERIC(20,2)
-
-Simulation variables, latent states, affinities, coordinates, and similar continuous parameters remain floating-point where appropriate.
+Simulation variables, affinities, latent states, coordinates, and similar continuous parameters remain floating-point where appropriate.
 
 Constraint Validation
 
-Foreign keys and CHECK constraints were validated against the historical generated world.
-
-Final state:
+Final validation state:
 
 Foreign keys validated        : 28 / 28
 CHECK constraints validated   : 27 / 27
 Tracked historical constraints: 55 / 55
 
-After the migration to the seven-schema architecture, the relational model was audited again:
-
 Tables                        : 23 / 23
 Primary keys                  : 23 / 23
-Foreign keys                  : 28 / 28
-CHECK constraints             : 27 / 27
 Audited NOT NULL              : 11 / 11
 Unvalidated foreign keys      : 0
 Unvalidated CHECK constraints : 0
 
-The schema reorganization therefore changed logical organization without damaging relational integrity.
+The seven-schema reorganization therefore changed logical organization without damaging relational integrity.
 
 SQL / PostgreSQL Pipeline
 
@@ -539,111 +464,91 @@ apply_relational_model.py
         ↓
 validate_relational_model.py
 
-1. load_postgresql.py
+load_postgresql.py
 
-Responsibilities:
+Discovers canonical datasets
 
-discover canonical datasets;
+Supports CSV and Parquet
 
-support CSV and Parquet;
+Preserves identifier columns
 
-preserve identifier columns;
+Loads large datasets in batches
 
-load large datasets in batches;
+Assigns initial ingestion schemas
 
-assign initial ingestion schemas;
+Validates source vs. PostgreSQL row counts
 
-validate source vs. PostgreSQL row counts;
+Safely reruns incomplete loads
 
-safely rerun incomplete loads.
-
-2. audit_relational_model.py
+audit_relational_model.py
 
 Read-only audit covering:
 
-schema layout;
+Schema and table inventory
 
-table inventory;
+Column inventory
 
-column inventory;
+Semantic types
 
-semantic types;
+Value compatibility
 
-value compatibility;
+Financial precision
 
-financial precision;
+Primary-key integrity
 
-primary-key integrity;
+Nullability
 
-nullability;
+Category domains
 
-category domains;
+Range, temporal, and business rules
 
-range rules;
+Current relational state
 
-temporal rules;
-
-business rules;
-
-current relational state.
-
-3. apply_relational_model.py
+apply_relational_model.py
 
 Applies the approved model:
 
-schema reorganization;
+Schema reorganization
 
-semantic type conversions;
+Semantic type conversions
 
-monetary precision;
+Monetary precision
 
-primary keys;
+Primary keys
 
-foreign keys;
+Foreign keys
 
-NOT NULL;
+NOT NULL
 
-CHECK constraints.
+CHECK constraints
 
-The final schema migration is:
+The final schema migration is pre-checked, atomic, and idempotent.
 
-pre-checked;
-
-atomic;
-
-idempotent.
-
-4. validate_relational_model.py
+validate_relational_model.py
 
 Validates:
 
-final schema layout;
+Final schema layout
 
-tracked foreign keys;
+Tracked foreign keys
 
-tracked CHECK constraints;
+Tracked CHECK constraints
 
-constraint existence;
+Constraint existence
 
-constraint type;
+Constraint type
 
-validation state.
+Validation state
 
 Already validated constraints are safely skipped.
 
-SQL Process Documentation
-
-Detailed technical documentation lives under:
+Detailed documentation lives under:
 
 docs/sqlprocess/
 ├── load_postgresql.md
 ├── audit_relational_model.md
 ├── apply_relational_model.md
 └── validate_relational_model.md
-
-The README summarizes the architecture.
-
-The docs/ layer contains the implementation detail.
 
 Synthetic World Architecture
 
@@ -667,21 +572,7 @@ Worlds are isolated under:
 
 worlds/<WORLD>/<VARIANT>/
 
-Each world stores its own:
-
-configuration;
-
-metadata;
-
-generated datasets;
-
-interim latent-state data;
-
-operational exports;
-
-audit outputs;
-
-manifests.
+Each world stores its own configuration, metadata, generated datasets, interim latent-state data, operational exports, audits, and manifests.
 
 BTYT World Builder
 
@@ -689,35 +580,31 @@ The project includes a desktop interface for creating and launching synthetic wo
 
 Current capabilities include:
 
-world name and variant;
+World name and variant
 
-deterministic seed derivation;
+Deterministic seed derivation
 
-fixed or ranged customer population;
+Fixed or ranged customer population
 
-observation-period configuration;
+Observation-period configuration
 
-data-reliability settings;
+Data-reliability settings
 
-pipeline start and end stages;
+Pipeline start and end stages
 
-reference-asset materialization;
+Reference-asset materialization
 
-live stage status;
+Live stage status
 
-per-stage progress;
+Per-stage and global progress
 
-global progress;
+Pause / resume / stop
 
-pause / resume / stop;
+Manifest generation and verification
 
-manifest generation;
+World-folder access
 
-manifest verification;
-
-world-folder access;
-
-execution logging.
+Execution logging
 
 Development launch command:
 
@@ -791,7 +678,7 @@ Monthly loan lifecycle and delinquency
 
 external_shocks
 
-External economic/operational shocks
+External economic and operational shocks
 
 11
 
@@ -803,7 +690,7 @@ Transaction engine and balances
 
 campaigns
 
-Campaign targets, exposures, responses
+Campaign targets, exposures, and responses
 
 13
 
@@ -833,43 +720,9 @@ January 2021 → December 2026
 
 Some relationships may originate before 2021 to represent inherited historical state.
 
-The universe includes:
+The universe includes customers, branches, products, accounts, cards, loans, monthly loan snapshots, transactions, balances, campaigns, financial institutions, market dynamics, macroeconomic conditions, external shocks, and bank/branch performance.
 
-branches;
-
-customers;
-
-products;
-
-accounts;
-
-cards;
-
-loans;
-
-loan monthly snapshots;
-
-transactions;
-
-account balances;
-
-campaigns;
-
-financial institutions;
-
-banking-market dynamics;
-
-macroeconomic conditions;
-
-external shocks;
-
-branch performance;
-
-consolidated bank performance.
-
-Large production worlds can generate tens of millions of transaction rows.
-
-Generated production data is therefore intentionally excluded from normal Git history.
+Large production worlds can generate tens of millions of transaction rows, so generated production data is intentionally excluded from normal Git history.
 
 Data-Generation Philosophy
 
@@ -877,237 +730,183 @@ BTYT does not generate independent random tables.
 
 Observable outcomes emerge from interacting mechanisms such as:
 
-customer heterogeneity;
+Customer heterogeneity
 
-product preferences;
+Product preferences
 
-account ownership;
+Account ownership
 
-branch relationships;
+Branch relationships
 
-digital adoption;
+Digital adoption
 
-lending behavior;
+Lending behavior
 
-delinquency;
+Delinquency
 
-transaction activity;
+Transaction activity
 
-seasonality;
+Seasonality
 
-banking-market evolution;
+Banking-market evolution
 
-external shocks;
+External shocks
 
-local operational pressure;
+Local operational pressure
 
-controlled data-quality degradation.
+Controlled data-quality degradation
 
 A macroeconomic or local event may influence several downstream systems, but it does not deterministically assign outcomes to individual entities.
 
-Branch Network
+Banking Network
+
+Branches
 
 BTYT contains a structurally defined network of 37 branches and agencies across Uruguay.
 
-Branches differ by:
-
-type;
-
-size;
-
-geography;
-
-administrative parent;
-
-opening history;
-
-strategic importance;
-
-structural closure risk.
+Branches differ by type, size, geography, administrative parent, opening history, strategic importance, and structural closure risk.
 
 Branch closures are stochastic rather than hard-coded.
 
-Banking Network
+Financial system
 
 BTYT operates inside a synthetic financial system containing:
 
-BTYT itself;
+BTYT itself
 
-domestic banks operating in Uruguay;
+Domestic banks operating in Uruguay
 
-international banking counterparties;
+International banking counterparties
 
-electronic-money institutions.
+Electronic-money institutions
 
-Some real institution names are used as structural references.
-
-All simulated values, trajectories, weights, affinities, shocks, and relationships are synthetic.
+Some real institution names are used only as structural references. All simulated values, trajectories, weights, affinities, shocks, and relationships are synthetic.
 
 Transactions
 
 The transaction engine supports:
 
-transfers;
+Transfers
 
-debit purchases;
+Debit purchases
 
-service payments;
+Service payments
 
-cash operations;
+Cash operations
 
-loan payments;
+Loan payments
 
-interest credits;
+Interest credits
 
-loan disbursements.
+Loan disbursements
 
-It also models:
+It also models digital adoption, channel migration, cash usage, failed transactions, internal-transfer pairing, counterparty institutions, branch usage, and account-balance reconciliation.
 
-digital adoption;
+The canonical world contains approximately 76.8 million transaction rows, making the transaction layer the largest workload in the project.
 
-channel migration;
+Loans and Performance
 
-cash usage;
+Monthly loan snapshots track:
 
-failed transactions;
+Outstanding balance
 
-internal-transfer pairing;
+Interest rate
 
-counterparty institutions;
+Scheduled payment
 
-branch usage;
+Actual payment
 
-account-balance reconciliation.
+Days past due
 
-The canonical world contains approximately 76.8 million transaction rows, which makes the transaction layer the largest workload in the project.
+Delinquency status
 
-Loans and Credit Performance
-
-The lending system includes retail and business credit products.
-
-Monthly snapshots track:
-
-outstanding balance;
-
-interest rate;
-
-scheduled payment;
-
-actual payment;
-
-days past due;
-
-delinquency status;
-
-arrears.
+Arrears
 
 Grain:
 
 loan_id × year_month
 
-This remains an operational banking table rather than an aggregate performance table.
+Performance tables aggregate measures such as:
 
-Branch and Bank Performance
+Active customers
 
-branch_monthly_performance
+Active accounts
 
-Grain:
+Deposits
 
-branch_id × year_month
+Loan balances
 
-bank_monthly_performance
+Transaction activity
 
-Grain:
+Interest income and expense
 
-year_month
+Fee income
 
-These tables provide aggregated measures such as:
+Operational costs
 
-active customers;
+Credit losses
 
-active accounts;
-
-deposits;
-
-loan balances;
-
-transaction activity;
-
-interest income;
-
-interest expense;
-
-fee income;
-
-operational costs;
-
-credit losses;
-
-net income.
+Net income
 
 Analytical KPIs
 
-Most BI ratios are intentionally not precomputed in Python.
+Most BI ratios are intentionally not precomputed in Python. They will be derived in SQL and/or DAX.
 
-They will be derived in SQL and/or DAX.
+Examples include:
 
-Examples:
+Cost-to-Income Ratio
 
-Cost-to-Income Ratio;
+Net Interest Margin
 
-Net Interest Margin;
+Revenue per Customer
 
-Revenue per Customer;
+Cost per Transaction
 
-Cost per Transaction;
+Branch Margin
 
-Branch Margin;
+Credit Loss Ratio
 
-Credit Loss Ratio;
+Deposit Growth
 
-Deposit Growth;
+Loan Growth
 
-Loan Growth;
+Digital Channel Share
 
-Digital Channel Share;
+Branch Profitability
 
-Branch Profitability;
+Regional Profitability
 
-Regional Profitability;
+Product Profitability
 
-Product Profitability;
-
-Customer Segment Performance.
+Customer Segment Performance
 
 Next Analytical Milestone
 
-With the relational model frozen, the next stage is to build reusable analytical SQL.
+With the relational model frozen, the next stage is reusable analytical SQL.
 
-Planned analytical areas include:
+Planned areas include:
 
-customer portfolio;
+Customer portfolio
 
-deposit evolution;
+Deposits and account activity
 
-account activity;
+Product performance
 
-product performance;
+Branch profitability
 
-branch profitability;
+Transaction-channel mix
 
-transaction-channel mix;
+Lending portfolio
 
-lending portfolio;
+Delinquency
 
-delinquency;
+Campaign response
 
-campaign response;
+External counterparties
 
-external counterparties;
+Market context
 
-market context;
-
-bank-wide profitability.
+Bank-wide profitability
 
 Potential analytical views include:
 
@@ -1129,37 +928,7 @@ These outputs will feed the first BI dashboards.
 
 BI Layer
 
-The PostgreSQL model is designed to act as the stable analytical foundation.
-
-PostgreSQL provides:
-
-clean entity relationships;
-
-explicit grain;
-
-validated joins;
-
-consistent data types;
-
-accounting-oriented precision;
-
-historical integrity.
-
-The BI layer will focus on:
-
-analytical views;
-
-KPI definitions;
-
-DAX measures;
-
-dimensional reporting logic;
-
-dashboard interaction;
-
-visual storytelling.
-
-The intended division of responsibilities is:
+The PostgreSQL model is the stable analytical foundation.
 
 Python
 → generates the world
@@ -1170,12 +939,13 @@ PostgreSQL + SQL
 Power BI / Tableau / Superset
 → communicates the results
 
+The BI layer will focus on analytical views, KPI definitions, DAX measures, dimensional reporting logic, dashboard interaction, and visual storytelling.
+
 Repository Structure
 
 btyt-banking-analytics/
 │
 ├── config/
-│
 ├── resources/
 │   └── reference/
 │
@@ -1207,6 +977,7 @@ btyt-banking-analytics/
 │
 ├── docs/
 │   ├── architecture/
+│   │   └── relational_model_btyt.png
 │   ├── data_dictionary/
 │   └── sqlprocess/
 │       ├── load_postgresql.md
@@ -1243,43 +1014,43 @@ GitHub
 
 CustomTkinter
 
-deterministic RNG architecture
+Deterministic RNG architecture
 
-cross-system auditing
+Cross-system auditing
 
 Current analytical stage
 
-SQL analytical queries;
+SQL analytical queries
 
-SQL views;
+SQL views
 
-banking KPIs;
+Banking KPIs
 
-Power BI;
+Power BI
 
-Power Query;
+Power Query
 
-DAX.
+DAX
 
 Later stages
 
-Tableau;
+Tableau
 
-Apache Superset;
+Apache Superset
 
-scikit-learn;
+scikit-learn
 
-credit-risk modeling;
+Credit-risk modeling
 
-machine learning;
+Machine learning
 
-model explainability;
+Model explainability
 
-MLflow;
+MLflow
 
-local scoring service;
+Local scoring service
 
-Docker / Docker Compose.
+Docker / Docker Compose
 
 Technologies are added to the implemented stack only when their corresponding project stage is actually completed.
 
@@ -1287,43 +1058,25 @@ Main Analytical Question — Part I
 
 How is BTYT performing, and where are the main opportunities and risks across its loan portfolio, deposits, products, customer segments, branches, channels, and banking relationships?
 
-Part I will answer this through:
-
-validated SQL;
-
-analytical views;
-
-banking KPIs;
-
-branch-performance analysis;
-
-customer and product analysis;
-
-transaction and channel analysis;
-
-lending and delinquency analysis;
-
-geographic analysis;
-
-BI dashboards.
+Part I will answer this through validated SQL, analytical views, banking KPIs, branch-performance analysis, customer and product analysis, transaction and channel analysis, lending and delinquency analysis, geographic analysis, and BI dashboards.
 
 Part II — Credit Risk Analytics
 
 Part II will reuse the same frozen BTYT universe for:
 
-SQL-based feature extraction;
+SQL-based feature extraction
 
-exploratory risk analysis;
+Exploratory risk analysis
 
-feature engineering;
+Feature engineering
 
-statistical modeling;
+Statistical modeling
 
-machine learning;
+Machine learning
 
-evaluation;
+Evaluation
 
-explainability.
+Explainability
 
 No separate disconnected dataset will be created.
 
@@ -1335,9 +1088,7 @@ All customers, accounts, cards, loans, transactions, balances, branch behavior, 
 
 The project contains no real customer data, confidential banking information, or actual bank transaction records.
 
-Names of real financial institutions may appear only as structural references within the simulated banking environment.
-
-Synthetic metrics associated with those institutions must not be interpreted as actual reported financial results or observed market behavior.
+Names of real financial institutions may appear only as structural references within the simulated banking environment. Synthetic metrics associated with those institutions must not be interpreted as actual reported financial results or observed market behavior.
 
 Author
 
