@@ -67,7 +67,7 @@ data/interim/transactions/internal_transfer_pairs.csv
 
 data/generated/*smoke*.csv
 data/interim/*smoke*.csv
-
+scripts/sql/sql_cheatsheet.sql
 
 # =============================================================================
 # WORLD BUILDER — GENERATED WORLD ARTIFACTS
