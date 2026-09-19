@@ -1,20 +1,25 @@
 -- ============================================================
--- BTYT — STRUCTURAL CONTEXT
+-- BTYT — STRUCTURAL CONTEXT — FINAL
 -- File: 00_structural_context.sql
--- Purpose: Build a reusable "census" of the BTYT banking universe
+-- Purpose: Build a reusable structural census and first analytical map of the BTYT banking universe
 -- PostgreSQL | Read-only analytical queries
 -- ============================================================
 --
 -- HOW TO USE
 -- - Run one statement at a time.
 -- - These queries describe the structure of the bank before KPI analysis.
--- - They are intentionally descriptive: counts, shares, categories, coverage.
+-- - They are intentionally descriptive: counts, shares, categories, coverage,
+--   and a small number of cross-tabs that add context without replacing the
+--   dedicated analytical files that follow.
 -- - Use this file to establish the bank's structural baseline before KPI analysis.
 -- - Structural NULLs are described first; do not label them as data-quality errors
 --   until their relationship with customer type / business logic is checked.
 -- - No query modifies canonical BTYT data.
 -- - Prefer saving the interesting outputs/notes separately rather than editing
 --   the database itself.
+-- - Depth rule: if a question starts requiring several dimensions, time trends,
+--   profitability, delinquency, or behavioral interpretation, move it to a
+--   dedicated thematic SQL file instead of expanding this census indefinitely.
 --
 -- Suggested repo path:
 -- scripts/sql/00_structural_context.sql
@@ -165,7 +170,21 @@ FROM core.branches AS b
 GROUP BY b.opening_year
 ORDER BY b.opening_year;
 
+-- 1.10.1
 
+SELECT
+    CASE
+        WHEN b.opening_year <= 2000 THEN '20th Century'
+        ELSE '21st Century'
+    END AS century,
+    COUNT(*) AS branches_opened
+FROM core.branches AS b
+GROUP BY
+    CASE
+        WHEN b.opening_year <= 2000 THEN '20th Century'
+        ELSE '21st Century'
+    END
+ORDER BY century;
 
 -- 1.11 Branches by opening reason.
 SELECT
@@ -187,7 +206,7 @@ ORDER BY branch_count DESC;
 
 
 -- 1.13 Structural consistency check: branch status vs closing year.
--- Ideally this returns zero rows or only cases justified by the model rules.
+-- Ideally this returns zero rows.
 SELECT
     b.branch_id,
     b.branch_name,
@@ -198,7 +217,8 @@ FROM core.branches AS b
 WHERE
     (b.status = 'OPEN' AND b.closing_year IS NOT NULL)
     OR
-    (b.status = 'CLOSED' AND b.closing_year IS NULL);
+    (b.status = 'CLOSED' AND b.closing_year IS NULL)
+ORDER BY b.branch_id;
 
 
 -- ============================================================
@@ -218,7 +238,7 @@ SELECT
     ROUND(
         100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
         2
-    ) AS pct_of_customers
+    ) AS customer_percentage
 FROM core.customers AS c
 GROUP BY c.customer_status
 ORDER BY customer_count DESC;
@@ -231,17 +251,23 @@ SELECT
     ROUND(
         100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
         2
-    ) AS pct_of_customers
+    ) AS customer_percentage
 FROM core.customers AS c
 GROUP BY c.customer_type
 ORDER BY customer_count DESC;
 
 
 -- 2.4 Customer status × customer type.
+-- pct_within_customer_type answers: within each type, what share is in each status?
 SELECT
     c.customer_type,
     c.customer_status,
-    COUNT(*) AS customer_count
+    COUNT(*) AS customer_count,
+    ROUND(
+        100.0 * COUNT(*)
+        / SUM(COUNT(*)) OVER (PARTITION BY c.customer_type),
+        2
+    ) AS pct_within_customer_type
 FROM core.customers AS c
 GROUP BY
     c.customer_type,
@@ -258,11 +284,10 @@ SELECT
     ROUND(
         100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
         2
-    ) AS pct_of_customers
+    ) AS customer_percentage
 FROM core.customers AS c
 GROUP BY COALESCE(c.nationality, 'NULL / NOT RECORDED')
 ORDER BY customer_count DESC;
-
 
 -- 2.6 Check whether nationality NULLs are structural by customer type.
 SELECT
@@ -296,7 +321,7 @@ SELECT
     ROUND(
         100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
         2
-    ) AS pct_of_customers
+    ) AS customer_percentage
 FROM core.customers AS c
 LEFT JOIN core.branches AS b
     ON c.primary_branch_id = b.branch_id
@@ -327,7 +352,7 @@ SELECT
     ROUND(
         100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
         2
-    ) AS pct_of_individual_customers
+    ) AS individual_percentage
 FROM core.customers AS c
 WHERE c.customer_type = 'INDIVIDUAL'
 GROUP BY COALESCE(c.gender, 'UNKNOWN')
@@ -335,7 +360,7 @@ ORDER BY customer_count DESC;
 
 
 -- 2.11 Approximate age distribution among individuals at the 2026 endpoint.
--- The explicit out-of-range bucket avoids silently classifying impossible ages as 65+.
+-- This keeps missing or implausible ages visible and adds share within individuals.
 WITH individual_ages AS (
     SELECT
         c.customer_id,
@@ -345,24 +370,11 @@ WITH individual_ages AS (
         END AS approx_age
     FROM core.customers AS c
     WHERE c.customer_type = 'INDIVIDUAL'
-)
-SELECT
-    CASE
-        WHEN ia.approx_age IS NULL THEN 'UNKNOWN'
-        WHEN ia.approx_age < 18 OR ia.approx_age > 110 THEN 'OUT_OF_RANGE'
-        WHEN ia.approx_age BETWEEN 18 AND 24 THEN '18-24'
-        WHEN ia.approx_age BETWEEN 25 AND 34 THEN '25-34'
-        WHEN ia.approx_age BETWEEN 35 AND 44 THEN '35-44'
-        WHEN ia.approx_age BETWEEN 45 AND 54 THEN '45-54'
-        WHEN ia.approx_age BETWEEN 55 AND 64 THEN '55-64'
-        ELSE '65+'
-    END AS age_group,
-    COUNT(*) AS customer_count
-FROM individual_ages AS ia
-GROUP BY 1
-ORDER BY
-    CASE
-        WHEN CASE
+),
+age_groups AS (
+    SELECT
+        ia.customer_id,
+        CASE
             WHEN ia.approx_age IS NULL THEN 'UNKNOWN'
             WHEN ia.approx_age < 18 OR ia.approx_age > 110 THEN 'OUT_OF_RANGE'
             WHEN ia.approx_age BETWEEN 18 AND 24 THEN '18-24'
@@ -371,16 +383,45 @@ ORDER BY
             WHEN ia.approx_age BETWEEN 45 AND 54 THEN '45-54'
             WHEN ia.approx_age BETWEEN 55 AND 64 THEN '55-64'
             ELSE '65+'
-        END
-            WHEN '18-24' THEN 1
-            WHEN '25-34' THEN 2
-            WHEN '35-44' THEN 3
-            WHEN '45-54' THEN 4
-            WHEN '55-64' THEN 5
-            WHEN '65+' THEN 6
-            WHEN 'OUT_OF_RANGE' THEN 7
-            ELSE 8
-        END;
+        END AS age_group
+    FROM individual_ages AS ia
+)
+SELECT
+    ag.age_group,
+    COUNT(*) AS customer_count,
+    ROUND(
+        100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
+        2
+    ) AS individual_pct
+FROM age_groups AS ag
+GROUP BY ag.age_group
+ORDER BY
+    CASE ag.age_group
+        WHEN '18-24' THEN 1
+        WHEN '25-34' THEN 2
+        WHEN '35-44' THEN 3
+        WHEN '45-54' THEN 4
+        WHEN '55-64' THEN 5
+        WHEN '65+' THEN 6
+        WHEN 'OUT_OF_RANGE' THEN 7
+        ELSE 8
+    END;
+
+
+-- 2.11.1 Employment status among individual customers aged 18 to 24.
+-- This is a contextual drill-down kept here because it helps interpret the youngest segment.
+SELECT
+    COALESCE(c.employment_status, 'UNKNOWN') AS employment_status,
+    COUNT(*) AS customer_count,
+    ROUND(
+        100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
+        2
+    ) AS pct_of_age_group
+FROM core.customers AS c
+WHERE c.customer_type = 'INDIVIDUAL'
+  AND (2026 - c.birth_year) BETWEEN 18 AND 24
+GROUP BY COALESCE(c.employment_status, 'UNKNOWN')
+ORDER BY customer_count DESC;
 
 
 -- 2.12 Individual income summary.
@@ -411,7 +452,11 @@ WHERE c.customer_type = 'INDIVIDUAL';
 -- 2.13 Business customers by company size.
 SELECT
     COALESCE(c.company_size, 'UNKNOWN') AS company_size,
-    COUNT(*) AS business_count
+    COUNT(*) AS business_count,
+    ROUND(
+        100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
+        2
+    ) AS business_pct
 FROM core.customers AS c
 WHERE c.customer_type = 'BUSINESS'
 GROUP BY COALESCE(c.company_size, 'UNKNOWN')
@@ -421,7 +466,11 @@ ORDER BY business_count DESC;
 -- 2.14 Business customers by sector.
 SELECT
     COALESCE(c.business_sector, 'UNKNOWN') AS business_sector,
-    COUNT(*) AS business_count
+    COUNT(*) AS business_count,
+    ROUND(
+        100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
+        2
+    ) AS business_pct
 FROM core.customers AS c
 WHERE c.customer_type = 'BUSINESS'
 GROUP BY COALESCE(c.business_sector, 'UNKNOWN')
@@ -587,6 +636,45 @@ ORDER BY a.closing_year;
 
 
 
+-- 4.7.1 Accounts by product and status.
+-- A light cross-tab to show whether some products are structurally more open/closed than others.
+SELECT
+    p.product_name,
+    a.account_status,
+    COUNT(*) AS account_count,
+    ROUND(
+        100.0 * COUNT(*)
+        / SUM(COUNT(*)) OVER (PARTITION BY p.product_name),
+        2
+    ) AS pct_within_product
+FROM core.accounts AS a
+JOIN core.products AS p
+    ON a.product_id = p.product_id
+GROUP BY
+    p.product_name,
+    a.account_status
+ORDER BY
+    p.product_name,
+    account_count DESC;
+
+
+-- 4.7.2 Average number of accounts per customer type.
+-- This is descriptive relationship depth, not yet a value/profitability KPI.
+SELECT
+    c.customer_type,
+    COUNT(DISTINCT c.customer_id) AS customers,
+    COUNT(a.account_id) AS accounts,
+    ROUND(
+        COUNT(a.account_id)::NUMERIC / NULLIF(COUNT(DISTINCT c.customer_id), 0),
+        2
+    ) AS avg_accounts_per_customer
+FROM core.customers AS c
+LEFT JOIN core.accounts AS a
+    ON a.customer_id = c.customer_id
+GROUP BY c.customer_type
+ORDER BY c.customer_type;
+
+
 -- 4.8 Structural consistency check: account status vs closing year.
 SELECT
     a.account_id,
@@ -640,6 +728,27 @@ ORDER BY card_count DESC;
 
 
 
+-- 5.3.1 Card product × status.
+SELECT
+    p.product_name,
+    ca.card_status,
+    COUNT(*) AS card_count,
+    ROUND(
+        100.0 * COUNT(*)
+        / SUM(COUNT(*)) OVER (PARTITION BY p.product_name),
+        2
+    ) AS pct_within_product
+FROM banking.cards AS ca
+JOIN core.products AS p
+    ON ca.product_id = p.product_id
+GROUP BY
+    p.product_name,
+    ca.card_status
+ORDER BY
+    p.product_name,
+    card_count DESC;
+
+
 -- 5.4 Cards issued by year.
 SELECT
     ca.issue_year,
@@ -681,58 +790,159 @@ GROUP BY l.loan_status
 ORDER BY loan_count DESC;
 
 
--- 6.3 Loans by product.
--- LEFT JOIN keeps lending products visible even if one has zero originated loans.
+-- 6.3 Loans by product and currency.
+-- Monetary amounts are NEVER combined across UYU and USD.
+-- This remains a structural overview; detailed lending analysis belongs in 03_loans.sql.
 SELECT
     p.product_id,
     p.product_name,
     p.product_family,
+    p.currency,
     COUNT(l.loan_id) AS loan_count,
-    ROUND(COALESCE(SUM(l.original_amount), 0), 2) AS total_original_amount
+    ROUND(
+        COALESCE(SUM(l.original_amount), 0)::NUMERIC,
+        2
+    ) AS total_original_amount,
+    ROUND(
+        COALESCE(AVG(l.original_amount), 0)::NUMERIC,
+        2
+    ) AS avg_original_amount,
+    ROUND(
+        100.0 * COUNT(l.loan_id)
+        / NULLIF(SUM(COUNT(l.loan_id)) OVER (), 0),
+        2
+    ) AS pct_of_loans,
+    ROUND(
+        (
+            100.0 * COALESCE(SUM(l.original_amount), 0)
+            / NULLIF(
+                SUM(SUM(l.original_amount)) OVER (
+                    PARTITION BY p.currency
+                ),
+                0
+            )
+        )::NUMERIC,
+        2
+    ) AS pct_of_original_amount_within_currency
 FROM core.products AS p
 LEFT JOIN banking.loans AS l
     ON l.product_id = p.product_id
-WHERE p.product_family IN ('RETAIL_LENDING', 'BUSINESS_LENDING')
+WHERE p.product_family IN (
+    'RETAIL_LENDING',
+    'BUSINESS_LENDING'
+)
 GROUP BY
     p.product_id,
     p.product_name,
-    p.product_family
-ORDER BY loan_count DESC;
+    p.product_family,
+    p.currency
+ORDER BY
+    p.currency,
+    total_original_amount DESC;
 
 
--- 6.4 Loans by branch.
+-- 6.3.1 Loan status by product.
+-- This adds context to the product mix without becoming the full credit-quality analysis.
+SELECT
+    p.product_name,
+    l.loan_status,
+    COUNT(*) AS loan_count,
+    ROUND(
+        100.0 * COUNT(*)
+        / SUM(COUNT(*)) OVER (
+            PARTITION BY p.product_name
+        ),
+        2
+    ) AS pct_within_product
+FROM banking.loans AS l
+JOIN core.products AS p
+    ON l.product_id = p.product_id
+GROUP BY
+    p.product_name,
+    l.loan_status
+ORDER BY
+    p.product_name,
+    loan_count DESC;
+
+
+-- 6.3.2 Loans by customer type and currency.
+SELECT
+    c.customer_type,
+    l.currency,
+    COUNT(l.loan_id) AS loan_count,
+    ROUND(
+        SUM(l.original_amount)::NUMERIC,
+        2
+    ) AS total_original_amount,
+    ROUND(
+        AVG(l.original_amount)::NUMERIC,
+        2
+    ) AS avg_original_amount
+FROM banking.loans AS l
+JOIN core.customers AS c
+    ON l.customer_id = c.customer_id
+GROUP BY
+    c.customer_type,
+    l.currency
+ORDER BY
+    l.currency,
+    total_original_amount DESC;
+
+
+-- 6.4 Loans by branch and currency.
 SELECT
     b.branch_id,
     b.branch_name,
     b.region,
+    l.currency,
     COUNT(l.loan_id) AS loan_count,
-    ROUND(SUM(l.original_amount), 2) AS total_original_amount
+    ROUND(
+        COALESCE(SUM(l.original_amount), 0)::NUMERIC,
+        2
+    ) AS total_original_amount,
+    ROUND(
+        COALESCE(AVG(l.original_amount), 0)::NUMERIC,
+        2
+    ) AS avg_original_amount
 FROM core.branches AS b
 LEFT JOIN banking.loans AS l
     ON l.branch_id = b.branch_id
 GROUP BY
     b.branch_id,
     b.branch_name,
-    b.region
-ORDER BY loan_count DESC;
+    b.region,
+    l.currency
+ORDER BY
+    l.currency,
+    total_original_amount DESC;
 
 
-
--- 6.5 Loan originations by year.
+-- 6.5 Loan originations by year and currency.
 SELECT
     l.origination_year,
+    l.currency,
     COUNT(*) AS loans_originated,
-    ROUND(SUM(l.original_amount), 2) AS original_amount
+    ROUND(
+        SUM(l.original_amount)::NUMERIC,
+        2
+    ) AS original_amount
 FROM banking.loans AS l
-GROUP BY l.origination_year
-ORDER BY l.origination_year;
+GROUP BY
+    l.origination_year,
+    l.currency
+ORDER BY
+    l.origination_year,
+    l.currency;
 
 
 -- 6.6 Loans by currency.
 SELECT
     l.currency,
     COUNT(*) AS loan_count,
-    ROUND(SUM(l.original_amount), 2) AS total_original_amount
+    ROUND(
+        SUM(l.original_amount)::NUMERIC,
+        2
+    ) AS total_original_amount
 FROM banking.loans AS l
 GROUP BY l.currency
 ORDER BY loan_count DESC;
@@ -745,11 +955,15 @@ ORDER BY loan_count DESC;
 -- NOTE:
 -- banking.transactions is the largest table in BTYT.
 -- Queries in this section may take noticeably longer.
+--
+-- Structural counts here describe RAW TRANSACTION EVENTS, including both
+-- COMPLETED and FAILED attempts. Realized financial activity is separated
+-- explicitly in 04_transactions.sql.
 
 -- 7.1 Exact transaction count.
 -- HEAVY QUERY: COUNT(*) may scan the full transactions table.
 SELECT
-    COUNT(*) AS total_transactions
+    COUNT(*) AS total_transaction_events
 FROM banking.transactions;
 
 
@@ -764,28 +978,43 @@ FROM banking.transactions AS t;
 -- 7.3 Transaction types.
 SELECT
     t.transaction_type,
-    COUNT(*) AS transaction_count
+    COUNT(*) AS transaction_event_count
 FROM banking.transactions AS t
 GROUP BY t.transaction_type
-ORDER BY transaction_count DESC;
+ORDER BY transaction_event_count DESC;
 
 
 -- 7.4 Transaction channels.
 SELECT
     t.channel,
-    COUNT(*) AS transaction_count
+    COUNT(*) AS transaction_event_count
 FROM banking.transactions AS t
 GROUP BY t.channel
-ORDER BY transaction_count DESC;
+ORDER BY transaction_event_count DESC;
+
+
+-- 7.4.1 Transaction type × channel.
+-- HEAVY QUERY: useful structural context, but avoid adding more transaction drill-downs here.
+SELECT
+    t.transaction_type,
+    t.channel,
+    COUNT(*) AS transaction_event_count
+FROM banking.transactions AS t
+GROUP BY
+    t.transaction_type,
+    t.channel
+ORDER BY
+    t.transaction_type,
+    transaction_event_count DESC;
 
 
 -- 7.5 Transaction statuses.
 SELECT
     t.transaction_status,
-    COUNT(*) AS transaction_count
+    COUNT(*) AS transaction_event_count
 FROM banking.transactions AS t
 GROUP BY t.transaction_status
-ORDER BY transaction_count DESC;
+ORDER BY transaction_event_count DESC;
 
 
 -- ============================================================
@@ -937,10 +1166,10 @@ FROM macro.macro_environment AS me;
 
 
 -- 11.2 External shock inventory.
+-- Compact structural view: what happened, scope, direction and timing.
 SELECT
     es.shock_id,
     es.shock_name,
-    es.shock_type,
     es.shock_scale,
     es.direction,
     es.region_scope,
@@ -993,6 +1222,67 @@ SELECT
 
 
 -- ============================================================
+-- 12.1 WHERE TO GO DEEPER
+-- ============================================================
+--
+-- Keep 00_structural_context.sql as the census + first map.
+-- Move deeper questions into thematic files, for example:
+--
+-- 01_customers.sql
+--   age × employment × income × geography × products × relationship depth
+--
+-- 02_products_accounts.sql
+--   product penetration, account mix, cross-sell gaps, account lifecycle
+--
+-- 03_loans.sql
+--   product × status × currency × branch × customer segment × time,
+--   delinquency, balances, DPD, restructuring/default/write-off analysis
+--
+-- 04_transactions.sql
+--   channel adoption, transaction type, monetary volume, customer behavior,
+--   digital/cash mix and temporal changes
+--
+-- 05_branches.sql
+--   customers, accounts, loans, deposits, activity, profitability and efficiency
+--
+-- 06_campaigns.sql
+--   exposure, response, conversion, channel, geography and customer segment
+--
+-- 07_performance.sql
+--   revenue, costs, net income, Cost-to-Income, growth and time trends
+--
+-- Rule of thumb: this file tells us WHERE the interesting structures are;
+-- the thematic files explain WHY they look that way.
+
+
+-- ============================================================
+-- ANALYTICAL BOUNDARY OF THIS FILE
+-- ============================================================
+--
+-- This file intentionally stops at:
+-- - census,
+-- - composition,
+-- - broad shares,
+-- - temporal coverage,
+-- - a few first-level cross-tabs that improve structural interpretation.
+--
+-- Deeper questions belong in thematic SQL files.
+-- Examples:
+-- - customer segmentation and relationship depth,
+-- - product/account behavior,
+-- - loan credit quality and delinquency,
+-- - transaction/channel behavior,
+-- - branch profitability and efficiency,
+-- - campaign effectiveness,
+-- - macro/performance relationships.
+--
+-- The purpose of 00 is to answer:
+-- "What bank do we have?"
+--
+-- ============================================================
+
+
+-- ============================================================
 -- 13. STRUCTURAL INTERPRETATION CHECKLIST
 -- ============================================================
 --
@@ -1011,6 +1301,7 @@ SELECT
 -- Products / accounts / cards / loans
 -- - What product families exist?
 -- - How many accounts, cards and loans exist, and what are their main states?
+-- - Which lending products dominate by count, amount and average ticket?
 -- - What is the temporal coverage of openings / issuances / originations?
 --
 -- Time / operations
@@ -1031,12 +1322,13 @@ SELECT
 --
 -- Once this structural census is understood, move to business analysis:
 --
--- 01. Branch profitability and efficiency
--- 02. Customer and product relationships
+-- 01. Customers and relationship depth
+-- 02. Products and accounts
 -- 03. Loan portfolio and credit quality
 -- 04. Transactions and channels
--- 05. Campaign effectiveness
--- 06. Macro context and shocks
+-- 05. Branch network and profitability
+-- 06. Campaign effectiveness
+-- 07. Bank performance and macro context
 --
 -- The structural file answers:
 -- "What bank do we have?"
@@ -1044,3 +1336,4 @@ SELECT
 -- The next files answer:
 -- "How is that bank performing, and why?"
 -- ============================================================
+
