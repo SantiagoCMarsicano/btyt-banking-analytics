@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Python · PostgreSQL · SQL · Power BI · Tableau · Apache Superset · Credit Risk / ML
+  Python · PostgreSQL · SQL · Power BI · Excel · Tableau · Credit Risk / ML
 </p>
 
 Overview
@@ -28,7 +28,9 @@ Project Status
 
 Completed
 
-Reproducible synthetic banking world
+Synthetic banking world
+
+Reproducible synthetic banking universe
 
 Deterministic world identity and configuration
 
@@ -42,6 +44,8 @@ Operational data-reliability layer
 
 Manifest and dataset fingerprinting
 
+PostgreSQL relational layer
+
 PostgreSQL ingestion pipeline
 
 Final seven-schema relational architecture
@@ -50,48 +54,112 @@ Semantic PostgreSQL types
 
 Accounting-oriented monetary precision
 
-23 primary keys
-
-28 foreign keys
-
-11 audited NOT NULL rules
-
-27 CHECK constraints
-
-55 / 55 historical constraints validated
-
-SQL-process documentation
-
-Portfolio-ready relational model
-
-Current milestone
-
-The PostgreSQL relational-model phase is complete.
-
-7 schemas
 23 tables
+
 251 columns
+
 23 primary keys
+
 28 foreign keys
-27 CHECK constraints
+
 11 audited NOT NULL rules
+
+27 CHECK constraints
+
 55 / 55 historical constraints validated
 
-The project is now moving into:
+Final relational model documented and frozen
 
-SQL analytics
-    ↓
-analytical views
-    ↓
-banking KPIs
-    ↓
-Power BI / Tableau / Superset
+SQL analytical layer
+
+Full thematic SQL layer completed
+
+Static and semantic audit completed
+
+Runtime smoke testing completed satisfactorily
+
+SQL analytical foundation frozen
+
+Analytical Markdown documentation aligned with the audited SQL layer
+
+The analytical SQL layer is organized as:
+
+00 → Structural Context
+01 → Customers
+02 → Products & Accounts
+03 → Loans & Credit Quality
+04 → Transactions & Channels
+05 → Branch Network & Branch Performance
+06 → Campaigns & Marketing Effectiveness
+07 → Bank Performance & Executive Management
+
+The project has now moved beyond relational design and SQL architecture.
+
+Current Milestone
+
+Part I — Portfolio-Ready BI & Analytics
+
+The current phase is focused on turning the frozen banking universe into a polished analytical portfolio product.
+
+Frozen PostgreSQL model
+        ↓
+Frozen SQL analytics 00–07
+        ↓
+KPI catalog
+        ↓
+Reusable analytical views
+        ↓
+Power BI + DAX
+        ↓
+Python analytical notebooks
+        ↓
+Advanced Excel management workbook
+        ↓
+Tableau geographic storytelling
+        ↓
+Portfolio documentation and publication
+
+Current Part I scope
+
+The portfolio-ready target includes:
+
+Banking KPI catalog
+
+Justified reusable SQL views
+
+Power BI semantic model
+
+DAX measures
+
+Executive and thematic dashboards
+
+Focused Python analysis
+
+Advanced Excel workbook
+
+Tableau geographic analysis
+
+Final README, screenshots, and portfolio narrative
+
+The following technologies remain in backlog for now and are not required for the first portfolio-ready release:
+
+Apache Superset
+
+Docker / Docker Compose
+
+Pentaho
+
+MLOps infrastructure
+
+Extreme SQL performance tuning
+
+They may be added later if they provide clear incremental value.
 
 Project Scope
 
 Part I — Business Intelligence & Performance Management
 
-Part I builds, validates, stores, and analyzes the synthetic banking universe through:
+Part I builds, validates, stores, analyzes, and communicates the synthetic banking universe through:
 
 Python data generation
 
@@ -99,9 +167,21 @@ PostgreSQL relational modeling
 
 SQL analytics
 
-Banking KPIs
+Banking KPI design
 
-Customer, product, branch, lending, transaction, channel, and profitability analysis
+Customer analysis
+
+Product and account analysis
+
+Loan and credit-quality analysis
+
+Transaction and channel analysis
+
+Branch-performance analysis
+
+Campaign analysis
+
+Bank-wide performance analysis
 
 Power BI
 
@@ -109,9 +189,11 @@ Power Query
 
 DAX
 
-Tableau
+Python / Pandas / Jupyter
 
-Apache Superset
+Advanced Excel
+
+Tableau
 
 Part II — Credit Risk Analytics & Machine Learning
 
@@ -139,13 +221,24 @@ No disconnected replacement dataset will be created for Part II.
 
 PostgreSQL Relational Model
 
-The final PostgreSQL model contains 7 schemas, 23 tables, 251 columns, 23 primary keys, and 28 foreign keys.
+The final PostgreSQL model contains:
+
+7 schemas
+23 tables
+251 columns
+23 primary keys
+28 foreign keys
+27 CHECK constraints
+11 audited NOT NULL rules
+55 / 55 historical constraints validated
 
 <p align="center">
   <img src="docs/architecture/relational_model_btyt.png" alt="BTYT PostgreSQL relational model" width="100%">
 </p>
 
-The portfolio ERD intentionally shows a maximum of ten representative fields per table while preserving the full schema structure, PK/FK relationships, and table-level grain. The complete PostgreSQL model contains all 251 columns.
+The portfolio ERD intentionally shows a maximum of ten representative fields per table while preserving the full schema structure, PK/FK relationships, and table-level grain.
+
+The complete PostgreSQL model contains all 251 columns.
 
 Schema
 
@@ -248,7 +341,9 @@ account_balances
 loan_monthly_snapshot
 → one loan × month
 
-Monthly frequency alone does not make a table a performance table. account_balances and loan_monthly_snapshot remain in banking because they describe individual banking relationships.
+Monthly frequency alone does not make a table a performance table.
+
+account_balances and loan_monthly_snapshot remain in banking because they describe individual banking relationships.
 
 marketing
 
@@ -312,9 +407,13 @@ bank_monthly_performance
 branch_monthly_performance
 → one branch × month
 
+Performance-layer monetary values are generated as UYU-equivalent reporting values, which allows aggregation inside the management-performance layer.
+
 Why Seven Schemas?
 
-The first PostgreSQL ingestion architecture used five schemas. At that stage, market temporarily contained competitive banks, financial institutions, macroeconomic conditions, external shocks, and BTYT performance.
+The first PostgreSQL ingestion architecture used five schemas.
+
+At that stage, market temporarily contained competitive banks, financial institutions, macroeconomic conditions, external shocks, and BTYT performance.
 
 The final architecture separates:
 
@@ -390,7 +489,7 @@ bank_financials.bank_id
 branch_monthly_performance.branch_id
 → branches.branch_id
 
-Transaction counterparties
+Transaction Counterparties
 
 External transaction counterparties use a two-level institution model:
 
@@ -404,7 +503,9 @@ This is intentional: not every operational financial counterparty must be a bank
 
 PostgreSQL Types and Precision
 
-The generated files are optimized for reproducible data generation and interoperability. PostgreSQL adds stronger semantic typing.
+The generated files are optimized for reproducible data generation and interoperability.
+
+PostgreSQL adds stronger semantic typing.
 
 Examples:
 
@@ -549,6 +650,133 @@ docs/sqlprocess/
 ├── audit_relational_model.md
 ├── apply_relational_model.md
 └── validate_relational_model.md
+
+SQL Analytical Layer
+
+The project includes a complete thematic SQL layer under:
+
+scripts/sql/
+
+Current structure:
+
+000_sql_cheatsheet.sql
+00_structural_context.sql
+01_customers.sql
+02_products_accounts.sql
+03_loans.sql
+04_transactions.sql
+05_branches.sql
+06_campaigns.sql
+07_performance.sql
+README_FREEZE.md
+
+The SQL analytical layer is considered frozen.
+
+The rule from this point forward is:
+
+Do not reopen SQL architecture unless a real bug or a justified downstream requirement appears.
+
+The layer can still be studied, queried, reused, and optimized where necessary.
+
+Analytical Architecture
+
+The governing analytical principle is:
+
+Build once at the data layer. Analyze where it makes sense. Visualize where it communicates best. Do not duplicate without purpose.
+
+The decision sequence for each business question is:
+
+1. What is the required grain?
+2. Is reusable preparation required? → SQL
+3. Must the metric react dynamically to BI filters? → DAX
+4. Is it ingestion / light shaping? → Power Query
+5. Is it statistical / exploratory? → Python
+6. How should it be communicated? → Power BI / Tableau / Excel
+
+Important Analytical Semantics
+
+Master status vs. historical state
+
+Fields such as:
+
+customer_status
+
+account_status
+
+card_status
+
+loan_status
+
+branch status
+
+are master / cutoff attributes unless explicitly documented otherwise.
+
+Historical monthly behavior comes from snapshot or performance tables.
+
+Stock vs. flow
+
+Snapshot / semi-additive measures include:
+
+active customers
+
+active accounts
+
+average deposits
+
+average loan balance
+
+closing balances
+
+These should not be blindly summed across months.
+
+Flow measures include:
+
+inflows
+
+outflows
+
+transaction count
+
+transaction volume
+
+revenue
+
+costs
+
+credit loss
+
+net income
+
+These can normally be accumulated across periods.
+
+Currency
+
+Lower-level monetary tables preserve native currencies:
+
+UYU
+USD
+
+These should not be combined without an explicit FX rule.
+
+The performance schema is different: its monetary values are already expressed as UYU-equivalent reporting measures.
+
+Transaction attempts vs. economic movement
+
+FAILED
+→ attempted operational event
+
+COMPLETED
+→ executed economic event
+
+Financial transaction volume therefore uses COMPLETED transactions only.
+
+Campaign response
+
+exposure_status defines customer-level exposure.
+
+response_status defines the observed campaign-response outcome.
+
+A POSITIVE response is not automatically a product conversion.
 
 Synthetic World Architecture
 
@@ -722,7 +950,13 @@ Some relationships may originate before 2021 to represent inherited historical s
 
 The universe includes customers, branches, products, accounts, cards, loans, monthly loan snapshots, transactions, balances, campaigns, financial institutions, market dynamics, macroeconomic conditions, external shocks, and bank/branch performance.
 
-Large production worlds can generate tens of millions of transaction rows, so generated production data is intentionally excluded from normal Git history.
+The canonical analytical world contains approximately:
+
+~107,000 customers
+37 branches / agencies
+~76.8 million transaction rows
+
+Generated production data is intentionally excluded from normal Git history.
 
 Data-Generation Philosophy
 
@@ -780,7 +1014,9 @@ International banking counterparties
 
 Electronic-money institutions
 
-Some real institution names are used only as structural references. All simulated values, trajectories, weights, affinities, shocks, and relationships are synthetic.
+Some real institution names are used only as structural references.
+
+All simulated values, trajectories, weights, affinities, shocks, and relationships are synthetic.
 
 Transactions
 
@@ -802,9 +1038,17 @@ Loan disbursements
 
 It also models digital adoption, channel migration, cash usage, failed transactions, internal-transfer pairing, counterparty institutions, branch usage, and account-balance reconciliation.
 
-The canonical world contains approximately 76.8 million transaction rows, making the transaction layer the largest workload in the project.
+The canonical world contains approximately 76.8 million transaction rows, making transactions the largest analytical workload in the project.
 
-Loans and Performance
+For financial analysis:
+
+COMPLETED
+→ realized transaction count / volume
+
+FAILED
+→ attempted operational activity
+
+Loans and Credit Quality
 
 Monthly loan snapshots track:
 
@@ -826,15 +1070,29 @@ Grain:
 
 loan_id × year_month
 
-Performance tables aggregate measures such as:
+Loan master status is a cutoff contractual attribute.
+
+Historical credit quality is analyzed through monthly delinquency and DPD.
+
+Canonical DPD buckets:
+
+CURRENT
+DPD_1_30
+DPD_31_60
+DPD_61_90
+DPD_90_PLUS
+
+Performance Layer
+
+Performance tables aggregate management measures such as:
 
 Active customers
 
 Active accounts
 
-Deposits
+Average deposits
 
-Loan balances
+Average loan balance
 
 Transaction activity
 
@@ -846,106 +1104,222 @@ Operational costs
 
 Credit losses
 
+Pre-provision profit
+
 Net income
 
-Analytical KPIs
+The bank-level and branch-level performance layers reconcile by month.
 
-Most BI ratios are intentionally not precomputed in Python. They will be derived in SQL and/or DAX.
+Accounting identities include:
 
-Examples include:
+Net Interest Income
+= Interest Income - Interest Expense
 
-Cost-to-Income Ratio
+Total Revenue
+= Net Interest Income + Fee Income
 
-Net Interest Margin
+Pre-Provision Profit
+= Total Revenue - Total Operating Cost
+
+Net Income
+= Pre-Provision Profit - Credit Loss
+
+KPI Layer — Current Focus
+
+The next analytical deliverable is a formal banking KPI catalog.
+
+Each KPI will document:
+
+business question
+
+definition
+
+numerator
+
+denominator
+
+grain
+
+temporal semantics
+
+currency semantics
+
+source table / analytical object
+
+SQL vs. DAX ownership
+
+interpretation
+
+Initial executive KPI families include:
+
+Scale
+
+Active Customers
+
+Active Accounts
+
+Average Deposits
+
+Average Loan Balance
+
+Transaction Count
+
+Transaction Volume
+
+Revenue
+
+Net Interest Income
+
+Fee Income
+
+Total Revenue
+
+Efficiency
+
+Cost-to-Income
 
 Revenue per Customer
 
-Cost per Transaction
+Revenue per Account
 
-Branch Margin
+Risk
 
-Credit Loss Ratio
+Credit Loss
 
-Deposit Growth
+Credit Loss / Average Loan Balance
 
-Loan Growth
+30+ DPD Rate
 
-Digital Channel Share
+90+ DPD Rate
 
-Branch Profitability
+Profitability
 
-Regional Profitability
+Pre-Provision Profit
 
-Product Profitability
+Net Income
 
-Customer Segment Performance
+Net Margin
 
-Next Analytical Milestone
+The K in KPI matters: not every available metric will be promoted to a key management indicator.
 
-With the relational model frozen, the next stage is reusable analytical SQL.
-
-Planned areas include:
-
-Customer portfolio
-
-Deposits and account activity
-
-Product performance
-
-Branch profitability
-
-Transaction-channel mix
-
-Lending portfolio
-
-Delinquency
-
-Campaign response
-
-External counterparties
-
-Market context
-
-Bank-wide profitability
-
-Potential analytical views include:
-
-customer portfolio summary
-account and deposit evolution
-loan portfolio composition
-delinquency migration
-transaction channel mix
-branch operating performance
-branch profitability
-regional performance
-product profitability
-customer segmentation
-campaign conversion
-external counterparty activity
-bank-wide monthly performance
-
-These outputs will feed the first BI dashboards.
-
-BI Layer
+BI & Analytical Layer
 
 The PostgreSQL model is the stable analytical foundation.
 
 Python
-→ generates the world
+→ generates the banking world
 
 PostgreSQL + SQL
-→ structures and analyzes the world
+→ structures, validates, and prepares reusable analytical data
 
-Power BI / Tableau / Superset
-→ communicates the results
+Power BI + DAX
+→ primary corporate BI and executive analytics
 
-The BI layer will focus on analytical views, KPI definitions, DAX measures, dimensional reporting logic, dashboard interaction, and visual storytelling.
+Python / Pandas / Jupyter
+→ statistical and exploratory analysis
+
+Excel
+→ management reporting and ad-hoc analysis
+
+Tableau
+→ geographic and spatial storytelling
+
+Power BI
+
+Power BI is the primary BI product for Part I.
+
+Planned reporting areas include:
+
+Executive Overview
+
+Customers
+
+Products & Accounts
+
+Loans & Credit Quality
+
+Transactions & Channels
+
+Branch Performance
+
+Campaign Performance
+
+DAX will own dynamic ratios, shares, and time intelligence.
+
+Python
+
+Python will be used selectively where it adds analytical value beyond SQL and BI.
+
+Candidate analyses include:
+
+distributions
+
+percentiles
+
+outliers
+
+concentration
+
+loan trajectories
+
+delinquency transitions
+
+campaign saturation
+
+branch-performance anomalies
+
+macro / performance relationships
+
+There is no requirement to create one Python artifact for every SQL module.
+
+Excel
+
+The portfolio-ready Part I will include an advanced management workbook demonstrating:
+
+Power Query
+
+PivotTables
+
+formulas
+
+dynamic reporting
+
+scorecards
+
+variance analysis
+
+scenario / sensitivity analysis
+
+selected automation where useful
+
+Tableau
+
+Tableau is included in the portfolio-ready scope because it provides high visual value with limited duplication.
+
+Its main role will be:
+
+geography + spatial storytelling
+
+Strong candidates include:
+
+branch network map
+
+regional business volume
+
+regional profitability
+
+campaign geographic coverage
+
+response geography
+
+Tableau will complement Power BI rather than reproduce it.
 
 Repository Structure
 
 btyt-banking-analytics/
 │
 ├── config/
+│
 ├── resources/
 │   └── reference/
 │
@@ -969,6 +1343,19 @@ btyt-banking-analytics/
 │   │   ├── audit_relational_model.py
 │   │   ├── apply_relational_model.py
 │   │   └── validate_relational_model.py
+│   │
+│   ├── sql/
+│   │   ├── 000_sql_cheatsheet.sql
+│   │   ├── 00_structural_context.sql
+│   │   ├── 01_customers.sql
+│   │   ├── 02_products_accounts.sql
+│   │   ├── 03_loans.sql
+│   │   ├── 04_transactions.sql
+│   │   ├── 05_branches.sql
+│   │   ├── 06_campaigns.sql
+│   │   ├── 07_performance.sql
+│   │   └── README_FREEZE.md
+│   │
 │   ├── generate_btyt.py
 │   └── generate_manifest.py
 │
@@ -978,6 +1365,21 @@ btyt-banking-analytics/
 ├── docs/
 │   ├── architecture/
 │   │   └── relational_model_btyt.png
+│   │
+│   ├── analytics/
+│   │   ├── 00_structural_context.md
+│   │   ├── 01_customers.md
+│   │   ├── 02_products_accounts.md
+│   │   ├── 03_loans.md
+│   │   ├── 04_transactions.md
+│   │   ├── 05_branches.md
+│   │   ├── 06_campaigns.md
+│   │   ├── 07_performance.md
+│   │   ├── architecture_part_i_analytical_update.md
+│   │   ├── tooling_strategy.md
+│   │   ├── README_ANALYTICS.md
+│   │   └── AUDIT_ALIGNMENT.md
+│   │
 │   ├── data_dictionary/
 │   └── sqlprocess/
 │       ├── load_postgresql.md
@@ -1018,13 +1420,15 @@ Deterministic RNG architecture
 
 Cross-system auditing
 
-Current analytical stage
+Relational-model validation
 
-SQL analytical queries
+SQL analytical architecture
 
-SQL views
+Current portfolio-ready stage
 
-Banking KPIs
+KPI design
+
+Analytical views
 
 Power BI
 
@@ -1032,11 +1436,19 @@ Power Query
 
 DAX
 
-Later stages
+Python analytical notebooks
+
+Advanced Excel
 
 Tableau
 
+Later / optional
+
 Apache Superset
+
+Docker / Docker Compose
+
+Pentaho
 
 scikit-learn
 
@@ -1050,15 +1462,37 @@ MLflow
 
 Local scoring service
 
-Docker / Docker Compose
-
 Technologies are added to the implemented stack only when their corresponding project stage is actually completed.
 
 Main Analytical Question — Part I
 
-How is BTYT performing, and where are the main opportunities and risks across its loan portfolio, deposits, products, customer segments, branches, channels, and banking relationships?
+How is BTYT performing, and where are the main opportunities and risks across its customers, deposits, products, loans, branches, channels, campaigns, and banking relationships?
 
-Part I will answer this through validated SQL, analytical views, banking KPIs, branch-performance analysis, customer and product analysis, transaction and channel analysis, lending and delinquency analysis, geographic analysis, and BI dashboards.
+Part I answers this through:
+
+validated SQL
+
+reusable analytical structures
+
+banking KPIs
+
+customer and product analysis
+
+lending and delinquency analysis
+
+transaction and channel analysis
+
+branch-performance analysis
+
+campaign analysis
+
+geographic analysis
+
+bank-wide profitability analysis
+
+BI dashboards
+
+statistical exploration
 
 Part II — Credit Risk Analytics
 
@@ -1088,7 +1522,9 @@ All customers, accounts, cards, loans, transactions, balances, branch behavior, 
 
 The project contains no real customer data, confidential banking information, or actual bank transaction records.
 
-Names of real financial institutions may appear only as structural references within the simulated banking environment. Synthetic metrics associated with those institutions must not be interpreted as actual reported financial results or observed market behavior.
+Names of real financial institutions may appear only as structural references within the simulated banking environment.
+
+Synthetic metrics associated with those institutions must not be interpreted as actual reported financial results or observed market behavior.
 
 Author
 
