@@ -2,17 +2,15 @@
 
 ## 1. Purpose
 
-This document defines the final analytical ownership model for BTYT Part I after completion of the `00–07` SQL design and static/semantic audit.
+This document defines the **current** analytical ownership model for BTYT Part I after completion of the relational model, thematic SQL layer, KPI catalog, reusable analytics objects and the first Power BI pages.
 
 The governing principle is:
 
 > **Build once at the data layer. Analyze where it makes sense. Visualize where it communicates best. Do not duplicate without purpose.**
 
----
-
 ## 2. Final PostgreSQL architecture
 
-The analytical layer sits on the frozen seven-schema relational model:
+The analytical layer sits on the validated seven-schema relational model:
 
 ```text
 core
@@ -24,6 +22,20 @@ macro
 performance
 ```
 
+Physical table distribution:
+
+```text
+core          4
+banking       5
+marketing     3
+reference     2
+market        5
+macro         2
+performance   2
+----------------
+total        23
+```
+
 PostgreSQL is the central reusable analytical data layer.
 
 It owns:
@@ -31,16 +43,12 @@ It owns:
 - relational joins;
 - stable analytical grains;
 - reusable dimensions and analytical bases;
-- lifecycle and cohort logic;
-- heavy aggregation over large fact tables;
+- heavy aggregation over large facts;
 - shared business definitions;
-- structural/data-quality diagnostics;
 - reconciliation;
 - performance-sensitive transformations.
 
-It does **not** need to precompute every dashboard combination.
-
----
+It does not need to precompute every dashboard combination.
 
 ## 3. Canonical thematic SQL map
 
@@ -55,13 +63,29 @@ It does **not** need to precompute every dashboard combination.
 07 → Bank Performance & Executive Management
 ```
 
-Each file has one principal responsibility.
-
 `07` is the executive synthesis layer, not a replacement for the detailed analyses in `01–06`.
 
----
+## 4. Reusable analytics layer
 
-## 4. Canonical analytical grains
+The project also contains an `analytics` schema with normal and materialized views used by downstream BI.
+
+Current working-tree SQL includes objects for:
+
+- bank monthly performance;
+- credit risk;
+- branch monthly performance;
+- customer account summary;
+- transaction/channel monthly aggregation;
+- campaign performance;
+- market performance;
+- USD reporting;
+- customer monthly/segment/debt/transaction summaries.
+
+Normal views reflect base-table refreshes automatically.
+
+Materialized views require an explicit refresh after source data changes; the current full-refresh loader handles analytics materialized views after the physical-table transaction commits.
+
+## 5. Canonical analytical grains
 
 Examples:
 
@@ -69,44 +93,29 @@ Examples:
 customer
 account
 account × month
-card
 loan
 loan × month
 transaction event
-account × month × transaction dimensions
 branch
 branch × month
 campaign
 campaign × customer
-exposure event
 bank × month
 ```
 
 No reusable analytical object should be created until its grain is explicit.
 
----
+## 6. Cross-layer semantic rules
 
-## 5. Cross-layer semantic rules
-
-### 5.1 Master status vs historical state
+### Master status vs historical state
 
 Master status fields are cutoff attributes unless explicitly documented otherwise.
 
-Examples:
+Historical monthly state belongs to snapshots and performance facts.
 
-- customer status;
-- account status;
-- card status;
-- loan status;
-- branch status.
+### Current vs lifetime relationships
 
-Historical monthly state should come from snapshot/performance tables.
-
-### 5.2 Current vs lifetime relationships
-
-Historical ownership and current ownership are different analytical concepts.
-
-Examples:
+Historical ownership and current ownership are distinct analytical concepts.
 
 ```text
 loan history != currently open loan
@@ -114,221 +123,80 @@ total cards != active cards
 historical account count != active account count
 ```
 
-### 5.3 Currency
+### Currency
 
-Lower-level native monetary data:
+Lower-level native monetary data preserves UYU / USD semantics.
 
-```text
-UYU and USD remain separate
-```
+`performance.*` values are UYU-equivalent reporting values.
 
-unless an explicit FX conversion is introduced.
+The current Power BI presentation layer converts selected measures to USD with explicit annual FX logic.
 
-Performance-layer monetary data:
+### Stock vs flow
 
-```text
-UYU-equivalent reporting values
-```
+Stocks and semi-additive values require an explicit time rule.
 
-and may be aggregated within that layer.
+Flows can normally be accumulated.
 
-### 5.4 Stock vs flow
-
-Stocks / semi-additive measures require an explicit time rule.
-
-Flows can normally be accumulated across periods.
-
-### 5.5 Transactions
-
-Operational attempts and completed economic movement are different.
+### Transactions
 
 ```text
-FAILED    → attempted activity
-COMPLETED → realized activity / financial volume
+FAILED    → attempted operation
+COMPLETED → realized economic operation
 ```
 
-### 5.6 Campaigns
+### Campaigns
 
 ```text
-exposure_status → canonical customer-level exposure
-response_status → canonical customer-level response outcome
-POSITIVE response != conversion
+POSITIVE response != product conversion
 ```
 
----
-
-## 6. Analytical tool ownership
+## 7. Analytical tool ownership
 
 ### PostgreSQL / SQL
 
-Primary role:
-
-- reusable data preparation;
-- joins;
-- filters;
-- cohorts;
-- flags;
-- analytical grains;
-- large-table aggregation;
-- consistency checks;
-- accounting/reconciliation logic.
+Owns reusable preparation, joins, heavy reduction, stable grains, consistency checks and reconciliation.
 
 ### Power Query
 
-Primary role:
+Owns connection, type handling and light presentation shaping.
 
-- connection;
-- column selection;
-- type enforcement;
-- light presentation shaping.
+### Power BI / DAX
 
-Avoid recreating major banking logic already defined in SQL.
+Owns interactive, filter-aware BI metrics and is the primary Part I dashboard product.
 
-### DAX
+### Python
 
-Primary role:
-
-- filter-context-aware measures;
-- shares;
-- ratios;
-- time intelligence;
-- selected-period comparisons;
-- rolling/YTD measures.
-
-Examples:
-
-- Cost-to-Income;
-- portfolio shares;
-- delinquency rate;
-- response rate;
-- YoY growth.
-
-### Python / Pandas / Jupyter
-
-Primary role:
-
-- distributions;
-- percentiles;
-- outliers;
-- statistical comparisons;
-- correlations;
-- exploratory regressions;
-- trajectories;
-- clustering;
-- anomaly analysis;
-- forecasting/scenario work.
-
-No Python file is required merely because a SQL file exists.
+Owns statistical / distributional / trajectory analysis when it adds value beyond BI.
 
 ### Excel
 
-Primary role:
-
-- management/ad-hoc analysis;
-- PivotTables;
-- formulas;
-- Power Query;
-- scorecards;
-- scenario/sensitivity analysis;
-- VBA for workbook automation;
-- Python in Excel only when it adds distinct analytical value.
-
-### Power BI
-
-Primary corporate BI surface:
-
-- semantic model;
-- DAX;
-- interactive executive/customer/product/loan/transaction/branch analysis.
+Owns management and ad-hoc tabular analysis.
 
 ### Tableau
 
-Primary niche:
+Owns geographic / spatial storytelling.
 
-- geography;
-- spatial storytelling;
-- branch and campaign territorial analysis.
+Apache Superset and Docker are not part of the current Part I release.
 
-### Superset
+## 8. Transaction-scale architecture
 
-Primary niche:
+The raw transaction fact contains approximately 76.8M rows.
 
-- SQL-first operational monitoring;
-- direct PostgreSQL interaction;
-- lightweight operational dashboards.
-
-### Docker
-
-Role:
-
-- reproducibility / environment packaging.
-
-### Pentaho
-
-Optional late-stage role:
-
-- controlled ETL / Data Quality demonstration.
-
----
-
-## 7. Decision rule for every business question
-
-1. **What is the required grain?**
-2. **Is reusable preparation required?** → SQL.
-3. **Must the metric react to BI filters?** → DAX.
-4. **Is the task ingestion/light shaping?** → Power Query.
-5. **Is it distributional/statistical/exploratory?** → Python.
-6. **How should the result be communicated?** → Power BI / Tableau / Superset / Excel.
-
----
-
-## 8. Exploratory query vs persistent object
-
-A query remains exploratory when it is used to:
-
-- inspect the realized world;
-- test a question;
-- validate a domain;
-- learn SQL;
-- check a possible KPI.
-
-A view/materialized view is justified only when:
-
-- logic is reused;
-- grain is stable;
-- definitions must be shared;
-- query cost justifies persistence;
-- downstream tools benefit.
-
-> **Do not materialize complexity merely because SQL can express it.**
-
----
-
-## 9. Transaction-scale architecture
-
-`banking.transactions` contains ~76.8M rows in the canonical world.
-
-Preferred flow:
+Preferred pattern:
 
 ```text
 banking.transactions
         ↓
-PostgreSQL aggregation / reusable reduced datasets
+PostgreSQL aggregation / reusable reduced dataset
         ↓
-Power BI / Superset / targeted Python extracts
+Power BI / Python / Excel / Tableau
 ```
 
-Do not import the full raw event table into Power BI by default.
+Do not import the full transaction fact into Power BI by default.
 
-`04_transactions.sql` should be run section-by-section during exploration/performance work.
-
----
-
-## 10. Performance-layer architecture
+## 9. Performance-layer architecture
 
 `performance.branch_monthly_performance` and `performance.bank_monthly_performance` are management reporting layers.
-
-Their monetary fields are UYU-equivalent.
 
 At a given month:
 
@@ -344,58 +212,142 @@ flows  → SUM
 stocks → end-of-period / monthly average / explicitly defined rule
 ```
 
-`07_performance.sql` is the canonical full branch-to-bank reconciliation.
+Current performance engine:
 
----
+```text
+generate_branch_performance.py
+V3.2.0
+```
 
-## 11. Final analytical flow
+The October 2026 regeneration reconciled 2,664 branch-month rows to 72 bank-month rows and passed validation.
+
+## 10. Credit-risk architecture
+
+Current risk engines:
+
+```text
+generate_loans.py                   V5.2.0 FINAL RISK CALIBRATION
+generate_loan_monthly_snapshot.py   V4.2 RISK RECALIBRATED
+```
+
+The risk page uses the monthly loan snapshot for DPD/exposure and master loan status only for cutoff contractual status.
+
+See `credit_risk_calibration.md` for the October 2026 recalibration record.
+
+## 11. PostgreSQL refresh architecture
+
+The current `scripts/database/load_postgresql.py` is a **full refresh loader for the existing relational model**.
+
+It performs:
+
+```text
+preflight
+    ↓
+single multi-table TRUNCATE
+    ↓
+COPY reload of 23 tables
+    ↓
+row-count validation
+    ↓
+ANALYZE
+    ↓
+commit
+    ↓
+refresh analytics materialized views
+```
+
+It preserves the relational structure rather than dropping/recreating the 23 tables.
+
+## 12. Current Power BI model
+
+The Power BI model currently uses 15 tables, including:
+
+- `_Measures`;
+- `Analysis Window`;
+- `Bank Performance`;
+- `Branch Performance`;
+- `Campaign Performance`;
+- `Credit Risk`;
+- `Customer Accounts`;
+- `Customer Monthly`;
+- `Customer Ranking Metric`;
+- `DimCustomerType`;
+- `DimDate`;
+- `DimRelationshipDepth`;
+- `Market Performance`;
+- `Portfolio Metric`;
+- `Transactions and Channels`.
+
+`Market Performance` and `Campaign Performance` remain intentionally disconnected where their grain does not justify a forced relationship.
+
+## 13. Current Power BI pages
+
+```text
+01 Resumen Ejecutivo         functionally closed
+02 Sucursales                functionally closed
+03 Clientes y Cuentas        functionally closed
+04 Riesgo de Crédito         KPI row complete / visuals in progress
+05 Transacciones y Canales   pending
+06 Mercado y Campañas        pending
+```
+
+Final visual theming is deferred until the functional build is complete.
+
+## 14. Current analytical flow
 
 ```text
 Synthetic BTYT universe
         ↓
-Frozen PostgreSQL relational model
+validated PostgreSQL relational model
         ↓
-00–07 SQL exploration + reusable analytical bases
+00–07 thematic SQL + analytics views
         ↓
-Runtime smoke test / SQL freeze
+KPI catalog
         ↓
-KPI catalog + justified views
+Power BI + DAX
         ↓
-├─ Python / Pandas → statistical exploration
-├─ Excel           → management / ad hoc
-├─ Power Query     → light ingestion
-│      ↓
-│  Power BI + DAX  → primary corporate BI
-├─ Tableau         → geographic storytelling
-└─ Superset        → operational SQL-first monitoring
+Python / Excel / Tableau deliverables
         ↓
-Performance tuning / indexes based on evidence
-        ↓
-Docker reproducibility
-        ↓
-Optional DQ / Pentaho module
-        ↓
-Portfolio publication
+Part I portfolio publication
 ```
 
----
-
-## 12. Current project status
-
-At this point:
+## 15. Current project status — 2026-10-11
 
 ```text
-Relational model                  ✅ frozen
-00–07 SQL design                  ✅ complete
-Static / semantic SQL audit       ✅ complete
-Runtime PostgreSQL smoke test     ⏳ in progress
-SQL analytical freeze             ⏳ pending runtime PASS
-Downstream BI/statistics          next phase
+Relational model                  ✅
+23-table full refresh             ✅
+00–07 thematic SQL                ✅
+KPI catalog                       ✅
+Analytics views                   ✅
+Power BI pages 01–03              ✅ functional
+Power BI page 04                  🟡 in progress
+Power BI pages 05–06              ⏳
+Python / Excel / Tableau          ⏳
+Final visual polish               ⏳
+New manifest / fingerprint        ⏳ after reproducibility check
 ```
 
----
+## 16. Reproducibility issue before the next freeze
 
-## 13. Final principle
+The path selected by `active_world.json` and the world seed/settings loaded from `world_config.json` must be synchronized.
+
+The current BTYT registry identifies:
+
+```text
+BTYT / variant 1 / seed 3839777825
+```
+
+but the 2026-10-11 performance regeneration reported seed:
+
+```text
+3165889979
+```
+
+while loading BTYT/01 data.
+
+This does not invalidate the relational full refresh, but it does mean RNG-driven regenerated layers must be reverified before issuing a new manifest/fingerprint.
+
+## 17. Final principle
 
 BTYT should demonstrate analytical judgment, not maximum tool count.
 

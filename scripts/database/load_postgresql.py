@@ -1,23 +1,43 @@
-"""Load the canonical BTYT generated world into PostgreSQL.
+"""Full-refresh loader for the canonical BTYT PostgreSQL database.
 
-This loader intentionally separates the physical folder structure from the
-logical PostgreSQL architecture. PostgreSQL schemas are assigned through an
-explicit table-to-schema mapping.
+Purpose
+-------
+Replace the DATA inside the existing 23 physical BTYT tables while preserving
+the relational model already configured in PostgreSQL:
 
-Logical schemas:
-    core
-    banking
-    marketing
-    market
-    reference
+- schemas
+- table definitions
+- data types
+- primary keys
+- foreign keys
+- CHECK / NOT NULL constraints
+- indexes
+- views
 
-Run from the repository root with:
-    python scripts/database/load_postgresql.py
+The loader never DROP/CREATEs existing BTYT tables.
+
+Canonical source
+----------------
+worlds/BTYT/01/data/generated
+
+Final PostgreSQL architecture
+-----------------------------
+core        : 4 tables
+banking     : 5 tables
+marketing   : 3 tables
+reference   : 2 tables
+market      : 5 tables
+macro       : 2 tables
+performance : 2 tables
+
+Total       : 23 tables
 """
 
 from __future__ import annotations
 
+import csv
 import getpass
+import io
 import os
 import re
 from pathlib import Path
@@ -25,21 +45,21 @@ from typing import Iterator
 
 import pandas as pd
 import pyarrow.parquet as pq
-from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.engine import Engine, URL
+import psycopg
+from psycopg import sql
 
 
-# -----------------------------------------------------------------------------
-# Project paths
-# -----------------------------------------------------------------------------
+# =============================================================================
+# PATHS
+# =============================================================================
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = REPO_ROOT / "worlds" / "BTYT" / "01" / "data" / "generated"
 
 
-# -----------------------------------------------------------------------------
-# PostgreSQL connection
-# -----------------------------------------------------------------------------
+# =============================================================================
+# POSTGRESQL
+# =============================================================================
 
 DB_HOST = os.getenv("BTYT_DB_HOST", "localhost")
 DB_PORT = int(os.getenv("BTYT_DB_PORT", "5432"))
@@ -48,97 +68,118 @@ DB_USER = os.getenv("BTYT_DB_USER", "postgres")
 DB_PASSWORD = os.getenv("BTYT_DB_PASSWORD")
 
 
-# -----------------------------------------------------------------------------
-# Loading configuration
-# -----------------------------------------------------------------------------
-
-CSV_CHUNK_SIZE = 50_000
-PARQUET_BATCH_SIZE = 100_000
-SQL_CHUNK_SIZE = 1_000
-
-SUPPORTED_EXTENSIONS = {".csv", ".parquet"}
-
-
-# -----------------------------------------------------------------------------
-# Logical PostgreSQL architecture
-# -----------------------------------------------------------------------------
+# =============================================================================
+# FINAL RELATIONAL ARCHITECTURE
+# =============================================================================
 
 TABLE_SCHEMA_MAP: dict[str, str] = {
-    # Core banking entities
+    # core
     "branches": "core",
     "customers": "core",
     "accounts": "core",
     "products": "core",
 
-    # Banking operations
+    # banking
     "cards": "banking",
     "loans": "banking",
     "transactions": "banking",
     "account_balances": "banking",
     "loan_monthly_snapshot": "banking",
 
-    # Marketing and commercial response
+    # marketing
     "campaigns": "marketing",
     "campaign_customers": "marketing",
     "campaign_exposures": "marketing",
 
-    # Competitive, financial and macro environment
+    # reference
+    "campaign_channels": "reference",
+    "campaign_geography": "reference",
+
+    # market
     "banks": "market",
     "bank_financials": "market",
     "bank_market_weights": "market",
-    "bank_monthly_performance": "market",
     "bank_world_parameters": "market",
-    "branch_monthly_performance": "market",
     "financial_institutions": "market",
-    "macro_environment": "market",
-    "external_shocks": "market",
 
-    # Reference / auxiliary dimensions
-    "campaign_channels": "reference",
-    "campaign_geography": "reference",
+    # macro
+    "macro_environment": "macro",
+    "external_shocks": "macro",
+
+    # performance
+    "bank_monthly_performance": "performance",
+    "branch_monthly_performance": "performance",
 }
 
 EXPECTED_TABLES = set(TABLE_SCHEMA_MAP)
 
+# Parent tables are loaded before dependent tables.
+LOAD_ORDER = [
+    # independent / parent dimensions
+    "branches",
+    "products",
+    "banks",
 
-# -----------------------------------------------------------------------------
-# Helpers
-# -----------------------------------------------------------------------------
+    # core entities
+    "customers",
+    "accounts",
+
+    # market / macro parents
+    "financial_institutions",
+    "bank_financials",
+    "bank_market_weights",
+    "bank_world_parameters",
+    "macro_environment",
+    "external_shocks",
+
+    # banking
+    "cards",
+    "loans",
+    "loan_monthly_snapshot",
+    "account_balances",
+    "transactions",
+
+    # marketing / reference
+    "campaigns",
+    "campaign_customers",
+    "campaign_exposures",
+    "campaign_channels",
+    "campaign_geography",
+
+    # management accounting
+    "bank_monthly_performance",
+    "branch_monthly_performance",
+]
+
+assert set(LOAD_ORDER) == EXPECTED_TABLES
+assert len(LOAD_ORDER) == 23
 
 
-def quote_identifier(value: str) -> str:
-    """Safely quote a PostgreSQL identifier."""
-    return '"' + value.replace('"', '""') + '"'
+# =============================================================================
+# LOADING SETTINGS
+# =============================================================================
 
+PARQUET_BATCH_SIZE = 150_000
+CSV_BATCH_SIZE = 100_000
+SUPPORTED_EXTENSIONS = {".parquet", ".csv"}
+
+
+# =============================================================================
+# SOURCE DISCOVERY
+# =============================================================================
 
 def normalize_column_name(column: object) -> str:
-    """Normalize a column name to lowercase snake_case."""
-    name = str(column).strip().lower()
-    name = re.sub(r"[^a-z0-9_]+", "_", name)
-    name = re.sub(r"_+", "_", name).strip("_")
-    return name
-
-
-def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize DataFrame column names before SQL insertion."""
-    df = df.copy()
-    df.columns = [normalize_column_name(column) for column in df.columns]
-    return df
-
-
-def identifier_columns(columns: list[str]) -> list[str]:
-    """Return columns that should be read as strings from CSV sources."""
-    return [column for column in columns if column == "id" or column.endswith("_id")]
-
-
-def read_csv_header(path: Path) -> list[str]:
-    """Read and normalize only the CSV header."""
-    header = pd.read_csv(path, nrows=0, encoding="utf-8")
-    return [normalize_column_name(column) for column in header.columns]
+    value = str(column).strip().lower()
+    value = re.sub(r"[^a-z0-9_]+", "_", value)
+    value = re.sub(r"_+", "_", value).strip("_")
+    return value
 
 
 def discover_datasets() -> dict[str, Path]:
-    """Discover logical datasets and prefer Parquet when duplicates exist."""
+    """Discover all 23 canonical datasets, preferring Parquet over CSV."""
+    if not DATA_ROOT.exists():
+        raise FileNotFoundError(f"Canonical generated-data root not found: {DATA_ROOT}")
+
     candidates: dict[str, list[Path]] = {}
 
     for path in DATA_ROOT.rglob("*"):
@@ -148,241 +189,601 @@ def discover_datasets() -> dict[str, Path]:
         table_name = path.stem.lower()
         candidates.setdefault(table_name, []).append(path)
 
-    unknown_tables = sorted(set(candidates) - EXPECTED_TABLES)
-    missing_tables = sorted(EXPECTED_TABLES - set(candidates))
+    missing = sorted(EXPECTED_TABLES - set(candidates))
+    unknown = sorted(set(candidates) - EXPECTED_TABLES)
 
-    if unknown_tables:
+    if missing:
         raise RuntimeError(
-            "Generated data contains tables without a PostgreSQL schema mapping: "
-            + ", ".join(unknown_tables)
+            "Missing canonical datasets:\n  " + "\n  ".join(missing)
         )
 
-    if missing_tables:
+    if unknown:
         raise RuntimeError(
-            "Expected BTYT datasets were not found under data/generated: "
-            + ", ".join(missing_tables)
+            "Generated data contains unmapped datasets. "
+            "Update TABLE_SCHEMA_MAP before refreshing PostgreSQL:\n  "
+            + "\n  ".join(unknown)
         )
 
     selected: dict[str, Path] = {}
 
-    for table_name, paths in candidates.items():
-        parquet_files = [path for path in paths if path.suffix.lower() == ".parquet"]
-        csv_files = [path for path in paths if path.suffix.lower() == ".csv"]
+    for table_name in EXPECTED_TABLES:
+        paths = candidates[table_name]
 
-        if parquet_files:
-            selected[table_name] = sorted(parquet_files)[0]
+        parquet = sorted(
+            p for p in paths if p.suffix.lower() == ".parquet"
+        )
+        csv_files = sorted(
+            p for p in paths if p.suffix.lower() == ".csv"
+        )
+
+        if parquet:
+            selected[table_name] = parquet[0]
         elif csv_files:
-            selected[table_name] = sorted(csv_files)[0]
+            selected[table_name] = csv_files[0]
+        else:
+            raise RuntimeError(f"No usable source found for {table_name}")
 
     return selected
 
 
-def source_row_count(path: Path) -> int:
-    """Return the number of source rows without loading the full dataset."""
+def csv_identifier_dtype(path: Path) -> dict[str, str]:
+    """Preserve identifier columns exactly as text when reading CSV files.
+
+    This is critical for IDs such as branch_id='001' and
+    parent_branch_id='001'; allowing pandas to infer numeric dtype would turn
+    them into 1 / 1.0 and break PostgreSQL foreign keys.
+    """
+    header = pd.read_csv(path, nrows=0, encoding="utf-8")
+    normalized = [normalize_column_name(c) for c in header.columns]
+
+    return {
+        original: "string"
+        for original, normalized_name in zip(header.columns, normalized)
+        if normalized_name == "id" or normalized_name.endswith("_id")
+    }
+
+
+def source_columns(path: Path) -> list[str]:
     if path.suffix.lower() == ".parquet":
-        parquet_file = pq.ParquetFile(path)
-        return parquet_file.metadata.num_rows
+        return [
+            normalize_column_name(name)
+            for name in pq.ParquetFile(path).schema.names
+        ]
+
+    header = pd.read_csv(path, nrows=0, encoding="utf-8")
+    return [normalize_column_name(c) for c in header.columns]
+
+
+def source_row_count(path: Path) -> int:
+    if path.suffix.lower() == ".parquet":
+        return int(pq.ParquetFile(path).metadata.num_rows)
 
     total = 0
-    for chunk in pd.read_csv(path, chunksize=CSV_CHUNK_SIZE, encoding="utf-8"):
-        total += len(chunk)
+    for frame in pd.read_csv(
+        path,
+        chunksize=CSV_BATCH_SIZE,
+        encoding="utf-8",
+        low_memory=False,
+    ):
+        total += len(frame)
     return total
 
 
 def iter_source_batches(path: Path) -> Iterator[pd.DataFrame]:
-    """Yield normalized DataFrames from CSV or Parquet sources."""
     if path.suffix.lower() == ".parquet":
         parquet_file = pq.ParquetFile(path)
-        for batch in parquet_file.iter_batches(batch_size=PARQUET_BATCH_SIZE):
-            yield normalize_dataframe(batch.to_pandas())
+
+        for batch in parquet_file.iter_batches(
+            batch_size=PARQUET_BATCH_SIZE
+        ):
+            frame = batch.to_pandas()
+            frame.columns = [
+                normalize_column_name(c) for c in frame.columns
+            ]
+            yield frame
+
         return
 
-    columns = read_csv_header(path)
-    id_columns = identifier_columns(columns)
-    dtype = {column: "string" for column in id_columns}
+    dtype = csv_identifier_dtype(path)
 
-    for chunk in pd.read_csv(
+    for frame in pd.read_csv(
         path,
-        chunksize=CSV_CHUNK_SIZE,
+        chunksize=CSV_BATCH_SIZE,
         encoding="utf-8",
+        low_memory=False,
         dtype=dtype or None,
     ):
-        yield normalize_dataframe(chunk)
+        frame.columns = [
+            normalize_column_name(c) for c in frame.columns
+        ]
+        yield frame
 
 
-def build_engine() -> Engine:
-    """Create a SQLAlchemy PostgreSQL engine."""
+# =============================================================================
+# DATABASE METADATA
+# =============================================================================
+
+def connect():
     global DB_PASSWORD
 
     if not DB_PASSWORD:
-        DB_PASSWORD = getpass.getpass(f"PostgreSQL password for user '{DB_USER}': ")
+        DB_PASSWORD = getpass.getpass(
+            f"PostgreSQL password for user '{DB_USER}': "
+        )
 
-    url = URL.create(
-        drivername="postgresql+psycopg",
-        username=DB_USER,
-        password=DB_PASSWORD,
+    return psycopg.connect(
         host=DB_HOST,
         port=DB_PORT,
-        database=DB_NAME,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
     )
 
-    return create_engine(url, future=True)
+
+def target_metadata(cursor, schema_name: str, table_name: str):
+    cursor.execute(
+        """
+        SELECT
+            column_name,
+            data_type,
+            udt_name,
+            ordinal_position
+        FROM information_schema.columns
+        WHERE table_schema = %s
+          AND table_name = %s
+        ORDER BY ordinal_position;
+        """,
+        (schema_name, table_name),
+    )
+
+    rows = cursor.fetchall()
+
+    if not rows:
+        raise RuntimeError(
+            f"Target table not found: {schema_name}.{table_name}"
+        )
+
+    return [
+        {
+            "name": row[0],
+            "data_type": row[1],
+            "udt_name": row[2],
+            "position": row[3],
+        }
+        for row in rows
+    ]
 
 
-def ensure_schema(engine: Engine, schema_name: str) -> None:
-    """Create a PostgreSQL schema if it does not already exist."""
-    sql = f"CREATE SCHEMA IF NOT EXISTS {quote_identifier(schema_name)}"
-    with engine.begin() as connection:
-        connection.execute(text(sql))
+def table_row_count(cursor, schema_name: str, table_name: str) -> int:
+    statement = sql.SQL("SELECT COUNT(*) FROM {}.{}").format(
+        sql.Identifier(schema_name),
+        sql.Identifier(table_name),
+    )
+    cursor.execute(statement)
+    return int(cursor.fetchone()[0])
 
 
-def table_exists(engine: Engine, schema_name: str, table_name: str) -> bool:
-    """Return whether the target table exists."""
-    inspector = inspect(engine)
-    return inspector.has_table(table_name, schema=schema_name)
+# =============================================================================
+# TYPE PREPARATION
+# =============================================================================
+
+INTEGER_TYPES = {"smallint", "integer", "bigint"}
+NUMERIC_TYPES = {
+    "numeric",
+    "decimal",
+    "real",
+    "double precision",
+}
+DATE_TYPES = {"date"}
+TIMESTAMP_TYPES = {
+    "timestamp without time zone",
+    "timestamp with time zone",
+}
 
 
-def table_row_count(engine: Engine, schema_name: str, table_name: str) -> int:
-    """Return the number of rows in a PostgreSQL table."""
-    schema = quote_identifier(schema_name)
-    table = quote_identifier(table_name)
-    sql = text(f"SELECT COUNT(*) FROM {schema}.{table}")
+def prepare_frame(
+    frame: pd.DataFrame,
+    metadata: list[dict],
+) -> pd.DataFrame:
+    """Prepare a source batch for COPY into the existing typed table."""
+    result = frame.copy()
 
-    with engine.connect() as connection:
-        return int(connection.execute(sql).scalar_one())
+    target_columns = [item["name"] for item in metadata]
+    result = result[target_columns]
+
+    for item in metadata:
+        column = item["name"]
+        data_type = item["data_type"]
+
+        if data_type in INTEGER_TYPES:
+            result[column] = pd.to_numeric(
+                result[column],
+                errors="coerce",
+            ).astype("Int64")
+
+        elif data_type in NUMERIC_TYPES:
+            result[column] = pd.to_numeric(
+                result[column],
+                errors="coerce",
+            )
+
+        elif data_type in DATE_TYPES:
+            parsed = pd.to_datetime(
+                result[column],
+                errors="coerce",
+            )
+            result[column] = parsed.dt.strftime("%Y-%m-%d")
+            result.loc[parsed.isna(), column] = pd.NA
+
+        elif data_type in TIMESTAMP_TYPES:
+            parsed = pd.to_datetime(
+                result[column],
+                errors="coerce",
+            )
+            result[column] = parsed.dt.strftime("%Y-%m-%d %H:%M:%S")
+            result.loc[parsed.isna(), column] = pd.NA
+
+    return result
 
 
-def truncate_table(engine: Engine, schema_name: str, table_name: str) -> None:
-    """Remove all rows from an incomplete target table."""
-    schema = quote_identifier(schema_name)
-    table = quote_identifier(table_name)
-    sql = text(f"TRUNCATE TABLE {schema}.{table}")
+# =============================================================================
+# COPY
+# =============================================================================
 
-    with engine.begin() as connection:
-        connection.execute(sql)
-
-
-def load_dataset(
-    engine: Engine,
-    source_path: Path,
+def copy_frame(
+    cursor,
     schema_name: str,
     table_name: str,
-    expected_rows: int,
-) -> str:
-    """Load one dataset and return LOAD, SKIP or FAIL status."""
-    ensure_schema(engine, schema_name)
+    frame: pd.DataFrame,
+    column_names: list[str],
+) -> None:
+    buffer = io.StringIO()
 
-    exists = table_exists(engine, schema_name, table_name)
-
-    if exists:
-        current_rows = table_row_count(engine, schema_name, table_name)
-
-        if current_rows == expected_rows:
-            print(
-                f"[SKIP] {schema_name}.{table_name}: "
-                f"already contains {current_rows:,} rows"
-            )
-            return "SKIP"
-
-        if current_rows > 0:
-            print(
-                f"[RESET] {schema_name}.{table_name}: "
-                f"database has {current_rows:,} rows, source has {expected_rows:,}"
-            )
-            truncate_table(engine, schema_name, table_name)
-
-    inserted_rows = 0
-
-    for frame in iter_source_batches(source_path):
-        frame.to_sql(
-            table_name,
-            engine,
-            schema=schema_name,
-            if_exists="append",
-            index=False,
-            chunksize=SQL_CHUNK_SIZE,
-        )
-        inserted_rows += len(frame)
-
-        if expected_rows >= 1_000_000:
-            print(
-                f"       {schema_name}.{table_name}: "
-                f"{inserted_rows:,}/{expected_rows:,} rows"
-            )
-
-    actual_rows = table_row_count(engine, schema_name, table_name)
-
-    if actual_rows != expected_rows:
-        raise RuntimeError(
-            f"Row-count validation failed for {schema_name}.{table_name}: "
-            f"source={expected_rows:,}, PostgreSQL={actual_rows:,}"
-        )
-
-    print(f"[ OK ] {schema_name}.{table_name}: {actual_rows:,} rows")
-    return "LOAD"
-
-
-# -----------------------------------------------------------------------------
-# Main
-# -----------------------------------------------------------------------------
-
-
-def main() -> None:
-    """Discover and load all canonical BTYT datasets."""
-    if not DATA_ROOT.exists():
-        raise FileNotFoundError(f"Generated data directory not found: {DATA_ROOT}")
-
-    datasets = discover_datasets()
-    engine = build_engine()
-
-    print(f"Connected to PostgreSQL: {DB_HOST}:{DB_PORT}/{DB_NAME}")
-    print(f"Generated data root: {DATA_ROOT}")
-    print(f"Discovered datasets: {len(datasets)}")
-    print()
-
-    results = {"LOAD": 0, "SKIP": 0, "FAIL": 0}
-
-    ordered_tables = sorted(
-        datasets,
-        key=lambda table: (TABLE_SCHEMA_MAP[table], table),
+    frame.to_csv(
+        buffer,
+        index=False,
+        header=False,
+        na_rep="\\N",
+        quoting=csv.QUOTE_MINIMAL,
+        lineterminator="\n",
     )
 
-    for table_name in ordered_tables:
-        source_path = datasets[table_name]
-        schema_name = TABLE_SCHEMA_MAP[table_name]
-        expected_rows = source_row_count(source_path)
+    buffer.seek(0)
 
-        print(
-            f"[LOAD] {schema_name}.{table_name} "
-            f"<- {source_path.name} ({expected_rows:,} rows)"
+    copy_statement = sql.SQL(
+        "COPY {}.{} ({}) FROM STDIN "
+        "WITH (FORMAT CSV, NULL '\\N')"
+    ).format(
+        sql.Identifier(schema_name),
+        sql.Identifier(table_name),
+        sql.SQL(", ").join(
+            sql.Identifier(column) for column in column_names
+        ),
+    )
+
+    with cursor.copy(copy_statement) as copy:
+        while True:
+            chunk = buffer.read(1024 * 1024)
+            if not chunk:
+                break
+            copy.write(chunk)
+
+
+# =============================================================================
+# PREFLIGHT
+# =============================================================================
+
+def preflight(cursor, datasets: dict[str, Path]):
+    print("\n" + "=" * 88)
+    print("PREFLIGHT")
+    print("=" * 88)
+
+    metadata_by_table: dict[str, list[dict]] = {}
+    source_rows: dict[str, int] = {}
+
+    for table_name in LOAD_ORDER:
+        schema_name = TABLE_SCHEMA_MAP[table_name]
+        path = datasets[table_name]
+
+        metadata = target_metadata(
+            cursor,
+            schema_name,
+            table_name,
+        )
+        metadata_by_table[table_name] = metadata
+
+        target_columns = [item["name"] for item in metadata]
+        src_columns = source_columns(path)
+
+        missing_in_source = sorted(
+            set(target_columns) - set(src_columns)
+        )
+        extra_in_source = sorted(
+            set(src_columns) - set(target_columns)
         )
 
-        try:
-            status = load_dataset(
-                engine=engine,
-                source_path=source_path,
-                schema_name=schema_name,
-                table_name=table_name,
-                expected_rows=expected_rows,
+        if missing_in_source or extra_in_source:
+            raise RuntimeError(
+                f"Column mismatch in {schema_name}.{table_name}\n"
+                f"Missing in source: {missing_in_source}\n"
+                f"Extra in source  : {extra_in_source}"
             )
-            results[status] += 1
-        except Exception as exc:
-            results["FAIL"] += 1
-            print(f"[FAIL] {schema_name}.{table_name}: {exc}")
 
-        print()
+        rows = source_row_count(path)
+        source_rows[table_name] = rows
+        current_rows = table_row_count(
+            cursor,
+            schema_name,
+            table_name,
+        )
 
-    print("=" * 78)
-    print("LOAD SUMMARY")
-    print("=" * 78)
-    print(f"Loaded : {results['LOAD']}")
-    print(f"Skipped: {results['SKIP']}")
-    print(f"Failed : {results['FAIL']}")
+        relative_path = path.relative_to(REPO_ROOT)
 
-    if results["FAIL"]:
-        print("\nSome datasets failed. Review the errors before adding constraints.")
-    else:
-        print("\nAll BTYT datasets are loaded and row-count validated.")
+        print(
+            f"[PASS] {schema_name}.{table_name:<30} "
+            f"DB={current_rows:>11,}  SOURCE={rows:>11,}"
+        )
+        print(f"       <- {relative_path}")
+
+    print("\nPreflight complete: 23/23 tables compatible.")
+
+    return metadata_by_table, source_rows
+
+
+# =============================================================================
+# FULL REFRESH
+# =============================================================================
+
+def truncate_all(cursor):
+    targets = [
+        sql.SQL("{}.{}").format(
+            sql.Identifier(TABLE_SCHEMA_MAP[table_name]),
+            sql.Identifier(table_name),
+        )
+        for table_name in LOAD_ORDER
+    ]
+
+    statement = sql.SQL("TRUNCATE TABLE {}").format(
+        sql.SQL(", ").join(targets)
+    )
+
+    cursor.execute(statement)
+
+
+def load_all(
+    cursor,
+    datasets: dict[str, Path],
+    metadata_by_table: dict[str, list[dict]],
+    source_rows: dict[str, int],
+):
+    for table_name in LOAD_ORDER:
+        schema_name = TABLE_SCHEMA_MAP[table_name]
+        path = datasets[table_name]
+        metadata = metadata_by_table[table_name]
+
+        target_columns = [item["name"] for item in metadata]
+        expected_rows = source_rows[table_name]
+
+        print(
+            f"\n[LOAD] {schema_name}.{table_name} "
+            f"({expected_rows:,} rows)"
+        )
+
+        inserted = 0
+
+        for raw_frame in iter_source_batches(path):
+            prepared = prepare_frame(
+                raw_frame,
+                metadata,
+            )
+
+            copy_frame(
+                cursor,
+                schema_name,
+                table_name,
+                prepared,
+                target_columns,
+            )
+
+            inserted += len(prepared)
+
+            if expected_rows >= 1_000_000:
+                print(
+                    f"       {inserted:,}/{expected_rows:,}"
+                )
+
+        actual_rows = table_row_count(
+            cursor,
+            schema_name,
+            table_name,
+        )
+
+        if actual_rows != expected_rows:
+            raise RuntimeError(
+                f"Row-count mismatch for "
+                f"{schema_name}.{table_name}: "
+                f"source={expected_rows:,}, "
+                f"database={actual_rows:,}"
+            )
+
+        print(
+            f"[ OK ] {schema_name}.{table_name}: "
+            f"{actual_rows:,} rows"
+        )
+
+
+# =============================================================================
+# POST-LOAD CHECKS
+# =============================================================================
+
+def verify_all_counts(
+    cursor,
+    source_rows: dict[str, int],
+):
+    print("\n" + "=" * 88)
+    print("POST-LOAD ROW-COUNT VALIDATION")
+    print("=" * 88)
+
+    for table_name in LOAD_ORDER:
+        schema_name = TABLE_SCHEMA_MAP[table_name]
+        expected = source_rows[table_name]
+        actual = table_row_count(
+            cursor,
+            schema_name,
+            table_name,
+        )
+
+        if actual != expected:
+            raise RuntimeError(
+                f"Final validation failed for "
+                f"{schema_name}.{table_name}: "
+                f"source={expected:,}, database={actual:,}"
+            )
+
+        print(
+            f"[PASS] {schema_name}.{table_name:<30} "
+            f"{actual:>11,}"
+        )
+
+
+def analyze_tables(cursor):
+    print("\nUpdating PostgreSQL planner statistics...")
+
+    for table_name in LOAD_ORDER:
+        schema_name = TABLE_SCHEMA_MAP[table_name]
+
+        statement = sql.SQL("ANALYZE {}.{}").format(
+            sql.Identifier(schema_name),
+            sql.Identifier(table_name),
+        )
+
+        cursor.execute(statement)
+
+    print("ANALYZE: PASS")
+
+
+def refresh_analytics_materialized_views(connection):
+    """Refresh analytics materialized views if the project currently has any."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT schemaname, matviewname
+            FROM pg_matviews
+            WHERE schemaname = 'analytics'
+            ORDER BY matviewname;
+            """
+        )
+        materialized_views = cursor.fetchall()
+
+    if not materialized_views:
+        print("\nAnalytics materialized views: none found.")
+        return
+
+    print("\nRefreshing analytics materialized views...")
+
+    for schema_name, view_name in materialized_views:
+        with connection.cursor() as cursor:
+            statement = sql.SQL(
+                "REFRESH MATERIALIZED VIEW {}.{}"
+            ).format(
+                sql.Identifier(schema_name),
+                sql.Identifier(view_name),
+            )
+            cursor.execute(statement)
+
+        connection.commit()
+        print(
+            f"[ OK ] {schema_name}.{view_name}"
+        )
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
+def main():
+    print("=" * 88)
+    print("BTYT POSTGRESQL — CANONICAL FULL REFRESH")
+    print("=" * 88)
+    print(f"Database : {DB_NAME}")
+    print(f"Server   : {DB_HOST}:{DB_PORT}")
+    print(f"User     : {DB_USER}")
+    print(f"Source   : {DATA_ROOT}")
+    print("Mode     : TRUNCATE + COPY into the EXISTING 23-table relational model")
+    print()
+    print("This preserves schemas, relationships, constraints, indexes and views.")
+
+    datasets = discover_datasets()
+
+    with connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database();")
+            current_database = cursor.fetchone()[0]
+
+            if current_database != DB_NAME:
+                raise RuntimeError(
+                    f"Connected to {current_database!r}; "
+                    f"expected {DB_NAME!r}."
+                )
+
+            metadata_by_table, source_rows = preflight(
+                cursor,
+                datasets,
+            )
+
+        connection.rollback()
+
+        confirmation = input(
+            "\nType BTYT to replace the data in all 23 physical tables: "
+        ).strip()
+
+        if confirmation != "BTYT":
+            print("Refresh cancelled. PostgreSQL was not modified.")
+            return
+
+        try:
+            with connection.transaction():
+                with connection.cursor() as cursor:
+                    print(
+                        "\nTruncating all 23 physical tables "
+                        "in one relationally safe statement..."
+                    )
+                    truncate_all(cursor)
+                    print("TRUNCATE: PASS")
+
+                    load_all(
+                        cursor,
+                        datasets,
+                        metadata_by_table,
+                        source_rows,
+                    )
+
+                    verify_all_counts(
+                        cursor,
+                        source_rows,
+                    )
+
+                    analyze_tables(cursor)
+
+            print("\nBase-table transaction committed successfully.")
+
+        except Exception:
+            print(
+                "\nERROR: full refresh failed. "
+                "The transaction was rolled back."
+            )
+            raise
+
+        # Normal views update automatically.
+        # Materialized views, when present, need an explicit refresh.
+        refresh_analytics_materialized_views(connection)
+
+    print("\n" + "=" * 88)
+    print("BTYT FULL REFRESH: PASS")
+    print("=" * 88)
+    print("23/23 physical tables reloaded from canonical sources.")
+    print("Existing PostgreSQL relational structure was preserved.")
+    print("Normal SQL views reflect the new data automatically.")
 
 
 if __name__ == "__main__":

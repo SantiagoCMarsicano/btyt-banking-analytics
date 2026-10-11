@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-BTYT — Loan Monthly Snapshot Generator — Centralized World Architecture
+BTYT — Loan Monthly Snapshot Generator — V4.2 Risk Recalibrated
 ======================================
 
 Generates:
@@ -284,6 +284,41 @@ PRODUCT_PAYMENT_RISK = {
     "P017": 0.12,
     "P018": 0.05,
 }
+
+# =============================================================================
+# Monthly repayment-risk calibration — V4.2
+# =============================================================================
+# The previous calibration produced too many ordinary miss/partial months,
+# causing delinquency to accumulate far beyond what the terminal lifecycle
+# constraints alone could explain. These parameters preserve the same causal
+# mechanics but lower routine payment friction and make cures more effective.
+#
+# These are model parameters, not hard delinquency targets.
+
+PAYMENT_RISK_INTERCEPT = -5.85
+PAYMENT_BURDEN_BETA = 1.30
+PAYMENT_CAPACITY_BETA = 0.90
+PAYMENT_RELATIONSHIP_BETA = 0.30
+PAYMENT_MACRO_BETA = 0.45
+PAYMENT_LIQUIDITY_BETA = 0.38
+PAYMENT_OPERATIONAL_BETA = 0.12
+PAYMENT_LOCAL_SHOCK_BETA = 0.42
+PAYMENT_ARREARS_BETA = 0.14
+
+MISS_PROB_MIN = 0.001
+MISS_PROB_MAX = 0.20
+
+PARTIAL_PROB_SCALE = 0.30
+PARTIAL_PROB_MIN = 0.003
+PARTIAL_PROB_MAX = 0.16
+
+CURE_INTERCEPT = 0.10
+CURE_CAPACITY_BETA = 1.20
+CURE_RELATIONSHIP_BETA = 0.50
+CURE_BURDEN_BETA = 0.45
+CURE_LIQUIDITY_BETA = 0.20
+CURE_OPERATIONAL_BETA = 0.08
+CURE_LOCAL_SHOCK_BETA = 0.18
 
 
 # =============================================================================
@@ -1531,23 +1566,29 @@ class SnapshotGenerator:
         )
 
         risk = (
-            -4.55
-            + 1.75 * math.log1p(max(burden, 0.0) * 5.0)
-            + 1.00 * (0.5 - capacity)
-            - 0.30 * (relationship - 0.5)
-            + 0.55 * macro
-            + 0.50 * liquidity_shock
-            + 0.18 * operational_pressure
-            + 0.48 * local_shock_effect
-            + 0.22 * arrears_pressure
+            PAYMENT_RISK_INTERCEPT
+            + PAYMENT_BURDEN_BETA * math.log1p(max(burden, 0.0) * 5.0)
+            + PAYMENT_CAPACITY_BETA * (0.5 - capacity)
+            - PAYMENT_RELATIONSHIP_BETA * (relationship - 0.5)
+            + PAYMENT_MACRO_BETA * macro
+            + PAYMENT_LIQUIDITY_BETA * liquidity_shock
+            + PAYMENT_OPERATIONAL_BETA * operational_pressure
+            + PAYMENT_LOCAL_SHOCK_BETA * local_shock_effect
+            + PAYMENT_ARREARS_BETA * arrears_pressure
             + branch_effect
             + sector_effect
             + product_effect
         )
 
-        p_miss = float(np.clip(sigmoid(risk), 0.002, 0.30))
+        p_miss = float(
+            np.clip(sigmoid(risk), MISS_PROB_MIN, MISS_PROB_MAX)
+        )
         p_partial = float(
-            np.clip(0.52 * sigmoid(risk + 0.90), 0.006, 0.28)
+            np.clip(
+                PARTIAL_PROB_SCALE * sigmoid(risk + 0.90),
+                PARTIAL_PROB_MIN,
+                PARTIAL_PROB_MAX,
+            )
         )
 
         u = rng.random()
@@ -1558,7 +1599,7 @@ class SnapshotGenerator:
             return scheduled_payment * rng.uniform(0.05, 0.25), "partial"
 
         if u < p_miss + p_partial:
-            return scheduled_payment * rng.uniform(0.45, 0.92), "partial"
+            return scheduled_payment * rng.uniform(0.60, 0.96), "partial"
 
         # Performing month. If arrears exist, some borrowers cure partially or
         # fully rather than merely paying the current installment.
@@ -1568,19 +1609,19 @@ class SnapshotGenerator:
         if arrears_before_current > EPS:
             cure_prob = float(np.clip(
                 sigmoid(
-                    -0.30
-                    + 1.15 * capacity
-                    + 0.45 * relationship
-                    - 0.55 * max(burden - 0.25, 0.0)
-                    - 0.25 * liquidity_shock
-                    - 0.10 * operational_pressure
-                    - 0.22 * local_shock_effect
+                    CURE_INTERCEPT
+                    + CURE_CAPACITY_BETA * capacity
+                    + CURE_RELATIONSHIP_BETA * relationship
+                    - CURE_BURDEN_BETA * max(burden - 0.25, 0.0)
+                    - CURE_LIQUIDITY_BETA * liquidity_shock
+                    - CURE_OPERATIONAL_BETA * operational_pressure
+                    - CURE_LOCAL_SHOCK_BETA * local_shock_effect
                 ),
-                0.18,
-                0.80,
+                0.25,
+                0.90,
             ))
             if rng.random() < cure_prob:
-                cure_fraction = rng.uniform(0.35, 1.00)
+                cure_fraction = rng.uniform(0.50, 1.00)
                 payment += arrears_before_current * cure_fraction
                 behavior = "cure_payment"
 
@@ -2155,7 +2196,7 @@ def print_audit(
 ):
     print()
     print("=" * 80)
-    print("BTYT LOAN MONTHLY SNAPSHOT AUDIT — V4.1.1 CLEAN TERMINAL LIFECYCLE")
+    print("BTYT LOAN MONTHLY SNAPSHOT AUDIT — V4.2 RISK RECALIBRATED")
     print("=" * 80)
 
     expected_detail_loans = 0

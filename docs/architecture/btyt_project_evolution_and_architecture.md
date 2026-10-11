@@ -1,405 +1,207 @@
-BTYT Banking Analytics --- Project Evolution and Technical Architecture
+# BTYT Banking Analytics — Project Evolution and Technical Architecture
 
-Project: Banco de Treinta y Tres (BTYT) Banking Analytics
-Document type: Project evolution, architecture decisions, and
-technical roadmap
-Status: Active architecture reference
-Current phase: Canonical world generation and validation
-Last updated: 2026-09-07
+**Project:** Banco de Treinta y Tres (BTYT) Banking Analytics  
+**Document type:** Architecture history, current state and roadmap  
+**Status:** Active architecture reference  
+**Current phase:** Part I — Power BI implementation and analytical delivery  
+**Last updated:** 2026-10-11
 
-1. Purpose of this document
+---
 
-This document records the technical evolution of the BTYT Banking
-Analytics project from its original conception to its current
-architecture and planned final state.
+## 1. Purpose
 
-It is intentionally broader than a description of the current repository
-structure. BTYT has evolved progressively: the first objective was to
-construct a functional and internally coherent synthetic banking
-universe; later development introduced richer stochastic behavior,
-cross-system consistency, data-quality degradation, auditing, and
-increasingly demanding execution volumes. Those stages exposed
-architectural limitations that now motivate a controlled refactor toward
-a reproducible, scalable, auditable data-generation pipeline.
+BTYT began as a synthetic-data portfolio project and evolved into a reproducible banking analytics platform.
 
-The document therefore answers four questions:
+This document records:
 
-Where did BTYT start?
+- why the architecture changed;
+- what is implemented today;
+- which historical decisions are superseded;
+- how the current Part I analytical stack fits together;
+- what remains before Part I is portfolio-ready;
+- how Part II will reuse the same banking universe.
 
-What has already been built and learned?
+It is an architecture reference, not a daily progress log.
 
-Why is the current architectural refactor necessary?
+---
 
-What is the target architecture for Part I, Part II, and the final
-local MLOps layer?
+## 2. Project vision
 
-This document should be treated as a governing architectural reference
-during the refactor.
+BTYT — Banco de Treinta y Tres — is a fictional Uruguayan commercial bank used to demonstrate an integrated workflow across:
 
-2. Project vision
+- synthetic data generation;
+- banking/economic modeling;
+- data engineering;
+- PostgreSQL;
+- SQL analytics;
+- business intelligence;
+- statistics;
+- later credit-risk machine learning.
 
-BTYT --- Banco de Treinta y Tres --- is a fictional Uruguayan bank
-created as the analytical universe for a portfolio project combining
-banking, economics, data engineering, business intelligence, statistical
-modeling, and machine learning.
+All data is synthetic.
 
-The project is deliberately divided into two principal analytical parts
-and a final technical closure.
+### Part I — Business Intelligence & Performance Management
 
-Part I --- Data, BI, and Banking Performance
+Part I covers:
 
-Part I constructs the synthetic banking universe and develops the
-analytical infrastructure required to study customers, accounts,
-branches, cards, loans, transactions, balances, campaigns, external
-shocks, bank and market dynamics, branch performance, operational data
-quality, and business-performance indicators.
+- customers;
+- accounts and products;
+- deposits;
+- cards;
+- loans and credit quality;
+- transactions and channels;
+- branches;
+- campaigns;
+- market context;
+- bank/branch performance.
 
-Part II --- Credit Scoring and Risk
+### Part II — Credit Risk Analytics & Machine Learning
 
-Part II will reuse the frozen banking universe to develop a credit-risk
-analytical dataset and modeling workflow, including feature engineering,
-credit-risk analysis, model training, comparison, validation, scoring,
-experiment tracking, and model versioning.
+Part II will reuse the same longitudinal BTYT universe for:
 
-Technical closure --- Local, limited MLOps
+- target definition;
+- feature engineering;
+- temporal train/validation/test design;
+- statistical / ML models;
+- evaluation;
+- explainability;
+- scoring.
 
-The final technical layer will demonstrate how the analytical components
-can operate together in a reproducible local environment using
-PostgreSQL, Apache Superset, MLflow, a scoring service, Docker, and
-Docker Compose.
+No unrelated replacement credit dataset is planned.
 
-The objective is not to reproduce enterprise infrastructure.
+---
 
-3. The original BTYT approach
+## 3. How BTYT evolved
 
-BTYT began as a collection of Python generators designed to
-progressively construct the fictional bank.
+The project began as a set of independent Python generators.
 
-The early architecture relied heavily on independent Python scripts, CSV
-outputs, generator-specific configuration, seeds defined inside
-individual scripts, hardcoded paths, development and smoke-test
-switches, directories such as raw/, processed/, and later master/,
-and manual execution order.
+That was useful for exploration, but scale introduced several problems:
 
-This approach was appropriate for exploration because each component
-could be designed, inspected, calibrated, and audited independently.
+- duplicated path logic;
+- scattered seeds;
+- hardcoded observation settings;
+- incompatible historical output folders;
+- ambiguous smoke vs production runs;
+- CSV scalability constraints;
+- weak world identity;
+- difficult cross-system reproducibility.
 
-As the number of systems increased, however, the scripts stopped being
-truly independent. The project had effectively become a dependency graph
-even though the repository architecture did not yet explicitly represent
-one.
+The project therefore moved toward a world-based architecture.
 
-4. Progressive construction of the synthetic banking universe
+---
 
-BTYT was built progressively rather than as one monolithic generator.
+## 4. World architecture
 
-The principal systems developed include:
+Current concepts:
 
-branches and geographic structure;
+```text
+world identity
+    ↓
+world registry
+    ↓
+active-world pointer
+    ↓
+world-relative paths
+    ↓
+generators / audits / outputs
+```
 
-domestic and foreign banks;
+### Registry
 
-bank market dynamics;
+`worlds/registry.json` records persistent world identity.
 
-customers;
+Current canonical registry entry:
 
-accounts;
+```text
+world_name : BTYT
+variant    : 1
+seed       : 3839777825
+path       : worlds/BTYT/01
+status     : FROZEN (registry metadata)
+```
 
-cards;
+### Active-world pointer
 
-loans;
+`config/active_world.json` selects the physical world path used by `scripts/core/paths.py`.
 
-loan lifecycle and monthly snapshots;
+### World configuration
 
-external shocks;
+`config/world_config.json` supplies `load_world()` with:
 
-transactions;
+- world name;
+- seed;
+- customer-population settings;
+- observation dates;
+- execution settings;
+- reliability settings.
 
-account balances;
+These two mechanisms must be synchronized.
 
-campaigns and campaign exposures;
+---
 
-branch performance;
+## 5. Current reproducibility issue
 
-bank performance;
+The project currently contains a split between:
 
-operational data reliability.
+```text
+active_world.json
+    → physical path
 
-This progressive development made it possible to audit each subsystem
-before integrating it with the rest of the world.
+world_config.json
+    → RNG / world settings
+```
 
-5. Evolution of the statistical model
+During the 2026-10-11 branch-performance regeneration, the process loaded BTYT/01 input files but reported seed:
 
-BTYT moved away from simple deterministic assignment toward a world in
-which common conditions influence probabilities while individual
-outcomes remain stochastic.
+```text
+3165889979
+```
 
-BTYT models causes as probabilistic shifts in behavior, not
-deterministic assignments of outcomes. Shared causal conditions may
-influence multiple processes, but downstream realizations use
-independent stochastic streams.
+while the canonical registry identifies BTYT/01 with:
 
-A macroeconomic or geographic shock may simultaneously increase default
-risk, reduce activity, alter branch performance, or affect transaction
-behavior. It does not directly assign a customer to default or force
-another downstream event.
+```text
+3839777825
+```
 
-The project progressively introduced stochastic branch behavior, dynamic
-banking-market shares, longitudinal credit lifecycle information, shared
-external shocks, economically reconciled transaction behavior, and
-probabilistic campaign response.
+This must be resolved before a new canonical manifest/fingerprint is issued.
 
-6. Reproducibility and RNG architecture
+### Consequence
 
-As BTYT grew, reproducibility became increasingly important.
+The current PostgreSQL/Power BI state is internally loaded and operational, but RNG-driven recalibrated outputs must be reverified once configuration identity is synchronized.
 
-Several generators developed dedicated random-number streams so that
-conceptually different stochastic processes would not depend on a single
-undifferentiated sequence.
+This is now a known reproducibility issue rather than an undocumented ambiguity.
 
-The current refactor will centralize world-level seed configuration
-while preserving model-specific streams where they belong.
+---
 
-Internal statistical stream definitions do not necessarily belong in the
-external world configuration. The configuration should specify the
-world; the model code should retain responsibility for how that world is
-generated.
+## 6. Canonical analytical world currently in use
 
-A further requirement introduced for scalable execution is:
+Materialized analytical scale:
 
-Chunk size must not determine the realized synthetic world.
+```text
+customers                    107,253
+accounts                     228,945
+cards                        297,775
+loans                        233,441
+loan-month snapshots       4,109,490
+account-month balances     7,525,724
+transactions              76,799,360
+branches                         37
+observation months               72
+```
 
-Changing a technical parameter such as chunk_size must not silently
-create a statistically different BTYT universe when the world
-configuration and seed are unchanged.
+Observation period:
 
-7. Auditing and stabilization
+```text
+2021-01 → 2026-12
+```
 
-BTYT did not treat successful execution as sufficient evidence of
-correctness.
+---
 
-The project progressively introduced generator-level validations,
-referential-integrity checks, temporal-integrity checks, economic
-validations, Monte Carlo audits, distribution diagnostics, boundary
-analysis, transaction reconciliation, balance reconciliation, and
-cross-system validation.
+## 7. Synthetic-data generation architecture
 
-The integrated cross-system audit eventually verified core banking,
-transactions, credit lifecycle, balances, branch performance, bank
-performance, external shocks, campaign behavior, referential integrity,
-temporal integrity, and reproducibility contracts.
+The canonical orchestration remains organized around 15 stages:
 
-The clean integrated world reached a full cross-system validation PASS.
-
-Validations must never be weakened merely to force a PASS.
-
-8. Operational Data Reliability Layer
-
-After establishing a coherent synthetic truth, BTYT introduced a second
-conceptual layer: the operational representation of that truth.
-
-BTYT therefore distinguishes between synthetic truth and
-operational representation.
-
-Operational incidents change the probability of data-quality
-degradation; they do not deterministically assign errors.
-
-The reliability layer supports clean and imperfect modes, with
-intensity levels such as light, realistic, and stress. The
-canonical operational target is imperfect / realistic.
-
-Incident families include branch-system degradation, digital telemetry
-degradation, legacy-system migration, manual backfill, CRM ingestion
-degradation, and positive reliability upgrades.
-
-Core economic and relational truths remain protected, including
-transaction identity, account ownership, transaction amount and
-direction, status, balances, loan principal, and core customer/account
-relationships.
-
-9. Why the original architecture became insufficient
-
-The original architecture successfully produced a complex synthetic
-banking universe, but increasing scale exposed structural problems:
-
-distributed customer counts and observation periods;
-
-fragmented seeds;
-
-hardcoded and historical paths;
-
-historical raw/, processed/, and master/ concepts;
-
-mixed generated, interim, audit, smoke, and operational outputs;
-
-CSV scalability limits;
-
-limited support for resumable long-running executions;
-
-accumulation of test datasets.
-
-These limitations motivate the current architectural refactor.
-
-10. Architecture consolidation completed
-
-The architectural refactor that was previously planned is now substantially
-implemented.
-
-The objective remained unchanged throughout the migration:
-
-Optimize and reorganize without unnecessarily changing statistical
-behavior.
-
-The project now has a centralized world configuration, typed world loading,
-shared path infrastructure, deterministic world-level identity, active-world
-routing, a dependency-aware orchestrator, per-world storage, cross-system
-auditing, manifest generation, and a graphical World Builder.
-
-The refactor therefore moved from a planned architecture to an operational
-generation platform.
-
-11. Canonical world configuration
-
-BTYT uses:
-
-config/world_config.json
-
-as the canonical engine configuration.
-
-The governing principle remains:
-
-JSON says what world we want. Python knows how to build it.
-
-The configuration contains nested world-level sections for:
-
-world name and seed;
-
-customer population or population range;
-
-observation period;
-
-execution mode and smoke-test population;
-
-operational data-reliability mode and intensity.
-
-Internal equations, calibrated distributions, AR dynamics, generator-specific
-parameters, and specialized RNG streams remain in Python.
-
-The canonical schema is validated by scripts/core/config.py and loaded into a
-typed WorldConfig object by scripts/core/world.py.
-
-12. World identity and deterministic seeds
-
-World identity is now explicit.
-
-A visible world name and variant define a deterministic seed through a stable
-SHA-256-based derivation rather than Python's process-dependent hash().
-
-Conceptually:
-
-world name + variant
-        ↓
-normalized identity
-        ↓
-SHA-256
-        ↓
-32-bit world seed
-
-This provides two important guarantees:
-
-the same world identity reproduces the same seed;
-
-a different identity creates a genuinely different stochastic universe.
-
-The seed is an implementation detail and does not need to dominate the normal
-World Builder interface.
-
-13. Active-world architecture
-
-BTYT now distinguishes between the active engine configuration and persistent
-world definitions.
-
-The active pointer is:
-
-config/active_world.json
-
-Persistent worlds live under:
-
-worlds/
-├── registry.json
-└── <world-slug>/
-    └── <variant>/
-        ├── world.json
-        ├── metadata.json
-        ├── data/
-        │   ├── interim/
-        │   ├── generated/
-        │   └── operational/
-        ├── database/
-        ├── audit/
-        └── manifests/
-
-scripts/core/paths.py resolves the active world and routes generation into
-that world's own directories.
-
-This prevents one synthetic universe from silently overwriting another.
-
-Legacy global data paths remain only for compatibility during repository
-cleanup.
-
-14. Repository architecture
-
-The current target repository structure is:
-
-btyt-banking-analytics/
-├── config/
-│   ├── world_config.json
-│   └── active_world.json
-├── worlds/
-│   ├── registry.json
-│   └── <world>/
-│       └── <variant>/
-│           ├── world.json
-│           ├── metadata.json
-│           ├── data/
-│           │   ├── interim/
-│           │   ├── generated/
-│           │   └── operational/
-│           ├── database/
-│           ├── audit/
-│           └── manifests/
-├── world_builder/
-│   ├── __init__.py
-│   └── app.py
-├── scripts/
-│   ├── core/
-│   ├── generators/
-│   ├── audits/
-│   ├── diagnostics/
-│   ├── validation/
-│   ├── generate_btyt.py
-│   └── generate_manifest.py
-├── docs/
-│   ├── data_dictionary/
-│   ├── architecture/
-│   └── methodology/
-├── data/                 # legacy tracked dataset during cleanup
-├── database/             # legacy/global database area during migration
-├── README.md
-└── .gitignore
-
-Generated world material is reproducible and is excluded from Git where
-appropriate. World definitions and metadata can remain versioned so that a
-world can be identified and reconstructed without committing very large
-datasets.
-
-15. Canonical generation pipeline
-
-The generation order is now explicit and implemented in
-scripts/generate_btyt.py.
-
-The canonical orchestrator contains 15 stages:
-
+```text
 01 macro
 02 banks
 03 financial_institutions
@@ -415,765 +217,374 @@ The canonical orchestrator contains 15 stages:
 13 branch_performance
 14 operational_exports
 15 cross_system_audit
+```
 
-The orchestrator supports architecture checks, stage listing, bounded stage
-ranges, single-stage execution, skipped stages, fail-fast execution, optional
-continuation after failure, and run records.
+The system uses world-relative output paths and generator-specific RNG namespaces.
 
-Each stage executes in a fresh subprocess.
+The intended principle remains:
 
-16. Orchestrator execution contract
+> **Technical chunk size must not define the synthetic world.**
 
-The orchestrator is the canonical command-line execution layer.
+---
 
-It supports workflows such as:
+## 8. Current credit-risk generators
 
-check architecture
-        ↓
-select stage range
-        ↓
-execute generators
-        ↓
-stream output
-        ↓
-record PASS / FAIL
-        ↓
-cross-system audit
-        ↓
-manifest
+After the October 2026 Power BI diagnostic:
 
-Production execution requires active-world routing so that outputs cannot
-silently fall back to an unrelated global dataset.
+```text
+generate_loans.py
+    V5.2.0 FINAL RISK CALIBRATION
 
-Run records are stored per world.
+generate_loan_monthly_snapshot.py
+    V4.2 RISK RECALIBRATED
+```
 
-17. World Builder
+The recalibration corrected excessive ordinary payment failure / delinquency accumulation without introducing a fixed default or DPD target.
 
-BTYT now includes a desktop graphical control layer under world_builder/.
+See:
 
-The World Builder does not replace the statistical engine. It configures and
-launches it.
+```text
+docs/analytics/credit_risk_calibration.md
+```
 
-Its responsibilities include:
+---
 
-world name and variant selection;
+## 9. Current performance engine
 
-deterministic world identity;
+Current engine:
 
-fixed or ranged customer population;
+```text
+generate_branch_performance.py
+V3.2.0
+```
 
-observation-period configuration;
+The 2026-10-11 regeneration produced:
 
-operational reliability settings;
+```text
+branch-month rows : 2,664
+bank-month rows   : 72
+branch→bank reconciliation : PASS
+validation                 : PASS
+```
 
-pipeline start/end selection;
+Business-result diagnostics are suppressed by default so technical generation does not spoil analytical findings before BI exploration.
 
-world registration and activation;
+---
 
-architecture validation;
+## 10. PostgreSQL relational architecture
 
-orchestrator launch;
+Final physical architecture:
 
-live subprocess output;
+```text
+core          4 tables
+banking       5 tables
+marketing     3 tables
+reference     2 tables
+market        5 tables
+macro         2 tables
+performance   2 tables
+----------------------
+total        23 tables
+```
 
-per-stage status;
+The relational model contains the established PK/FK, semantic-type, precision and constraint layer documented under:
 
-per-stage progress;
+```text
+docs/dbprocess/
+```
 
-overall pipeline progress;
+---
 
-pause, resume, and stop controls;
+## 11. PostgreSQL full-refresh architecture
 
-optional manifest and final verification;
+The current `scripts/database/load_postgresql.py` is no longer the historical five-schema ingestion loader.
 
-opening the active world folder.
+It now refreshes the existing final 23-table model:
 
-The governing separation is:
-
-World Builder configures the laws and identity of the universe; the
-generators realize its history.
-
-The Builder must not invent stage progress. Exact percentages are derived from
-generator telemetry when generators report completed/total units.
-
-18. Process control and progress observability
-
-Long-running generation requires execution visibility.
-
-The World Builder supports:
-
-PASS indicators for completed stages;
-
-per-stage progress bars;
-
-a global progress bar;
-
-live console output;
-
-recursive process suspension and resumption where supported;
-
-controlled process-tree termination.
-
-Generators that emit progress such as:
-
-Processed 500/8,222 accounts
-
-or chunk telemetry such as:
-
-... 5,000/63,205 | row group rows: 5,000
-
-can drive exact stage percentages.
-
-Stages without exact telemetry remain below 100% until the orchestrator reports
-a real PASS.
-
-19. Reproducibility and RNG architecture
-
-World-level randomness is centralized while generator-specific streams remain
-separated by mechanism.
-
-The project preserves the principle:
-
-Chunk size must not determine the realized synthetic world.
-
-Large generators can use chunked execution for memory and I/O control, but
-technical chunk size must not silently alter the statistical realization when
-world identity and configuration remain unchanged.
-
-Independent stochastic mechanisms use independent namespaces or streams where
-appropriate.
-
-20. Population as a world realization
-
-BTYT supports either:
-
-a fixed customer population; or
-
-a configured population interval.
-
-For ranged populations, scripts/core/world.py resolves the final customer
-count deterministically from the world seed using the dedicated
-world.population RNG namespace.
-
-This means population can itself be part of the realized world while remaining
-fully reproducible.
-
-The final world currently being generated is:
-
-World: BTYT33
-World seed: 606597249
-Resolved customers: 63,205
-
-This replaces the earlier plan to mechanically impose a 100,000--120,000
-customer canonical population.
-
-The final scale is therefore an outcome of the configured world rather than a
-portfolio-size target chosen after the fact.
-
-21. Selective performance engineering
-
-Not every generator requires the same optimization strategy.
-
-Small dimensional generators prioritize:
-
-clarity;
-
-validation;
-
-reproducibility;
-
-maintainability.
-
-Large fact and longitudinal generators may use:
-
-vectorization;
-
-bounded chunks;
-
-incremental output;
-
-Parquet;
-
-compression;
-
-partitioning where justified;
-
-execution telemetry.
-
-Performance optimization is accepted only when statistical behavior remains
-valid.
-
-22. Parquet and large-table strategy
-
-Parquet is the preferred working format for large generated and intermediate
-tables where it materially improves execution or storage.
-
-CSV remains appropriate for:
-
-small dimensions;
-
-human inspection;
-
-selected BI outputs;
-
-interoperability;
-
-cases where simplicity is more valuable than columnar storage.
-
-Large generators can write incrementally in row groups or partitions rather
-than accumulating the complete dataset in memory.
-
-23. Auditing and validation
-
-BTYT continues to treat successful execution as insufficient evidence of
-correctness.
-
-Validation layers include:
-
-generator-level assertions;
-
-referential-integrity checks;
-
-temporal-integrity checks;
-
-economic reconciliation;
-
-transaction and balance reconciliation;
-
-distribution diagnostics;
-
-stochastic and Monte Carlo audits where appropriate;
-
-cross-system validation.
-
-The governing principle remains:
-
-Validations are never weakened merely to obtain a PASS.
-
-The final pipeline culminates in scripts/audits/audit_cross_system.py.
-
-24. Operational Data Reliability Layer
-
-BTYT preserves the distinction between:
-
-synthetic truth
-
-and
-
-operational representation.
-
-The operational reliability layer supports:
-
-clean;
-
-imperfect.
-
-Imperfect mode supports intensity levels such as:
-
-light;
-
-realistic;
-
-stress.
-
-The canonical target remains imperfect / realistic.
-
-Operational incidents modify probabilities of degradation while protected
-financial and relational truths remain intact.
-
-25. Manifest and dataset fingerprint
-
-scripts/generate_manifest.py now operates within the active-world
-architecture.
-
-The manifest connects a materialized world to:
-
-world identity;
-
-configuration;
-
-source-code state;
-
-dataset inventory;
-
-validation state;
-
-reproducibility information.
-
-The repository Git root remains the source-code root while dataset inventory
-is resolved relative to the active world.
-
-Manifest generation is intended to occur only after the required validation
-contract has been satisfied.
-
-26. Git and reproducible-world storage policy
-
-The repository now separates source-controlled world definitions from large
-materialized datasets.
-
-Git should preserve:
-
-source code
-world_builder/
-config/
-worlds/registry.json
-worlds/<world>/<variant>/world.json
-worlds/<world>/<variant>/metadata.json
-documentation
-
-Large reproducible world artifacts should normally remain outside Git:
-
-worlds/<world>/<variant>/data/
-worlds/<world>/<variant>/database/
-worlds/<world>/<variant>/audit/
-worlds/<world>/<variant>/manifests/
-
-The design principle is:
-
-Git stores the code and the world's reproducible identity, not every
-materialized row of the universe.
-
-Legacy globally tracked datasets remain subject to a final repository cleanup.
-
-27. Current canonical-generation process
-
-The current process is:
-
-World Builder
-        ↓
-world identity
-        ↓
-world_config.json
-        ↓
-active_world.json
-        ↓
-core config / world / paths / RNG
-        ↓
-15-stage orchestrator
-        ↓
-per-world generated + interim data
-        ↓
-operational representation
-        ↓
-cross-system audit
-        ↓
-manifest
-        ↓
-dataset freeze
-
-The definitive analytical world is generated from zero under the consolidated
-architecture rather than assembled from incompatible historical outputs.
-
-28. Dataset lifecycle
-
-The earlier candidate/current/frozen directory proposal has been superseded
-by explicit named and versioned world directories.
-
-A world is now identified independently of its lifecycle state.
-
-Lifecycle status belongs in metadata and validation records rather than
-requiring three complete physical copies of a large universe.
-
-A world becomes analytically frozen only after:
-
-successful canonical generation;
-
-generator-level validations;
-
-cross-system audit PASS;
-
-manifest generation;
-
-explicit approval to stop modifying the Part I dataset.
-
-29. PostgreSQL and the SQL analytical layer
-
-Docker remains deliberately postponed until the synthetic dataset is frozen.
-
-The intended sequence is:
-
-generate the definitive world;
-
-audit it;
-
-freeze it;
-
-load the frozen data into PostgreSQL;
-
-develop the SQL analytical layer;
-
-validate analytical queries and database structure.
-
-PostgreSQL becomes the analytical database layer between generated data and
-downstream BI tooling.
-
-30. Part I BI delivery
-
-The intended Part I analytical flow is:
-
-Python generators
-        ↓
-frozen BTYT world
-        ↓
-PostgreSQL
-        ↓
-SQL analytical layer
-        ↓
-Power BI / Tableau / Apache Superset
-        ↓
-banking-performance analysis
-
-The analytical phase is deliberately separated from generation.
-
-Once the dataset is frozen, the project changes roles: it stops designing the
-world and begins investigating it.
-
-This preserves the possibility of discovering patterns that were not manually
-selected as analytical conclusions during generation.
-
-31. First use of Docker
-
-Docker will be introduced only when it solves a concrete environment problem.
-
-Its first planned use remains the reproducible local analytical stack around
-PostgreSQL and Apache Superset.
-
-Containerization is supporting infrastructure, not a project objective by
-itself.
-
-32. Part II --- Credit scoring and risk
-
-Part II begins from the frozen Part I universe.
-
-frozen BTYT world
-        ↓
-credit-risk analytical dataset
-        ↓
-feature engineering
-        ↓
-training / validation split
-        ↓
-model development
-        ↓
-model comparison
-        ↓
-risk evaluation
-        ↓
-scoring
-
-The objective is to build credit-risk modeling on the same longitudinal
-banking ecosystem rather than downloading an unrelated external scoring
-dataset.
-
-33. MLflow
-
-MLflow remains planned for Part II.
-
-It will be used to track:
-
-experiments;
-
-model parameters;
-
-evaluation metrics;
-
-relevant artifacts;
-
-model versions.
-
-The target is reproducible and inspectable model development rather than
-enterprise-scale MLOps.
-
-34. Final local technical architecture
-
-The planned technical closure remains:
-
-Docker Compose
-├── PostgreSQL
-├── Apache Superset
-├── MLflow
-└── scoring service
-
-The scoring service will expose the selected model for controlled local
-prediction.
-
-This remains the technical closure of BTYT rather than the start of a separate
-infrastructure project.
-
-35. Explicitly out of scope
-
-The following remain deliberately outside the project:
-
-Azure;
-
-cloud infrastructure solely for demonstration;
-
-Kubernetes;
-
-RAG;
-
-LLM-based analytical features;
-
-conversational agents;
-
-enterprise MLOps platforms;
-
-unnecessary distributed infrastructure.
-
-BTYT prioritizes depth and integration across synthetic-data generation,
-banking and economic modeling, SQL, BI, statistics, machine learning,
-reproducibility, and local deployment.
-
-36. Frozen architecture principles
-
-Statistical modeling
-
-BTYT models causes as probabilistic shifts in behavior, not deterministic
-assignments of outcomes.
-
-Shared causal conditions may influence multiple processes, but downstream
-realizations use independent stochastic streams.
-
-Validation
-
-Validations are never weakened merely to obtain a PASS.
-
-Optimization
-
-Optimize without changing statistical behavior.
-
-Chunking
-
-Chunk size must not determine the realized synthetic world.
-
-Configuration
-
-JSON says what world we want. Python knows how to build it.
-
-World identity
-
-The same world identity must reproduce the same world seed.
-
-World isolation
-
-One world must never silently overwrite another world.
-
-Complexity
-
-Introduce infrastructure only when it solves a concrete project
-requirement.
-
-Analysis
-
-Build the mechanisms first; discover the realized history afterward.
-
-37. Current project state --- 2026-09-07
-
-The architecture consolidation is substantially complete.
-
-Implemented:
-
-canonical world_config.json;
-
-active-world pointer;
-
-typed world loading;
-
-centralized path routing;
-
-shared RNG infrastructure;
-
-deterministic world identity;
-
-persistent world registry;
-
-per-world storage;
-
-generator migration into the active-world architecture;
-
-dependency-aware 15-stage orchestrator;
-
-run records;
-
-cross-system audit integration;
-
-per-world manifest generation;
-
-World Builder desktop interface;
-
-stage selection;
-
-live generation logs;
-
-stage PASS indicators;
-
-per-stage and overall progress;
-
-pause / resume / stop controls;
-
-Git rules separating reproducible definitions from large materialized data.
-
-A repository checkpoint containing the reproducible-world architecture and
-World Builder was committed and pushed to main on 2026-09-07.
-
-The final BTYT world is currently being generated:
-
-World: BTYT33
-Seed: 606597249
-Customers: 63,205
-Status: canonical generation in progress
-
-The dataset must not be considered frozen until the complete pipeline,
-cross-system audit, and manifest finish successfully.
-
-38. Immediate next steps
-
-The immediate sequence is now:
-
-complete BTYT33 generation
-        ↓
-cross-system audit
-        ↓
-manifest
-        ↓
-inspect final dataset statistics
-        ↓
-general repository cleanup
-        ↓
-update README and architecture documentation
-        ↓
-freeze Part I dataset
-        ↓
-PostgreSQL
-        ↓
-SQL analysis
-
-Repository cleanup will include review of legacy globally tracked datasets,
-obsolete test worlds, temporary diagnostics, and final Git-ignore policy.
-
-No statistical redesign should be introduced merely because the canonical
-world produces surprising but valid outcomes.
-
-39. Updated roadmap
-
-PHASE A --- Architecture consolidation                 COMPLETE
+```text
+preflight
     ↓
-Central config
-Central paths
-World identity
-RNG architecture
-Generator migration
-Per-world storage
-
-PHASE B --- Reproducible execution platform            COMPLETE
+TRUNCATE all 23 tables
     ↓
-15-stage orchestrator
-World Builder
-Progress telemetry
-Process control
-Cross-system audit
-Manifest architecture
-
-PHASE C --- Canonical world generation                 IN PROGRESS
+COPY reload
     ↓
-BTYT33
-63,205 customers
-15-stage generation
-Final audit
-Manifest
-
-PHASE D --- Freeze and repository cleanup              NEXT
+row-count validation
     ↓
-Final statistics
-Legacy-data cleanup
-Documentation update
-README update
-Dataset freeze
-Release / tag
-
-PHASE E --- Part I analytical infrastructure
+ANALYZE
     ↓
-PostgreSQL
-SQL layer
-Power BI
+commit
+    ↓
+refresh analytics materialized views
+```
+
+The loader preserves the relational structure.
+
+Latest successful run:
+
+```text
+2026-10-11
+BTYT FULL REFRESH: PASS
+23 / 23 tables reloaded
+```
+
+---
+
+## 12. Analytical SQL architecture
+
+Thematic analysis:
+
+```text
+00 Structural Context
+01 Customers
+02 Products & Accounts
+03 Loans & Credit Quality
+04 Transactions & Channels
+05 Branch Network & Branch Performance
+06 Campaigns & Marketing Effectiveness
+07 Bank Performance & Executive Management
+```
+
+A separate analytics-view layer provides reusable objects for Power BI and other consumers.
+
+The principle is:
+
+```text
+raw fact
+    ↓
+stable reusable SQL grain
+    ↓
+dynamic measure / downstream analysis
+```
+
+---
+
+## 13. Power BI architecture
+
+Power BI is the primary Part I BI deliverable.
+
+Current semantic model contains 15 tables.
+
+Current page status:
+
+```text
+01 Resumen Ejecutivo         closed functionally
+02 Sucursales                closed functionally
+03 Clientes y Cuentas        closed functionally
+04 Riesgo de Crédito         KPI row complete / visuals in progress
+05 Transacciones y Canales   pending
+06 Mercado y Campañas        pending
+```
+
+Final theming is intentionally deferred until functional completion.
+
+---
+
+## 14. Current BI conventions
+
+### Naming
+
+```text
+technical model objects → English
+visible report labels   → Spanish
+```
+
+### Currency
+
+- performance source values: UYU-equivalent;
+- Power BI presentation: selected measures converted to USD;
+- native loan USD values remain USD;
+- UYU loan values use explicit annual FX conversion.
+
+### Time
+
+Stocks and flows are treated differently.
+
+Customer/account active-window logic and portfolio stock averages use explicit window semantics rather than blind month summation.
+
+---
+
+## 15. Current risk page checkpoint
+
+Current headline risk KPIs after refresh:
+
+```text
+Exposición crediticia          ≈ US$4.338B
+Exposición 90+ DPD              5.16%
+Cartera reestructurada          0.64%
+Pérdida crediticia / cartera    0.63%
+```
+
+These are synthetic management analytics.
+
+---
+
+## 16. Tooling strategy for the current Part I release
+
+Implemented / planned in the active release:
+
+```text
+PostgreSQL + SQL
+Power BI + DAX
+Python
+Excel
 Tableau
-Docker
+```
+
+### Not part of the current Part I release
+
+```text
 Apache Superset
-Banking-performance analysis
+Docker / Docker Compose
+```
 
-PHASE F --- Part II
-    ↓
-Credit-risk analytical dataset
-Feature engineering
-Model development
-Model validation
-MLflow
-Scoring
+Pentaho remains a later option for the deliberately dirty-world / ETL practice exercise.
 
-PHASE G --- Technical closure
-    ↓
-Docker Compose
-PostgreSQL
-Superset
-MLflow
-Scoring service
+This supersedes earlier architecture documents that treated Superset/Docker as active Part I milestones.
 
-40. Final perspective
+---
 
-BTYT did not begin as a synthetic-data platform.
+## 17. Operational data reliability
 
-It began as a portfolio project intended to create a believable fictional bank
-for business-intelligence analysis.
+BTYT retains the conceptual distinction:
 
-The project first solved the conceptual problem: constructing customers,
-accounts, credit products, transactions, branches, campaigns, competitors,
-macroeconomic conditions, shocks, and operational imperfections that could
-coexist coherently.
+```text
+synthetic truth
+vs
+operational representation
+```
 
-As that universe became richer, its engineering requirements changed.
+The reliability layer may introduce controlled imperfections while protecting core relational and economic truths.
 
-functional generators
-        ↓
-richer stochastic modeling
-        ↓
-system-specific validation
-        ↓
-cross-system consistency
-        ↓
-operational data realism
-        ↓
-scale limitations discovered
-        ↓
-architecture consolidation
-        ↓
-deterministic world identity
-        ↓
-isolated reproducible worlds
-        ↓
-World Builder
-        ↓
-15-stage generation pipeline
-        ↓
-canonical BTYT33 world
-        ↓
-frozen analytical universe
-        ↓
-SQL and BI
-        ↓
-credit-risk ML
-        ↓
-local MLOps closure
+This remains a separate methodological feature from the current Power BI clean analytical layer.
 
-The architectural refactor is no longer merely preparation for future work.
+---
 
-It has produced a reusable execution platform around the statistical and
-economic model already developed.
+## 18. Manifest and dataset freeze
 
-The immediate objective is now to complete and validate BTYT33, freeze the Part
-I universe, and change the nature of the project from world construction to
-world investigation.
+The project includes a manifest/fingerprint mechanism.
 
-That transition is central to the value of BTYT: the analytical phase should
-not merely display conclusions manually embedded during generation. It should
-allow SQL, BI, statistical analysis, and later machine learning to discover the
-realized consequences of the probabilistic mechanisms that created the world.
+A prior dataset release was frozen, but the October 2026 risk/performance regeneration changed materialized files.
+
+Therefore:
+
+> **The old manifest is not proof that the current recalibrated files match the previously frozen fingerprint.**
+
+Before a new freeze:
+
+1. synchronize active-world and world-config identity;
+2. verify/rerun affected RNG-driven generators;
+3. rerun required audits;
+4. regenerate the manifest;
+5. run manifest verification;
+6. only then mark the new data state frozen.
+
+---
+
+## 19. Git policy
+
+Git should primarily preserve:
+
+- code;
+- configuration;
+- world registry/identity;
+- documentation;
+- Power BI deliverables through Git LFS where intended.
+
+Very large reproducible generated data should not be committed merely to reproduce the world.
+
+Smoke-test material should not be mixed into the canonical commit.
+
+---
+
+## 20. Current repository / documentation priorities
+
+Current technical priorities:
+
+```text
+1. finish Power BI Page 04
+2. build Pages 05–06
+3. final visual polish
+4. complete/update documentation
+5. resolve world-config / active-world seed synchronization
+6. reverify affected generated layers
+7. regenerate manifest/fingerprint
+8. finish remaining Part I deliverables
+```
+
+---
+
+## 21. Part I remaining analytical deliverables
+
+After Power BI:
+
+- focused Python analysis;
+- advanced Excel management workbook;
+- Tableau geographic storytelling;
+- final portfolio documentation.
+
+These deliverables should complement rather than duplicate one another.
+
+---
+
+## 22. Part II boundary
+
+Part II begins only after the Part I analytical universe is stable enough to define credit-risk targets without leakage.
+
+Core requirements:
+
+- explicit observation window;
+- explicit performance window;
+- temporal splitting;
+- no post-default leakage;
+- reproducible feature extraction;
+- consistent use of the BTYT longitudinal universe.
+
+---
+
+## 23. Superseded historical states
+
+The following are historical and no longer describe the current project:
+
+```text
+BTYT33 as the canonical analytical world
+63,205 customers as the current canonical population
+canonical generation still in progress
+SQL runtime smoke test still pending
+Superset as an active Part I deliverable
+Docker as an active Part I deliverable
+five-schema PostgreSQL loader as the current load architecture
+```
+
+They may remain relevant to project history but must not be presented as current state.
+
+---
+
+## 24. Final architecture principle
+
+BTYT has moved from:
+
+```text
+independent generators
+        ↓
+reproducible world architecture
+        ↓
+validated relational database
+        ↓
+reusable analytical SQL
+        ↓
+Power BI / downstream analytics
+```
+
+The core value of the project is not the number of technologies.
+
+It is the coherence between:
+
+- synthetic mechanisms;
+- reproducibility;
+- banking semantics;
+- relational integrity;
+- analytical grain;
+- business questions;
+- downstream presentation.
+
+The immediate objective is to finish Part I as a portfolio-ready analytical product while preserving enough reproducibility that Part II can build on the same universe.

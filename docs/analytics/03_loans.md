@@ -1,5 +1,10 @@
 # 03 — Loans & Credit Quality Analytics
 
+> **Current loan master:** `generate_loans.py` — V5.2.0 FINAL RISK CALIBRATION  
+> **Current monthly snapshot:** `generate_loan_monthly_snapshot.py` — V4.2 RISK RECALIBRATED  
+> **Observation window:** 2021-01 → 2026-12  
+> **Current canonical path used by analytics:** `worlds/BTYT/01`
+
 ## Objective
 
 Build a reusable analytical layer for BTYT's loan portfolio and credit-quality analysis without forcing every risk question into SQL.
@@ -58,6 +63,45 @@ The following topics belong elsewhere:
 - predictive default models / credit scoring → Part II
 
 Part II may reuse outputs from this file, but this file must not introduce target leakage or prematurely build ML features.
+
+---
+
+## October 2026 credit-risk recalibration
+
+During Power BI Page 04 development, the prior risk realization produced an excessively concentrated severe-delinquency result.
+
+The issue was corrected at the generator level rather than repaired in DAX.
+
+The accepted current implementation uses:
+
+```text
+Loan master               V5.2.0 FINAL RISK CALIBRATION
+Loan monthly snapshot     V4.2 RISK RECALIBRATED
+```
+
+The recalibration reduced ordinary monthly payment friction, strengthened cure behavior, and moderately reduced master lifecycle deterioration while preserving the causal/stochastic architecture and terminal reconciliation.
+
+Current 2026-12 portfolio check:
+
+```text
+Total exposure        ≈ US$4.338B
+90+ DPD exposure      ≈ US$223.8M
+90+ exposure rate     ≈ 5.16%
+```
+
+The model was not tuned to a fixed target. The final rate was accepted after the repayment mechanics were corrected and the KPI emerged from the regenerated portfolio.
+
+See:
+
+```text
+credit_risk_calibration.md
+```
+
+for the full diagnostic and recalibration history.
+
+### Reproducibility note
+
+Before a new dataset freeze/manifest, `active_world.json` and `world_config.json` must be verified to identify the same BTYT world and seed. The current October 2026 analytical outputs should therefore be treated as the active BI state until that consistency check is closed.
 
 ---
 
@@ -210,7 +254,15 @@ Cohort analysis should be interpreted carefully because older cohorts have had m
 27. Which products have high original volumes but relatively small remaining balances?
 28. Which products have relatively high current balances per loan?
 
-Native loan monetary values must remain separated by currency unless an explicit FX conversion is introduced. The `performance` schema is different because its reporting measures are already UYU-equivalent.
+Native loan monetary values must remain separated by currency unless an explicit FX conversion is introduced.
+
+For the current Power BI presentation layer, loan exposure is converted to USD explicitly:
+
+- rows whose native currency is `USD` remain in USD;
+- UYU rows are divided by the documented annual UYU/USD rate;
+- ratios and counts are not currency-converted.
+
+The `performance` schema is different because its reporting measures are already UYU-equivalent before any Power BI presentation conversion.
 
 ---
 
@@ -226,6 +278,8 @@ Native loan monetary values must remain separated by currency unless an explicit
 36. Which origination cohorts show higher current delinquency?
 
 Dynamic delinquency ratios should generally be calculated in DAX from the reusable loan-month dataset.
+
+For the current risk page, 90+ exposure means `days_past_due > 90`, which is equivalent to the canonical `DPD_90_PLUS` bucket. Do not mix this with the `DPD_61_90` band, which includes exactly 90 days.
 
 ---
 
@@ -430,6 +484,36 @@ Python is the preferred tool for:
 - exploratory regressions.
 
 Python should not be created merely for symmetry with SQL.
+
+---
+
+## Current Power BI implementation
+
+The current **Riesgo de Crédito** page is organized around the question:
+
+> **¿Cuánta exposición crediticia tiene BTYT, cuánto está en mora y qué tan severo es ese riesgo?**
+
+Current headline KPIs:
+
+```text
+Exposición crediticia
+Exposición 90+ DPD
+Cartera reestructurada
+Pérdida crediticia / cartera
+```
+
+The 30+ DPD rate remains analytically valid but is no longer a headline KPI on the page. It may be used as secondary trend/context when it adds decision value.
+
+The current 2026-12 headline state after the database refresh is approximately:
+
+```text
+Exposición crediticia          US$4.338B
+Exposición 90+ DPD              5.16%
+Cartera reestructurada          0.64%
+Pérdida crediticia / cartera    0.63%
+```
+
+These are synthetic analytical results, not regulatory banking metrics.
 
 ---
 

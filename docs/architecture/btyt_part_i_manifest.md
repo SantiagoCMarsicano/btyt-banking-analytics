@@ -1,10 +1,12 @@
 # BTYT Part I — Final Dataset Manifest
 
 **Component:** Final Dataset Manifest  
-**Version:** V1.0.1  
+**Version:** V1.1.0  
 **Project:** BTYT Banking Analytics — Part I  
-**Status:** Finalization component  
+**Status:** Manifest refresh required after October 2026 recalibration  
 **Purpose:** Cryptographically inventory and freeze the finalized BTYT Part I dataset without modifying upstream data.
+
+> **Current status — 2026-10-11:** the previously frozen manifest no longer describes the current materialized loan / loan-snapshot / performance files because those layers were regenerated during the credit-risk recalibration. A new manifest/fingerprint must **not** be issued until the active-world path and world-level RNG configuration are synchronized and the affected outputs are reverified.
 
 ---
 
@@ -31,7 +33,7 @@ scripts/generate_manifest.py
 Current version:
 
 ```text
-V1.0.1
+V1.1.0
 ```
 
 Run from the repository root:
@@ -66,13 +68,15 @@ The manifest generator refuses to create the final freeze record if the cross-sy
 
 ## 4. Manifest outputs
 
-The generator creates:
+The generator writes into the active world's manifest directory:
 
 ```text
-manifests/
+worlds/<world>/<variant>/manifests/
 ├── btyt_part_i_manifest.json
 └── btyt_part_i_manifest_files.csv
 ```
+
+`MANIFESTS_DIR` is resolved by `scripts/core/paths.py`.
 
 ### `btyt_part_i_manifest.json`
 
@@ -129,7 +133,7 @@ The manifest separates files into three roles:
 
 ## 6. Canonical inventory
 
-V1.0.1 inventories the following canonical files:
+V1.1.0 inventories the following canonical files:
 
 ```text
 data/generated/world/macro_environment.csv
@@ -144,7 +148,7 @@ data/generated/core/accounts.parquet
 data/generated/core/cards.parquet
 data/generated/core/loans.parquet
 data/generated/credit/loan_monthly_snapshot.parquet
-data/generated/performance/external_shocks.csv
+data/generated/world/external_shocks.csv
 data/generated/transactions/transactions.parquet
 data/generated/core/account_balances.parquet
 data/generated/campaigns/campaigns.csv
@@ -154,7 +158,7 @@ data/generated/performance/branch_monthly_performance.parquet
 data/generated/performance/bank_monthly_performance.parquet
 ```
 
-Important V1.0.1 correction:
+Path correction retained from V1.0.1:
 
 ```text
 cards.parquet
@@ -339,13 +343,15 @@ The manifest is therefore the final identity and integrity record, not another s
 At the time of this manifest specification:
 
 ```text
-Transactions                         V4.0.0
-Campaign behavioral engine           V2.1.0
-Branch performance                   V2.1.2
-Operational data reliability layer   V2.0.2
-Final cross-system audit             V2.0.0
-Full-project orchestrator            V1.0.0
-Final dataset manifest               V1.0.1
+Transactions                         V5.0.0 EXACT FAST
+Loan master                           V5.2.0 FINAL RISK CALIBRATION
+Loan monthly snapshot                 V4.2 RISK RECALIBRATED
+Campaign behavioral engine            V2.1.0
+Branch performance                    V3.2.0
+Operational data reliability layer    V2.0.2
+Final cross-system audit              V2.0.0
+Full-project orchestrator             V1.0.0
+Final dataset manifest                V1.1.0; regeneration pending
 ```
 
 ---
@@ -367,7 +373,7 @@ The manifest component is accepted when:
 Expected final generation message:
 
 ```text
-BTYT FINAL DATASET MANIFEST V1.0.1: PASS
+BTYT FINAL DATASET MANIFEST V1.1.0: PASS
 Dataset state recorded as FROZEN.
 No inventoried source dataset was modified.
 ```
@@ -381,7 +387,42 @@ The inventoried BTYT Part I dataset matches the frozen manifest.
 
 ---
 
-## 16. Version history
+## 16. Current freeze condition after risk recalibration
+
+The October 2026 recalibration changed canonical or derived files including:
+
+```text
+data/generated/core/loans.parquet
+data/generated/credit/loan_monthly_snapshot.parquet
+data/generated/performance/branch_monthly_performance.parquet
+data/generated/performance/bank_monthly_performance.parquet
+```
+
+The PostgreSQL full refresh successfully consumed the current files, but a database refresh is **not** a dataset freeze.
+
+Before generating a replacement manifest:
+
+1. synchronize `config/active_world.json` and `config/world_config.json` to BTYT/01;
+2. verify the intended canonical seed against `worlds/registry.json`;
+3. rerun / verify the RNG-driven recalibrated layers as needed;
+4. run the integrated audits required by the manifest contract;
+5. generate the new manifest;
+6. run `--verify-only`;
+7. only then mark the updated Part I dataset as frozen.
+
+Until those steps are complete, the previous manifest should be treated as an older frozen release record rather than proof that the current recalibrated files match the old fingerprint.
+
+---
+
+## 17. Version history
+
+### V1.1.0
+
+- Manifest generator operates against the active isolated world.
+- Manifest outputs resolve through the active world's `MANIFESTS_DIR`.
+- Generation and verification refuse to proceed without an active isolated world.
+- Canonical inventory uses the current world-relative `external_shocks` path.
+- Existing fingerprint and file-inventory semantics remain intact.
 
 ### V1.0.1
 

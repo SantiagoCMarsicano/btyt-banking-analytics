@@ -516,3 +516,10 @@ The final success condition is:
 
 [PASS] Historical relational validation
 ```
+
+
+---
+
+## 2026-10-11 refresh note
+
+The canonical 23-table full refresh completed successfully while preserving the existing relational structure. This data refresh did not require a schema migration. Structural audit/validation scripts remain available for explicit relational checks, but they are not automatically rerun after every normal data refresh.

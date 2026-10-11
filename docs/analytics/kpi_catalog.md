@@ -1,4 +1,4 @@
-BTYT Part I — KPI Catalog and Tier List
+# BTYT Part I — KPI Catalog and Tier List
 
 Analytical ranking proposed for what BTYT Part I can support and should show. This is the assistant’s independent assessment, separate from Santiago’s annotated vote. A tier is not proof that its source SQL has been verified.
 
@@ -10,9 +10,11 @@ Number is the identifier in the reduced 52-item game. Original is the identifier
 
 The ranking weighs decision value, distinctiveness for the synthetic BTYT bank, and likely support in its modeled data. Implementation status must be checked against source tables and audited SQL separately.
 
-Primary output code: PW = Power BI, E = Excel, T = Tableau, S = Superset, P = Python. Exactly one code is assigned per KPI as its intended main output; PostgreSQL remains the shared calculation layer. This follows the Power BI ownership defined in the tooling strategy.
+Primary output code: PW = Power BI, E = Excel, T = Tableau, P = Python. Exactly one code is assigned per KPI as its intended main output; PostgreSQL remains the shared calculation layer. Superset is outside the current Part I release, so transaction KPIs that were previously assigned to S are now assigned to PW.
 
 The earlier Executive / Thematic / Supporting terminology described dashboard placement. It is not equivalent to the S–D vote and is superseded as a priority ranking here.
+
+Tool ownership is allowed to evolve when the implemented Part I product proves a different primary home. The current assignments reflect actual or planned delivery as of October 2026 rather than the earliest catalog proposal.
 
 Tier board
 
@@ -72,7 +74,7 @@ Count active customers in the selected period
 
 S
 
-E
+PW
 
 Average Deposits
 
@@ -114,7 +116,7 @@ Net interest income + fee income
 
 S
 
-E
+PW
 
 Cost-to-Income
 
@@ -128,7 +130,7 @@ Operating cost / total revenue
 
 A
 
-P
+PW
 
 Credit Loss Ratio
 
@@ -226,7 +228,7 @@ Average loan balance / average deposits
 
 B
 
-S
+PW
 
 Digital Transaction Share - Count
 
@@ -240,7 +242,7 @@ Completed MOBILE + WEB count / completed count
 
 A
 
-S
+PW
 
 Transaction Failure Rate
 
@@ -338,7 +340,7 @@ Average elapsed time since customer registration
 
 B
 
-E
+PW
 
 Active Accounts
 
@@ -422,7 +424,7 @@ Aligned applicable relationships / applicable relationships
 
 C
 
-S
+PW
 
 Opening Channel Share
 
@@ -450,7 +452,7 @@ Sum principal of loans originated in period
 
 A
 
-P
+PW
 
 90+ DPD Exposure Rate
 
@@ -506,7 +508,7 @@ Loans moving from below 30 to 30+ DPD / eligible loans below 30 DPD
 
 B
 
-S
+PW
 
 Completed Transaction Count
 
@@ -520,7 +522,7 @@ Count transactions with COMPLETED status
 
 B
 
-S
+PW
 
 Completed Transaction Volume
 
@@ -534,7 +536,7 @@ Sum amount for COMPLETED transactions
 
 C
 
-S
+PW
 
 Digital Transaction Share - Value
 
@@ -548,7 +550,7 @@ Completed MOBILE + WEB amount / completed amount
 
 C
 
-S
+PW
 
 External Transfer Share
 
@@ -562,7 +564,7 @@ External completed transfers / completed transfers
 
 A
 
-T
+PW
 
 Branch Net Income
 
@@ -576,7 +578,7 @@ Net income attributable to each branch
 
 A
 
-T
+PW
 
 Branch Cost-to-Income
 
@@ -618,7 +620,7 @@ Applicable net income / applicable active customers
 
 B
 
-T
+PW
 
 Profitable Branch Share
 
@@ -782,6 +784,9 @@ Revenue growth rate - operating-cost growth rate
 
 BTYT-specific measurement rules
 
+Current Power BI implementation note (October 2026): Page 04 uses **Exposición 90+ DPD** as the severe-delinquency headline and **Cartera reestructurada** as an additional headline KPI. The catalog's 30+ DPD metric remains valid for secondary analysis but is not currently a top-row KPI.
+
+
 Profitability is synthetic operating performance. The performance layer contains revenue, operating costs, credit loss and resulting net income. Do not label these as audited statutory net income, ROE, ROA or regulatory capital returns without corresponding accounting and balance-sheet data.
 
 Time: distinguish monthly stocks (customers, accounts, average deposits and loans) from additive flows (revenue, losses, originations and transactions). Recompute ratios from their aggregate numerator and denominator. Do not sum monthly stock values or average monthly ratios by default.
@@ -790,7 +795,7 @@ Currency: performance.* reporting amounts are UYU-equivalent. Lower-level UYU an
 
 Transactions: attempted operations include COMPLETED and FAILED; realized counts and value include only COMPLETED. Value and count channel shares serve different questions.
 
-Credit quality: DPD ratios use outstanding exposure as numerator and denominator at a common loan-month grain. The 30+ and 90+ buckets use inclusive cutoffs. Cure and roll rates require consecutive monthly snapshots and an explicitly defined eligible cohort.
+Credit quality: DPD ratios use outstanding exposure as numerator and denominator at a common loan-month grain. The 30+ measure is defined from its documented threshold; the canonical `DPD_90_PLUS` bucket is `days_past_due > 90` because `DPD_61_90` includes exactly 90 days. Cure and roll rates require consecutive monthly snapshots and an explicitly defined eligible cohort.
 
 Campaigns: POSITIVE response is observed receptivity, not purchase or product conversion. Exposure and response denominators must match their defined cohorts.
 

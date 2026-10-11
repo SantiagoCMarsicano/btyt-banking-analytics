@@ -1,416 +1,259 @@
-# BTYT Part I — Analytics Tooling Strategy
+# BTYT Part I — Tooling Strategy
 
 ## 1. Purpose
 
-BTYT Part I is a banking analytics portfolio project built to demonstrate both analytical depth and cross-tool competence without duplicating the same work everywhere.
+This document defines the current tool ownership for **BTYT Banking Analytics — Part I**.
 
-The strategy is:
+The goal is not maximum tool count. The goal is a coherent portfolio in which each tool has a clear analytical role.
 
-> **Use each tool where it is strongest, while PostgreSQL remains the common analytical foundation.**
+> **Build reusable logic once, analyze at the appropriate grain, and avoid recreating the same dashboard or business rule in multiple tools.**
 
----
+## 2. Current Part I stack
 
-## 2. Architecture at a glance
-
-```text
-Synthetic data generators
-        ↓
-PostgreSQL — frozen relational model
-        ↓
-00–07 thematic SQL analytics
-        ↓
-Reusable analytical bases / justified views
-        ↓
-┌──────────────────────────────────────────────┐
-│ Python   → statistics / exploration          │
-│ Excel    → management / ad hoc               │
-│ Power BI → corporate BI + DAX                │
-│ Tableau  → geography / spatial storytelling  │
-│ Superset → SQL-first operational monitoring  │
-└──────────────────────────────────────────────┘
-        ↓
-Docker / optional DQ-Pentaho / publication
-```
-
----
-
-## 3. Current phase
+The portfolio-ready Part I release uses:
 
 ```text
-PostgreSQL relational model        ✅
-SQL files 00–07                    ✅ designed
-Static / semantic audit            ✅
-Runtime smoke test                 ⏳
-SQL freeze                         pending PASS
+Python
+PostgreSQL + SQL
+Power BI + DAX
+Excel
+Tableau
 ```
 
-The immediate next step after runtime validation is not to reopen relational design.
+Supporting technologies already used by the project include Pandas, NumPy, PyArrow/Parquet, Psycopg/SQLAlchemy and Git/GitHub.
 
-It is to freeze SQL, define the KPI catalog and select the small number of reusable views actually needed downstream.
-
----
-
-## 4. PostgreSQL + SQL
-
-### Main responsibility
-
-PostgreSQL owns shared analytical logic.
-
-Use it for:
-
-- joins;
-- reusable flags;
-- lifecycle and cohorts;
-- customer/account/loan analytical bases;
-- transaction reduction;
-- branch and bank performance preparation;
-- campaign funnel bases;
-- data-quality checks;
-- accounting identities;
-- reconciliation.
-
-### Development interface
-
-DBeaver remains the practical primary SQL interface.
-
-VS Code may support repository work and documentation.
-
-pgAdmin is optional rather than mandatory.
-
-### Performance rule
-
-Do not create indexes or materialized views speculatively.
-
-Use:
+### Not in the current Part I release
 
 ```text
-EXPLAIN
-EXPLAIN ANALYZE
+Apache Superset
+Docker / Docker Compose
 ```
 
-after identifying a real recurring workload.
+They may be revisited later if they solve a concrete portfolio or reproducibility problem, but they are not current delivery dependencies.
 
-For `04_transactions.sql`, work section-by-section because the transaction table contains ~76.8M rows.
+Pentaho is also not part of the current dashboard path. It remains a possible tool for the later deliberately “dirty world” / ETL practice module.
 
----
+## 3. Current phase — 2026-10-11
 
-## 5. Python + Pandas + Jupyter
+```text
+Synthetic world / generators        implemented
+PostgreSQL relational model         implemented
+00–07 thematic SQL                  complete
+KPI catalog                         complete
+Reusable analytics views            implemented
+Power BI pages 01–03                functionally closed
+Power BI page 04                    in progress
+Power BI pages 05–06                pending
+Python analytical deliverables      pending
+Excel deliverable                   pending
+Tableau deliverable                 pending
+```
 
-### Main responsibility
+The old “runtime SQL smoke-test pending” status is obsolete.
 
-Python owns questions where SQL stops being the natural analytical environment.
+## 4. PostgreSQL / SQL
 
-Examples:
+PostgreSQL is the central reusable analytical layer.
 
-- distributions;
-- medians / percentiles;
-- outlier analysis;
-- concentration;
-- statistical segment comparisons;
+It owns:
+
+- relational joins;
+- stable analytical grains;
+- heavy aggregation over large facts;
+- reusable views / materialized views;
+- common business definitions;
+- structural and reconciliation checks;
+- database-side reduction before BI ingestion.
+
+SQL should not precompute every interactive dashboard combination.
+
+### Current scale rule
+
+The raw transaction fact contains approximately 76.8M rows.
+
+Preferred pattern:
+
+```text
+raw PostgreSQL fact
+        ↓
+reusable SQL aggregation/view
+        ↓
+Power BI / Python / Excel / Tableau
+```
+
+Do not import the full raw transaction event table into Power BI merely because it exists.
+
+## 5. Power Query
+
+Power Query owns light ingestion and presentation shaping:
+
+- PostgreSQL connection;
+- column selection;
+- type enforcement;
+- light renaming / display shaping;
+- refresh orchestration.
+
+It should not reproduce major banking logic that already exists in SQL.
+
+## 6. Power BI / DAX
+
+Power BI is the **primary corporate BI surface** for Part I.
+
+DAX owns:
+
+- filter-context-aware ratios;
+- interactive KPI calculations;
+- dynamic period selection;
+- portfolio shares;
+- time intelligence;
+- rankings;
+- filter-aware comparisons.
+
+Current page plan:
+
+```text
+01 Resumen Ejecutivo
+02 Sucursales
+03 Clientes y Cuentas
+04 Riesgo de Crédito
+05 Transacciones y Canales
+06 Mercado y Campañas
+```
+
+Functional completion comes before final visual theming.
+
+### Naming convention
+
+```text
+tables / columns / measures / DAX → English
+visible titles / labels           → Spanish
+```
+
+### Currency convention
+
+- PostgreSQL `performance.*` monetary values remain UYU-equivalent.
+- Power BI presentation measures may convert them to USD with the documented annual FX convention.
+- Native loan values must respect each row's currency before conversion.
+- Ratios, counts and percentages are not currency-converted.
+
+## 7. Python
+
+Python has two distinct roles.
+
+### Generation / engineering
+
+Python owns the synthetic world, generator logic, audits and reproducible data production.
+
+### Analysis
+
+Python should be used when the question is genuinely statistical or distributional, for example:
+
 - delinquency trajectories;
-- roll-rate exploration;
-- campaign saturation;
-- performance decomposition;
-- anomaly detection;
-- forecasting / scenarios.
+- roll/cure behavior;
+- distributions and percentiles;
+- outliers;
+- concentration;
+- correlation / exploratory regression;
+- anomaly analysis;
+- scenario analysis.
 
-### Rule
+Python should not be added merely to duplicate a chart already handled better by Power BI.
 
-No artificial symmetry:
+## 8. Excel
 
-```text
-one SQL file ≠ one Python file
-```
+Excel should demonstrate management and ad-hoc analytical work rather than become a second BI dashboard.
 
-Create Python notebooks only when the question benefits from Python.
+Good uses include:
 
----
-
-## 6. Excel
-
-### Main responsibility
-
-Excel demonstrates management and spreadsheet competence.
-
-Use:
-
-- PivotTables / PivotCharts;
-- XLOOKUP;
-- SUMIFS / COUNTIFS / AVERAGEIFS;
 - Power Query;
-- slicers;
-- conditional formatting;
+- PivotTables;
 - management scorecards;
-- monthly variance tables;
-- scenario / sensitivity work.
+- variance analysis;
+- formulas;
+- scenario / sensitivity analysis;
+- management-ready tabular reporting.
 
-### VBA vs Python in Excel
+## 9. Tableau
 
-```text
-VBA / macros
-→ workbook automation
+Tableau should complement Power BI through **geographic and spatial storytelling**.
 
-Python in Excel
-→ analytical computation
-```
+Good uses include:
 
-Python in Excel does not replace VBA.
+- branch network;
+- regional business scale;
+- regional profitability;
+- territorial campaign coverage;
+- geographic comparisons.
 
-A strong BTYT Excel deliverable should still visibly demonstrate advanced Excel capability.
+Prefer a small number of strong spatial stories over a full duplicate of the Power BI report.
 
----
+## 10. Decision rule
 
-## 7. Power BI
+For each business question:
 
-### Main responsibility
+1. What is the required grain?
+2. Does reusable/heavy preparation belong in SQL?
+3. Must the result respond dynamically to BI filters? → DAX.
+4. Is the task light shaping / ingestion? → Power Query.
+5. Is it distributional/statistical? → Python.
+6. Is it management tabular work? → Excel.
+7. Is geography the central story? → Tableau.
 
-Power BI is the principal corporate BI product.
+## 11. Current KPI-tool interpretation
 
-Suggested pages:
-
-1. Executive Overview
-2. Customer 360
-3. Products & Accounts
-4. Loans & Credit Quality
-5. Transactions & Channels
-6. Branch Performance
-7. Campaign Performance / response summary
-
-### DAX ownership
-
-DAX should own dynamic metrics such as:
-
-- shares;
-- response/exposure rates;
-- delinquency rates;
-- Cost-to-Income;
-- revenue per customer;
-- branch contribution;
-- MoM / YoY;
-- rolling periods;
-- YTD measures.
-
-Do not preaggregate every slicer combination in SQL.
-
----
-
-## 8. Tableau
-
-### Main responsibility
+The KPI catalog historically used:
 
 ```text
-Geography + spatial storytelling
+PW = Power BI
+E  = Excel
+T  = Tableau
+S  = Superset
+P  = Python
 ```
 
-Strong candidates:
+Because Superset is not part of the current Part I release, current documentation reassigns Superset-primary transaction KPIs to **Power BI** where they fit the planned `Transacciones y Canales` page.
 
-- branch network map;
-- regional deposits / lending;
-- branch performance geography;
-- campaign coverage;
-- response geography.
+The catalog remains an analytical priority map, not a requirement to implement every KPI in its originally proposed tool.
 
-Prefer 1–2 strong Tableau deliverables rather than duplicating Power BI.
-
----
-
-## 9. Apache Superset
-
-### Main responsibility
-
-```text
-Operational / SQL-first monitoring
-```
-
-Strong candidates:
-
-- transaction activity;
-- failure monitoring;
-- channel activity;
-- operational PostgreSQL aggregates.
-
-Superset should demonstrate direct database interaction rather than reproduce the complete executive Power BI product.
-
----
-
-## 10. Docker
-
-### Main responsibility
-
-Reproducibility.
-
-Potential final environment:
-
-```text
-Docker Compose
-├── PostgreSQL
-├── Superset
-└── supporting services
-```
-
-Add Docker when it materially improves reproducibility; it is not an analytical tool.
-
----
-
-## 11. Pentaho / Data Quality
-
-Pentaho remains optional and late-stage.
-
-A useful demonstration would work on controlled dirty copies rather than modifying the canonical database.
-
-Possible pattern:
-
-```text
-clean canonical data
-        ↓
-controlled dirty sample
-        ↓
-Pentaho / DQ pipeline
-        ↓
-validated clean output
-```
-
-Possible issues:
-
-- NULLs;
-- duplicates;
-- inconsistent categories;
-- malformed dates/codes;
-- whitespace / capitalization problems;
-- implausible values.
-
----
-
-## 12. KPI strategy
-
-A KPI is not the same thing as a dimension.
-
-Example:
-
-```text
-Dimension → branch
-KPI       → branch net income
-```
-
-Every important KPI should eventually document:
-
-- name;
-- business definition;
-- numerator;
-- denominator;
-- grain;
-- temporal semantics;
-- currency semantics;
-- source;
-- intended interpretation.
-
-### Important corrected KPI semantics
-
-#### Transactions
-
-```text
-Transaction Volume
-→ COMPLETED amounts only
-
-Failure Rate
-→ FAILED attempts / all attempts
-```
-
-#### Campaigns
-
-Prefer:
-
-- Exposure Rate;
-- Observed Response Rate;
-- Positive Response Rate.
-
-Do **not** label a positive response as `Campaign Conversion Rate` unless a separate product-conversion event/window is explicitly defined.
-
-#### Performance
-
-Respect:
-
-```text
-flows  → additive through time
-stocks → semi-additive
-```
-
----
-
-## 13. Primary ownership matrix
-
-| Analytical theme | Primary tool |
-|---|---|
-| Shared transformations / joins | PostgreSQL / SQL |
-| Customer/account/loan reusable bases | PostgreSQL / SQL |
-| Large transaction reduction | PostgreSQL / SQL |
-| Dynamic KPI measures | DAX |
-| Statistical exploration | Python |
-| Distribution / outlier work | Python |
-| Management / ad hoc | Excel |
-| Executive banking BI | Power BI |
-| Geography | Tableau |
-| Operational monitoring | Superset |
-| Reproducibility | Docker |
-| Optional dirty-data ETL demo | Pentaho |
-
----
-
-## 14. Anti-duplication rules
+## 12. Anti-duplication rules
 
 Avoid:
 
-- implementing the same KPI independently in every tool;
-- building one Python artifact per SQL file;
-- rebuilding the Power BI dashboard in Tableau;
-- turning Power Query into a hidden second warehouse;
-- creating views with no reuse case;
+- rebuilding the complete Power BI report in Tableau;
+- recreating SQL transformations in Power Query without reason;
 - loading the full transaction fact into Power BI by default;
-- adding technologies only to increase the tool count.
+- creating a Python notebook for every SQL topic;
+- materializing a view only because SQL can express it;
+- creating a new KPI purely because one chart needs a one-off calculation.
 
----
-
-## 15. Business-question-first workflow
-
-```text
-1. Define the business question
-2. Define the analytical grain
-3. Explore / validate in SQL
-4. Decide whether reusable logic is justified
-5. Define the KPI or analytical measure
-6. Assign the primary tool
-7. Build the final output
-8. Validate interpretation
-```
-
----
-
-## 16. Current execution order
-
-After the SQL runtime smoke test:
+Prefer:
 
 ```text
-1. Freeze SQL 00–07
-2. Define KPI catalog
-3. Decide justified views / materialized views
-4. Python statistical analyses where useful
-5. Excel management workbook
-6. Power BI semantic model + DAX + dashboard
-7. Tableau geographic story
-8. Superset operational dashboard
-9. Query-plan review / evidence-based indexes
-10. Docker reproducibility
-11. Optional DQ + Pentaho
-12. Final documentation / portfolio publication
+business question
+    ↓
+required grain
+    ↓
+reusable preparation?
+    ├─ yes → SQL
+    └─ no  → dynamic measure / downstream analysis
 ```
 
-This is a guide, not a requirement to finish every tool before making progress in another.
+## 13. Backlog tools
 
----
+### Apache Superset
 
-## 17. Final guiding principle
+Outside the current Part I release.
 
-> **Build once at the data layer.  
-> Analyze where it makes sense.  
-> Visualize where it communicates best.  
-> Do not duplicate without purpose.**
+### Docker
+
+Outside the current Part I release. Add only if a later distribution/deployment requirement justifies it.
+
+### Pentaho
+
+Potential later use for the deliberately broken/dirty synthetic world intended for ETL and data-cleaning practice.
+
+## 14. Final principle
+
+BTYT should demonstrate that tool choice follows the analytical problem.
+
+> **One coherent banking universe, one reusable data foundation, and deliberate handoffs between SQL, BI, statistics, spreadsheets and geography.**

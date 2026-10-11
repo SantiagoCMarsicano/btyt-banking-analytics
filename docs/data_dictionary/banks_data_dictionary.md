@@ -1,8 +1,8 @@
 ## Architecture context
 
-**Documentation status:** Canonical-generation contract — updated 2026-09-07  
-**World scope:** Active BTYT world  
-**Routing:** Physical storage is resolved through `scripts/core/paths.py` and `config/active_world.json`.
+**Documentation status:** Table contract — architecture note refreshed 2026-10-11  
+**World scope:** World-relative BTYT datasets  
+**Routing:** Physical storage is selected through `config/active_world.json`; world-level RNG/settings are loaded from `config/world_config.json` through `scripts/core/world.py`.
 
 Paths written as `data/generated/...`, `data/interim/...`, or `data/operational/...`
 are **world-relative paths**. Under the active-world architecture they resolve beneath:
@@ -12,8 +12,8 @@ worlds/<world>/<variant>/
 ```
 
 The dictionary describes the table contract and statistical meaning, not one specific
-materialized world. World identity, seed, population, observation period, execution mode,
-and operational reliability are supplied by the active world configuration.
+materialized world. Physical world routing and world-level RNG/settings are separate
+mechanisms in the current codebase and must be synchronized before canonical regeneration.
 
 > **World Builder configures the world; Python generators realize its history.**
 
@@ -1093,7 +1093,7 @@ Net margin
 \[ NetMargin = `\frac{net\_income}{revenue}{=tex}`{=tex} \]
 
 These should preferably be calculated downstream in SQL, Power BI,
-Tableau, Superset or Python.
+Tableau, Excel or Python.
 
 36. Reproducibility and RNG architecture
 

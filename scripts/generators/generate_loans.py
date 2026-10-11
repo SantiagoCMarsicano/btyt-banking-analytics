@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """
 BTYT Banking Analytics
-Loan master generator (Phase 3) — V5.0.0 EXACT FAST
+Loan master generator (Phase 3) — V5.2.0 FINAL RISK CALIBRATION
 
 Creates:
     data/generated/core/loans.parquet
@@ -201,6 +201,33 @@ LIFECYCLE_MACRO_STRESS = {
     2025: 0.00,
     2026: -0.02,
 }
+
+# =============================================================================
+# Credit-risk lifecycle calibration — V5.2
+# =============================================================================
+# The prior calibration produced an unrealistically large stock of open DEFAULTED
+# exposure at the 2026 cutoff. These parameters keep the same causal lifecycle
+# structure, but make deterioration less frequent and recovery more likely.
+#
+# They are model parameters, not hard portfolio targets. The resulting delinquency
+# distribution still emerges stochastically from borrower/contract conditions.
+
+DETERIORATION_INTERCEPT = -5.45
+DETERIORATION_STRESS_BETA = 2.00
+DETERIORATION_PERSISTENCE_BONUS = 0.18
+
+RECOVERY_INTERCEPT = 0.95
+RECOVERY_CAPACITY_BETA = 0.75
+RECOVERY_RELATIONSHIP_BETA = 0.40
+RECOVERY_STRESS_BETA = 0.90
+
+RESTRUCTURE_INTERCEPT = -2.60
+RESTRUCTURE_RELATIONSHIP_BETA = 1.15
+RESTRUCTURE_STRESS_BETA = 1.15
+
+WRITEOFF_INTERCEPT = -5.35
+WRITEOFF_STRESS_BETA = 2.20
+WRITEOFF_RESTRUCTURED_BONUS = 0.60
 
 RATE_TYPE_ADJUSTMENT = {
     "FIXED": 0.45,
@@ -981,10 +1008,10 @@ class LoanGenerator:
             macro_stress = LIFECYCLE_MACRO_STRESS.get(year, 0.0)
 
             p_deteriorate = sigmoid(
-                -4.00
-                + 2.20 * stress
+                DETERIORATION_INTERCEPT
+                + DETERIORATION_STRESS_BETA * stress
                 + macro_stress
-                + (0.28 if severe_state else 0.0)
+                + (DETERIORATION_PERSISTENCE_BONUS if severe_state else 0.0)
                 + self.rng.normal(0, 0.45)
             )
 
@@ -993,28 +1020,28 @@ class LoanGenerator:
 
             elif severe_state:
                 p_recover = sigmoid(
-                    0.55
-                    + 0.70 * row["_capacity"]
-                    + 0.35 * row["_relationship"]
-                    - 1.05 * stress
+                    RECOVERY_INTERCEPT
+                    + RECOVERY_CAPACITY_BETA * row["_capacity"]
+                    + RECOVERY_RELATIONSHIP_BETA * row["_relationship"]
+                    - RECOVERY_STRESS_BETA * stress
                     + self.rng.normal(0, 0.35)
                 )
                 if self.rng.random() < p_recover:
                     severe_state = False
                 else:
                     p_restructure = sigmoid(
-                        -3.0
-                        + 1.25 * row["_relationship"]
-                        + 1.30 * stress
+                        RESTRUCTURE_INTERCEPT
+                        + RESTRUCTURE_RELATIONSHIP_BETA * row["_relationship"]
+                        + RESTRUCTURE_STRESS_BETA * stress
                         + self.rng.normal(0, 0.35)
                     )
                     if not restructured and self.rng.random() < p_restructure:
                         restructured = True
 
                     p_writeoff = sigmoid(
-                        -5.35
-                        + 2.20 * stress
-                        + (0.60 if restructured else 0.0)
+                        WRITEOFF_INTERCEPT
+                        + WRITEOFF_STRESS_BETA * stress
+                        + (WRITEOFF_RESTRUCTURED_BONUS if restructured else 0.0)
                         + self.rng.normal(0, 0.40)
                     )
                     if self.rng.random() < p_writeoff:
@@ -1607,7 +1634,7 @@ def validate_output(loans, customers, branches):
 
 def audit(loans, customers):
     print("\n" + "=" * 72)
-    print("BTYT LOANS AUDIT — V5.0.0 EXACT FAST BRANCH-STATE INTEGRATED")
+    print("BTYT LOANS AUDIT — V5.2.0 FINAL RISK CALIBRATION")
     print("=" * 72)
 
     print(f"\nCustomers in dev population: {len(customers):,}")
@@ -1628,6 +1655,33 @@ def audit(loans, customers):
 
         print("\nLoan status:")
         print((loans["loan_status"].value_counts(normalize=True) * 100).round(2).astype(str) + "%")
+
+        open_mask = loans["closing_year"].isna()
+        open_loans = loans.loc[open_mask].copy()
+        if not open_loans.empty:
+            print("\nOpen-loan status at cutoff:")
+            print(
+                (
+                    open_loans["loan_status"]
+                    .value_counts(normalize=True)
+                    .mul(100)
+                    .round(2)
+                    .astype(str)
+                    + "%"
+                )
+            )
+
+            open_default_share = open_loans["loan_status"].eq("DEFAULTED").mean()
+            open_restructured_share = open_loans["loan_status"].eq("RESTRUCTURED").mean()
+            print(
+                "\nRisk calibration diagnostic (count-based, open loans only):"
+            )
+            print(f"  DEFAULTED:    {open_default_share:.2%}")
+            print(f"  RESTRUCTURED: {open_restructured_share:.2%}")
+            print(
+                "  Note: descriptive diagnostic only; exposure-weighted DPD is "
+                "validated downstream in loan_monthly_snapshot."
+            )
 
         print("\nCurrency by product (%):")
         print(
@@ -1700,7 +1754,7 @@ def audit_history_observation_seam(loans):
     )
 
     print("\n" + "=" * 72)
-    print("HISTORY / OBSERVATION SEAM AUDIT — LOANS V5.0.0")
+    print("HISTORY / OBSERVATION SEAM AUDIT — LOANS V5.2.0")
     print("=" * 72)
     print("\nOriginations 2018-2022:")
     print(counts.to_string())
@@ -1774,7 +1828,7 @@ def audit_branch_state_integration(
     )
 
     print("\n" + "=" * 72)
-    print("BRANCH-STATE INTEGRATION AUDIT — LOANS V5.0.0")
+    print("BRANCH-STATE INTEGRATION AUDIT — LOANS V5.2.0")
     print("=" * 72)
     print(
         "Observed originations linked to branch state: "

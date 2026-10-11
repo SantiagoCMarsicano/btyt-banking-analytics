@@ -1,37 +1,47 @@
 # 07 — Bank Performance & Executive Management Analytics
 
+> **Performance Engine:** `generate_branch_performance.py`  
+> **Engine version:** `3.2.0`  
+> **Observation grain:** monthly  
+> **Reporting currency:** UYU-equivalent  
+> **Design principle:** structural conditions shape probabilities, but do not pre-determine performance outcomes.
+>
+> **Current implementation note (2026-10-11):** the engine was regenerated downstream of the V5.2/V4.2 credit-risk recalibration, then loaded through the 23-table PostgreSQL full refresh. A world-seed synchronization check remains open before a new dataset manifest is issued.
+
+---
+
 ## Objective
 
 Build the final Part I analytical layer for consolidated BTYT management performance.
 
-The main question is:
+The central question is:
 
-> **How is BTYT performing as a bank, what is driving changes in revenue, costs, credit losses and net income, and how should management interpret those changes over time?**
+> **How is BTYT performing as a bank, what is driving changes in revenue, operating costs, credit losses and net income, and how should management interpret those changes over time?**
 
 This file is the executive synthesis of Part I.
 
-It should connect:
+It connects:
 
 1. business scale;
 2. balance-sheet operating scale;
 3. transaction activity;
 4. revenue generation;
-5. cost structure;
+5. operating-cost structure;
 6. credit losses;
 7. profitability;
 8. customer/account productivity;
 9. branch contribution;
-10. macroeconomic and shock context.
+10. macroeconomic, shock and market context.
 
-The objective is not to build every management KPI directly in SQL.
+The objective is not to calculate every management KPI directly in SQL.
 
-PostgreSQL should provide a stable monthly performance grain and reusable context. Power BI / DAX should own dynamic KPIs, ratios, time intelligence and executive interaction.
+PostgreSQL provides stable analytical grains and reusable context. Power BI / DAX owns dynamic ratios, time intelligence, filter-aware KPIs and executive interaction.
 
 ---
 
-## Scope
+# 1. Scope
 
-This analysis focuses on:
+The performance layer covers:
 
 - active customers;
 - active accounts;
@@ -62,180 +72,743 @@ This analysis focuses on:
 - external-shock context;
 - market context where appropriate.
 
----
-
-## Out of Scope
-
-The following detailed questions remain in their thematic files:
-
-- customer segmentation and relationship depth → `01_customers.sql`
-- account/product behavior → `02_products_accounts.sql`
-- loan delinquency and DPD trajectories → `03_loans.sql`
-- transaction/channel behavior → `04_transactions.sql`
-- branch-level operational diagnosis → `05_branches.sql`
-- campaign effectiveness → `06_campaigns.sql`
-
-`07_performance.sql` should integrate their implications at management level rather than duplicate their detailed analyses.
+Detailed thematic diagnosis remains in the corresponding analytical modules.
 
 ---
 
-## Main Tables
+# 2. Main Performance Tables
 
-### Primary table
+## Primary consolidated table
 
-- `performance.bank_monthly_performance`
+```text
+performance.bank_monthly_performance
+```
 
-### Branch reconciliation
+Grain:
 
-- `performance.branch_monthly_performance`
+```text
+1 row = 1 month of consolidated BTYT performance
+```
 
-### Context tables
+## Branch table
 
-- `macro.macro_environment`
-- `macro.external_shocks`
+```text
+performance.branch_monthly_performance
+```
 
-### Optional market context
+Grain:
 
-- `market.banks`
-- `market.bank_financials`
-- `market.bank_market_weights`
+```text
+1 row = 1 branch × 1 month
+```
+
+The bank table is derived by aggregating the branch table and must reconcile to it.
+
+## Context tables
+
+```text
+macro.macro_environment
+macro.external_shocks
+```
+
+## Optional market context
+
+```text
+market.banks
+market.bank_financials
+market.bank_market_weights
+```
 
 ---
 
-## Reporting Currency
+# 3. Reporting Currency
 
 Monetary fields in:
 
-- `performance.bank_monthly_performance`;
-- `performance.branch_monthly_performance`
+```text
+performance.bank_monthly_performance
+performance.branch_monthly_performance
+```
 
-are generated as **UYU-equivalent reporting values**.
+are expressed in **UYU-equivalent reporting values**.
 
-They are therefore designed to be aggregated within the performance layer.
+They can therefore be aggregated within the performance layer.
 
-This is different from lower-level native-currency tables such as accounts, loans and transactions, where UYU and USD must remain separate unless converted.
-
----
-
-## Core Analytical Grain
-
-### Bank-month grain
-
-> **1 row = 1 month of consolidated BTYT performance**
-
-Source:
-
-- `performance.bank_monthly_performance`
-
-This is the principal management-performance grain.
-
-It contains both:
-
-- **stock / semi-additive measures**
-- **flow / additive measures**
-
-These must be treated differently.
+This differs from lower-level native-currency tables such as accounts, loans and transactions, where UYU and USD must remain separate unless an explicit conversion rule is applied.
 
 ---
 
-## Performance-Engine Definitions
+# 4. Performance Engine V3.2
 
-### Active customers
+Version 3.0.0 changes the cost-generation philosophy substantially.
 
-A monthly relationship/activity measure from the account-balance layer.
+The previous engine produced economically coherent accounting identities, but operating costs were too concentrated around a narrow and unrealistically low Cost-to-Income outcome.
+
+V3 does **not** fix that problem by imposing a Cost-to-Income target.
+
+Instead, it changes the way operating costs are generated.
+
+The new architecture is:
+
+```text
+Structural branch characteristics
+        ↓
+Component-specific band probabilities
+        ↓
+Persistent branch/component profile draw
+        ↓
+Long-run wage / price dynamics
+        ↓
+Workload + yearly cost pressure
+        ↓
+Independent monthly mean-reverting shock
+        ↓
+Realized monthly operating cost
+        ↓
+Profitability and efficiency KPIs
+```
+
+The resulting Cost-to-Income, margins and profitability are therefore **emergent outputs**.
+
+They are not input targets.
+
+---
+
+# 5. Core Design Principle
+
+The V3 cost engine follows one rule:
+
+> **Structural characteristics influence probabilities, but they do not determine outcomes.**
+
+A large branch is more likely to have higher personnel or fixed costs than a small agency.
+
+However, this relationship is probabilistic rather than deterministic.
+
+A large branch can still realize relatively efficient costs.
+
+A small agency can still realize unusually high costs.
+
+These exceptions are analytically desirable because they create meaningful management questions such as:
+
+- Why is one large branch structurally more efficient than peers?
+- Why does a small branch carry unusually high fixed costs?
+- Are high variable costs explained by activity or inefficiency?
+- Are unusually expensive branches persistent or temporary?
+- Which branch characteristics could inform management action?
+
+---
+
+# 6. Four Independent Cost Components
+
+V3 models four operating-cost components separately:
+
+```text
+personnel_cost
+fixed_cost
+variable_cost
+operational_cost
+```
+
+Each component has:
+
+- its own base probability distribution;
+- its own structural probability adjustments;
+- its own persistent band draw;
+- its own within-band value draw;
+- its own structural shock;
+- its own monthly stochastic process.
+
+A branch is therefore not assigned a single global label such as "cheap" or "expensive".
+
+For example, the same branch may be:
+
+```text
+Personnel     HIGH
+Fixed         LOW
+Variable      VERY_HIGH
+Operational   NORMAL
+```
+
+This creates multidimensional branch heterogeneity.
+
+---
+
+# 7. Cost Bands
+
+The persistent cost bands are:
+
+```text
+VERY_LOW
+LOW
+NORMAL
+HIGH
+VERY_HIGH
+```
+
+The band itself is categorical.
+
+The realized structural value is then drawn continuously inside the band's range.
+
+Therefore, two branches assigned to the same band do not receive the same parameter.
+
+---
+
+# 8. Base Band Probabilities
+
+The common starting probabilities are component-specific.
+
+## Personnel
+
+| Band | Base probability |
+|---|---:|
+| VERY_LOW | 8% |
+| LOW | 20% |
+| NORMAL | 44% |
+| HIGH | 20% |
+| VERY_HIGH | 8% |
+
+## Fixed
+
+| Band | Base probability |
+|---|---:|
+| VERY_LOW | 10% |
+| LOW | 20% |
+| NORMAL | 40% |
+| HIGH | 20% |
+| VERY_HIGH | 10% |
+
+## Variable
+
+| Band | Base probability |
+|---|---:|
+| VERY_LOW | 10% |
+| LOW | 22% |
+| NORMAL | 40% |
+| HIGH | 20% |
+| VERY_HIGH | 8% |
+
+## Operational
+
+| Band | Base probability |
+|---|---:|
+| VERY_LOW | 8% |
+| LOW | 18% |
+| NORMAL | 40% |
+| HIGH | 24% |
+| VERY_HIGH | 10% |
+
+These are **starting probabilities**, not branch-type-specific deterministic tables.
+
+They are subsequently tilted by branch structure and an independent component-specific shock.
+
+---
+
+# 9. Structural Value Ranges
+
+## Personnel profile
+
+Personnel values are multipliers over the branch staffing-cost base.
+
+| Band | Multiplier range |
+|---|---:|
+| VERY_LOW | 0.70–0.95 |
+| LOW | 0.95–1.15 |
+| NORMAL | 1.15–1.55 |
+| HIGH | 1.55–2.05 |
+| VERY_HIGH | 2.05–2.80 |
+
+## Fixed-cost profile
+
+Fixed values are multipliers over the structural fixed-cost base.
+
+| Band | Multiplier range |
+|---|---:|
+| VERY_LOW | 0.55–0.80 |
+| LOW | 0.80–1.10 |
+| NORMAL | 1.10–1.60 |
+| HIGH | 1.60–2.30 |
+| VERY_HIGH | 2.30–3.40 |
+
+## Variable-cost profile
+
+Variable values are shares of the rigid cost base before workload and cost-pressure adjustments.
+
+| Band | Share range |
+|---|---:|
+| VERY_LOW | 0.12–0.25 |
+| LOW | 0.25–0.45 |
+| NORMAL | 0.45–0.75 |
+| HIGH | 0.75–1.15 |
+| VERY_HIGH | 1.15–1.80 |
+
+## Operational-cost profile
+
+Operational values are broad allocated technology, administration, compliance, support and other overhead shares of the rigid cost base.
+
+| Band | Share range |
+|---|---:|
+| VERY_LOW | 0.75–1.25 |
+| LOW | 1.25–2.00 |
+| NORMAL | 2.00–3.20 |
+| HIGH | 3.20–4.80 |
+| VERY_HIGH | 4.80–7.00 |
+
+These values are model inputs to cost formation.
+
+They are **not** Cost-to-Income bands.
+
+---
+
+# 10. Soft Structural Correlation
+
+Structural branch characteristics modify the base probabilities only slightly.
+
+The probability distribution is tilted using:
+
+- branch size;
+- branch type;
+- location, where economically relevant;
+- an independent branch/component structural shock.
+
+Examples:
+
+- `LARGE` raises the probability of higher personnel-cost bands;
+- `SMALL` slightly raises the probability of lower personnel-cost bands;
+- `BRANCH` and `AGENCY` shift probabilities differently;
+- location matters most for fixed costs;
+- variable costs remain primarily activity-driven.
+
+No structural feature forces a branch into a particular band.
+
+---
+
+# 11. Independent Structural Shocks
+
+Each branch receives a different structural shock for each component.
+
+Conceptually:
+
+```text
+branch 012
+
+personnel structural shock   ≠
+fixed structural shock       ≠
+variable structural shock    ≠
+operational structural shock
+```
+
+This prevents one global latent draw from making a branch mechanically:
+
+```text
+cheap in everything
+```
+
+or:
+
+```text
+expensive in everything
+```
+
+The branch can therefore exhibit mixed cost characteristics.
+
+All draws remain deterministic under the world seed and RNG namespace, so the world is reproducible.
+
+---
+
+# 12. Persistent Structural Identity
+
+A branch does **not** redraw its structural band every month.
+
+The following elements remain persistent across the observation horizon:
+
+- cost band;
+- within-band structural value;
+- monthly-process persistence parameter;
+- monthly-process long-run volatility parameter.
+
+This preserves branch identity.
+
+A structurally expensive branch tends to remain relatively expensive, but its realized monthly cost can still fluctuate.
+
+---
+
+# 13. Monthly Cost Dynamics
+
+Monthly costs are not forced to increase monotonically.
+
+Each component has its own independent mean-reverting process in log space:
+
+```text
+log_shock_t
+=
+phi × log_shock_(t-1)
++ innovation_t
+```
+
+The multiplicative monthly factor is:
+
+```text
+monthly_factor_t = exp(log_shock_t)
+```
+
+Therefore:
+
+```text
+monthly_factor_t > 1
+```
+
+raises the component cost relative to its structural path, while:
+
+```text
+monthly_factor_t < 1
+```
+
+reduces it.
+
+A monthly sequence may therefore behave like:
+
+```text
+120
+123
+121
+125
+124
+128
+126
+```
+
+rather than moving mechanically upward every month.
+
+---
+
+# 14. Component-Specific Monthly Processes
+
+Each component receives separate persistence and volatility parameter draws.
+
+## Personnel
+
+```text
+phi   ∈ [0.65, 0.90]
+sigma ∈ [0.015, 0.040]
+```
+
+Interpretation:
+
+- relatively persistent;
+- relatively low monthly volatility;
+- long-run movement still influenced by the wage index.
+
+## Fixed
+
+```text
+phi   ∈ [0.75, 0.95]
+sigma ∈ [0.020, 0.055]
+```
+
+Interpretation:
+
+- highly persistent;
+- sticky facility/infrastructure behavior;
+- long-run movement influenced by the price index.
+
+## Variable
+
+```text
+phi   ∈ [0.35, 0.70]
+sigma ∈ [0.050, 0.120]
+```
+
+Interpretation:
+
+- less persistent;
+- more volatile;
+- strongly linked to actual monthly workload.
+
+## Operational
+
+```text
+phi   ∈ [0.50, 0.82]
+sigma ∈ [0.035, 0.090]
+```
+
+Interpretation:
+
+- intermediate persistence and volatility;
+- captures technology, administration, compliance, support and other operating overhead dynamics.
+
+---
+
+# 15. Monthly Cost Formation
+
+## Personnel cost
+
+Conceptually:
+
+```text
+Personnel Cost
+=
+Staff Base
+× Base Labor Cost
+× Persistent Personnel Profile
+× Monthly Personnel Shock
+× Wage Index
+× Cost-Pressure Effect
+```
+
+The structural staffing base still depends on branch size and branch type.
+
+---
+
+## Fixed cost
+
+Conceptually:
+
+```text
+Fixed Cost
+=
+Structural Fixed Base
+× Persistent Fixed Profile
+× Monthly Fixed Shock
+× Location Effect
+× Price Index
+× Cost-Pressure Effect
+```
+
+Location therefore affects both the structural base and the probabilistic environment without fully determining the realized cost.
+
+---
+
+## Variable cost
+
+Variable cost is built from the rigid cost base:
+
+```text
+Rigid Base
+=
+Personnel Cost + Fixed Cost
+```
+
+Then:
+
+```text
+Variable Cost
+=
+Rigid Base
+× Persistent Variable Profile
+× Monthly Variable Shock
+× Workload Effect
+× Cost-Pressure Effect
+```
+
+The workload index uses:
+
+```text
+55% transaction count
+25% branch transaction count
+15% active accounts
+5% active loans
+```
+
+with elasticity:
+
+```text
+VARIABLE_COST_ELASTICITY = 0.82
+```
+
+Variable cost is therefore the component most directly connected to monthly operational activity.
+
+---
+
+## Operational cost
+
+Conceptually:
+
+```text
+Operational Cost
+=
+Rigid Base
+× Persistent Operational Profile
+× Monthly Operational Shock
+× Cost-Pressure Effect
+```
+
+It represents broad allocated operating overhead that is not captured by payroll, fixed branch infrastructure or activity-linked variable cost.
+
+---
+
+# 16. Cost Pressure
+
+The engine retains the branch/year `cost_pressure` process.
+
+Cost pressure affects components with different sensitivities:
+
+```text
+Personnel beta    = 0.04
+Fixed beta        = 0.08
+Variable beta     = 0.06
+Operational beta  = 0.20
+```
+
+Therefore a common branch/year pressure state does not affect all cost components equally.
+
+---
+
+# 17. Long-Run Wage and Price Dynamics
+
+Personnel and fixed costs retain deterministic long-run economic indices.
+
+This is intentional.
+
+The indices represent macro-level cost trends, while the stochastic monthly processes introduce local deviations around those trends.
+
+Therefore:
+
+> a long-run upward trend does not imply that every month must be more expensive than the previous month.
+
+---
+
+# 18. Cost-to-Income Is an Output
+
+The V3 engine does not contain:
+
+```text
+COST_TO_INCOME_MIN
+COST_TO_INCOME_MAX
+TARGET_COST_TO_INCOME
+```
+
+and does not solve costs backward from a desired efficiency ratio.
+
+Instead:
+
+```text
+Cost-to-Income
+=
+Total Operating Cost / Total Revenue
+```
+
+is calculated after revenue and cost generation.
+
+This is a critical analytical distinction.
+
+The engine generates economic conditions.
+
+The analytical layer observes their consequences.
+
+---
+
+# 19. Performance-Engine Definitions
+
+## Active customers
+
+Monthly relationship/activity measure derived from the account-balance layer.
 
 Each represented customer is uniquely assigned to one branch for that month.
 
-It is not the same as the cutoff field `core.customers.customer_status`.
+It is not equivalent to the cutoff field:
 
-### Active accounts
+```text
+core.customers.customer_status
+```
+
+## Active accounts
 
 Accounts represented in the month's account-balance layer.
 
-It is not simply the cutoff field `core.accounts.account_status`.
+It is not simply:
 
-### Average deposits
+```text
+core.accounts.account_status
+```
 
-Generated from account monthly average balances:
+## Average deposits
+
+Generated from monthly account balances:
 
 ```text
 (opening_balance + closing_balance) / 2
 ```
 
-with currency conversion to UYU-equivalent.
+then converted to UYU-equivalent.
 
-### Average loan balance
+## Average loan balance
 
-Monthly outstanding exposure converted to UYU-equivalent.
+Monthly outstanding loan exposure converted to UYU-equivalent.
 
-### Transactions
+## Transactions
 
-Performance transaction counts and volume use **COMPLETED transactions only**.
+Performance transaction counts and transaction volume use:
 
-`branch_transaction_count` is the completed `BRANCH`-channel count.
+```text
+COMPLETED
+```
 
----
+transactions only.
 
-## Stock vs Flow Semantics
-
-### Semi-additive / snapshot-style measures
-
-- `active_customers`
-- `active_accounts`
-- `average_deposits`
-- `average_loan_balance`
-
-These can describe a month and may reconcile across branches for that month.
-
-They should **not** simply be summed across months.
-
-For annual reporting, use an explicit rule such as:
-
-- year-end value;
-- average monthly value.
+`branch_transaction_count` contains completed `BRANCH`-channel activity.
 
 ---
 
-### Additive flow measures
+# 20. Revenue Formation
 
-- `transaction_count`
-- `transaction_volume`
-- `branch_transaction_count`
-- `interest_income`
-- `interest_expense`
-- `net_interest_income`
-- `fee_income`
-- `total_revenue`
-- `personnel_cost`
-- `fixed_cost`
-- `variable_cost`
-- `operational_cost`
-- `total_operating_cost`
-- `credit_loss`
-- `pre_provision_profit`
-- `net_income`
-
-These may be summed across months to produce annual totals.
-
----
-
-## Performance Accounting Identities
-
-The performance engine follows the management identities:
+Net interest income is:
 
 ```text
 Net Interest Income
-= Interest Income - Interest Expense
+=
+Interest Income - Interest Expense
+```
+
+Fee income is generated from:
+
+- transaction fees;
+- card fees.
+
+Total revenue is:
+
+```text
+Total Revenue
+=
+Net Interest Income + Fee Income
+```
+
+---
+
+# 21. Credit-Loss Formation
+
+Credit loss is produced from the credit-risk layer.
+
+The performance engine uses:
+
+- delinquency-based provision requirements;
+- changes in required provisions;
+- terminal write-off loss where applicable;
+- inherited opening-state treatment for pre-2021 exposures.
+
+Credit loss is an operating performance input but its detailed delinquency mechanics remain documented in the credit-risk analytical layer.
+
+---
+
+# 22. Performance Accounting Identities
+
+The engine must satisfy:
+
+```text
+Net Interest Income
+=
+Interest Income - Interest Expense
 ```
 
 ```text
 Total Revenue
-= Net Interest Income + Fee Income
+=
+Net Interest Income + Fee Income
 ```
 
 ```text
 Total Operating Cost
-= Personnel Cost
+=
+Personnel Cost
 + Fixed Cost
 + Variable Cost
 + Operational Cost
@@ -243,220 +816,195 @@ Total Operating Cost
 
 ```text
 Pre-Provision Profit
-= Total Revenue - Total Operating Cost
+=
+Total Revenue - Total Operating Cost
 ```
 
 ```text
 Net Income
-= Pre-Provision Profit - Credit Loss
+=
+Pre-Provision Profit - Credit Loss
 ```
 
-These relationships should be audited directly in SQL.
+These are accounting identities, not behavioral assumptions.
 
 ---
 
-## Main Business Questions
+# 23. Stock vs Flow Semantics
 
-### 1. Business Scale
+## Semi-additive / snapshot-style measures
 
-1. How many active customers does BTYT have over time?
-2. How many active accounts does it have?
-3. How does average deposit scale evolve?
-4. How does average loan balance evolve?
-5. Is business scale growing consistently?
-6. Are customers, accounts, deposits and loans growing at similar rates?
-7. Does account growth outpace customer growth?
+```text
+active_customers
+active_accounts
+average_deposits
+average_loan_balance
+```
 
----
+They may reconcile across branches for the same month.
 
-### 2. Transaction Activity
+They should not simply be summed across months.
 
-8. How does transaction count evolve?
-9. How does transaction volume evolve?
-10. What share of activity remains branch-linked?
-11. Is transaction count growing faster than transaction value?
-12. Does increased activity translate into higher revenue?
+Annual reporting should use explicit semantics such as:
 
-Detailed channel analysis remains in `04_transactions.sql`.
+- monthly average;
+- year-end value.
 
----
+## Additive flow measures
 
-### 3. Revenue
+```text
+transaction_count
+transaction_volume
+branch_transaction_count
+interest_income
+interest_expense
+net_interest_income
+fee_income
+total_revenue
+personnel_cost
+fixed_cost
+variable_cost
+operational_cost
+total_operating_cost
+credit_loss
+pre_provision_profit
+net_income
+```
 
-13. How does total revenue evolve?
-14. How much comes from net interest income?
-15. How much comes from fee income?
-16. Is the revenue mix changing over time?
-17. Is fee income becoming more or less important?
-18. Does revenue growth track customer, loan or transaction growth?
-19. Which periods show revenue acceleration or deterioration?
-
----
-
-### 4. Net Interest Income
-
-20. How do interest income and interest expense evolve?
-21. Is net interest income expanding or compressing?
-22. Does net interest income grow with loan balances?
-23. Are there periods where funding cost pressure reduces net interest income?
-24. Does macro or USD pressure coincide with changes in interest performance?
-
-This file should describe association and timing, not claim causality.
+These may be summed across months.
 
 ---
 
-### 5. Cost Structure
+# 24. Branch-to-Bank Reconciliation
 
-25. How does total operating cost evolve?
-26. How much comes from personnel costs?
-27. How much comes from fixed costs?
-28. How much comes from variable costs?
-29. How much comes from operational costs?
-30. Is the cost mix changing?
-31. Are costs growing faster or slower than revenue?
-32. Is operating leverage improving?
+The consolidated bank table is built from branch-month values.
 
----
+For every additive field:
 
-### 6. Pre-Provision Profit
+```text
+SUM(branch_monthly_performance)
+=
+bank_monthly_performance
+```
 
-33. How does pre-provision profit evolve?
-34. Is the core business generating more profit before credit losses?
-35. Are periods of weak pre-provision profit caused primarily by revenue weakness or cost pressure?
-36. Does scale growth translate into stronger pre-provision profitability?
+subject only to the engine's rounding tolerance.
+
+This reconciliation is a required integrity condition.
 
 ---
 
-### 7. Credit Loss
+# 25. V3 Diagnostic Outputs
 
-37. How does credit loss evolve over time?
-38. Which periods show unusually high credit-loss pressure?
-39. How large is credit loss relative to the loan book?
-40. How much of pre-provision profit is absorbed by credit losses?
-41. Does credit-loss deterioration coincide with macro stress?
+Before accepting a generated world, the engine reports the structural cost-profile distribution.
 
-Detailed delinquency drivers remain in `03_loans.sql`.
+For each component it reports:
 
----
+```text
+number of branches in each band
+profile value min / median / max
+```
 
-### 8. Net Income
+It also reports monthly stochastic-process diagnostics:
 
-42. How does net income evolve?
-43. Which periods are profitable or loss-making?
-44. Is net income volatility driven more by revenue, costs or credit losses?
-45. Is profitability improving as the bank scales?
-46. Are there sustained periods of margin compression?
-47. How does net income behave around external shocks?
+```text
+monthly factor P10 / median / P90
+phi min / median / max
+sigma min / median / max
+```
 
----
+These diagnostics are descriptive.
 
-### 9. Efficiency
-
-48. What is BTYT's Cost-to-Income ratio?
-49. Is Cost-to-Income improving?
-50. How much revenue is generated per active customer?
-51. How much net income is generated per active customer?
-52. How much revenue is generated per active account?
-53. Are deposits and loan balances growing faster than operating costs?
-54. Does scale produce operating leverage?
+They are not guardrails that force the world toward a target Cost-to-Income or profitability result.
 
 ---
 
-### 10. Balance-Sheet Operating Mix
+# 26. Performance Integrity Checks
 
-55. What is the relationship between average loans and average deposits?
-56. Is the loan-to-deposit operating mix changing?
-57. Are deposits growing faster than lending?
-58. Does the funding/lending mix shift during stress periods?
+Before loading the regenerated outputs into PostgreSQL, verify:
 
-This is a management ratio based on the BTYT performance-engine fields, not a claim of regulatory reporting equivalence.
+- one branch-month row per branch and month;
+- complete 2021–2026 coverage;
+- no duplicate branch/month rows;
+- non-negative required count and balance fields;
+- accounting identities;
+- branch-to-bank reconciliation;
+- valid cost-band probabilities;
+- valid within-band ranges;
+- no missing monthly shock factors;
+- meaningful variation in component-level monthly shock factors;
+- cost-profile diversity across branches;
+- no accidental UYU/USD mixing;
+- no impossible branch transaction count above total transaction count.
 
----
-
-### 11. Revenue Mix
-
-59. What share of revenue comes from fees?
-60. What share comes from net interest income?
-61. Is the bank becoming more fee-dependent?
-62. Does revenue diversification improve during periods of interest pressure?
-
----
-
-### 12. Transaction Mix at Management Level
-
-63. What share of transaction count is branch-linked?
-64. Is branch-linked activity declining as the bank grows?
-65. Does lower physical transaction share coincide with lower operating costs?
-
-Detailed digital-channel definitions remain in `04_transactions.sql`.
+The V3 audit should be inspected **before replacing the existing PostgreSQL performance tables**.
 
 ---
 
-### 13. Annual Management Performance
+# 27. Main Management Questions
 
-66. What are annual total revenues?
-67. What are annual total operating costs?
-68. What are annual credit losses?
-69. What is annual net income?
-70. What are average monthly customers/accounts/deposits/loans?
-71. What are year-end customers/accounts?
-72. How does each year compare structurally and financially with the previous one?
+## Business scale
 
-Annual reporting must respect stock-versus-flow semantics.
+- How do active customers and accounts evolve?
+- How do deposits and loan balances evolve?
+- Does scale growth translate into stronger revenue?
+- Does account growth outpace customer growth?
+
+## Revenue
+
+- How does total revenue evolve?
+- How much comes from net interest income?
+- How much comes from fees?
+- Is the revenue mix changing?
+
+## Cost structure
+
+- How do personnel, fixed, variable and operational costs evolve?
+- Which components are responsible for cost acceleration?
+- Are some branches structurally more expensive than peers?
+- Do exceptional branches persist over time?
+- Are high variable costs explained by high workload?
+- Do high fixed costs coincide with location or branch structure?
+
+## Efficiency
+
+- What is Cost-to-Income?
+- How dispersed is Cost-to-Income across branches?
+- Which branches combine high activity with relatively low cost?
+- Which branches have unusual cost structures?
+- Are changes in efficiency driven by revenue or costs?
+
+## Credit risk
+
+- How does credit loss evolve?
+- How much pre-provision profit is absorbed by credit loss?
+- Which periods show unusually high risk pressure?
+
+## Profitability
+
+- How does pre-provision profit evolve?
+- How does net income evolve?
+- Which months or branches are loss-making?
+- Is profitability volatility driven by revenue, costs or credit losses?
+
+## Management action
+
+The V3 design makes it possible to investigate cases such as:
+
+- large but efficient branches;
+- small but expensive agencies;
+- high fixed-cost locations;
+- high workload with low variable cost;
+- low workload with high operational overhead;
+- branches with persistent negative profitability;
+- branches with temporary cost shocks.
+
+These patterns may motivate management hypotheses, but the analytical layer should distinguish descriptive evidence from causal claims.
 
 ---
 
-### 14. Branch-to-Bank Reconciliation
+# 28. Executive KPI Framework
 
-73. Do monthly branch totals reconcile to consolidated bank performance?
-74. Are active customers/accounts fully allocated to branches?
-75. Do branch revenue, costs, credit losses and net income reconcile?
-76. Are there any residuals caused by rounding or allocation?
-
-The consolidated performance layer should be auditable back to branch performance. `07_performance.sql` is the **canonical full branch-to-bank reconciliation** for the final SQL layer.
-
----
-
-### 15. Macro Context
-
-77. How does performance behave across different macro growth environments?
-78. How does the credit cycle align with lending and credit loss?
-79. Does financial stress align with weaker profitability?
-80. Does USD pressure align with changes in funding or lending conditions?
-81. Does digitalization context align with branch transaction share?
-82. Does cross-border context align with transaction volume?
-
-The macro table is annual context. Monthly performance rows inherit the relevant year's macro state.
-
----
-
-### 16. External Shock Context
-
-83. Which performance months overlap with external-shock windows?
-84. How do revenue, costs, credit losses and net income behave during those windows?
-85. Are several shocks active simultaneously?
-86. Does performance recover after shock periods?
-
-Shock overlap is descriptive context, not causal identification.
-
----
-
-### 17. Competitive / Market Context
-
-87. How does the competitive environment evolve across years?
-88. How do market weights change among banks?
-89. How do external bank financials change over time?
-90. Does BTYT's internal trajectory occur during periods of broader market change?
-
-The market tables should be treated as context rather than directly merged into monthly accounting measures without a clear definition.
-
----
-
-## Executive KPI Framework
-
-The Power BI executive layer should eventually organize KPIs into five groups.
-
-### Scale
+## Scale
 
 - Active Customers
 - Active Accounts
@@ -465,7 +1013,7 @@ The Power BI executive layer should eventually organize KPIs into five groups.
 - Transaction Count
 - Transaction Volume
 
-### Revenue
+## Revenue
 
 - Interest Income
 - Interest Expense
@@ -473,7 +1021,7 @@ The Power BI executive layer should eventually organize KPIs into five groups.
 - Fee Income
 - Total Revenue
 
-### Cost
+## Cost
 
 - Personnel Cost
 - Fixed Cost
@@ -481,13 +1029,13 @@ The Power BI executive layer should eventually organize KPIs into five groups.
 - Operational Cost
 - Total Operating Cost
 
-### Risk
+## Risk
 
 - Credit Loss
 - Credit Loss / Average Loan Balance
 - Credit Loss / Pre-Provision Profit
 
-### Profitability & Efficiency
+## Profitability and efficiency
 
 - Pre-Provision Profit
 - Net Income
@@ -497,228 +1045,142 @@ The Power BI executive layer should eventually organize KPIs into five groups.
 - Revenue per Customer
 - Net Income per Customer
 - Revenue per Account
-- Loan-to-Deposit operating ratio
+- Loan-to-Deposit Ratio
 - Fee Income Share
 - Branch Transaction Share
 
 ---
 
-## SQL vs DAX vs Python Boundary
+# 29. SQL vs DAX vs Python Boundary
 
-### SQL
+## SQL
 
 SQL should own:
 
-- consolidated monthly performance base;
-- macro-context joins;
-- shock-calendar joins;
+- stable monthly performance grains;
 - annual stock/flow rollups;
-- accounting identity audits;
+- accounting-identity audits;
 - branch-to-bank reconciliation;
-- reusable P&L component structure;
+- reusable P&L structures;
+- macro and shock context;
 - structural consistency diagnostics.
 
----
-
-### DAX / Power BI
+## Power BI / DAX
 
 DAX should own dynamic measures such as:
 
 - Total Revenue;
 - Net Income;
 - Cost-to-Income;
+- Pre-Provision Margin;
+- Net Margin;
 - Revenue per Customer;
 - Net Income per Customer;
-- Revenue per Account;
-- Loan-to-Deposit ratio;
+- Loan-to-Deposit Ratio;
 - Fee Income Share;
-- Branch Transaction Share;
-- Credit Loss ratio;
-- MoM / YoY growth;
-- rolling 3 / 6 / 12-month measures;
-- YTD revenue;
-- YTD net income;
-- period-versus-period variance;
-- branch contribution under filter context.
+- Credit Loss Ratio;
+- MoM / YoY measures;
+- rolling measures;
+- YTD measures;
+- filter-aware branch contribution.
 
-These should respond dynamically to date and other selected dimensions.
+Power BI should **observe** the generated performance world, not repair or recalibrate it.
 
----
+## Python
 
-### Python / Pandas / Jupyter
+Python owns:
 
-Python is useful for:
-
-- decomposition of performance changes;
-- correlations;
-- shock-window comparison;
-- trend breaks;
-- anomaly detection;
-- scenario analysis;
-- statistical association with macro variables;
-- exploratory forecasting.
-
-Causal or predictive interpretation requires a separately defined methodology.
+- synthetic performance generation;
+- stochastic cost-profile assignment;
+- monthly mean-reverting cost processes;
+- deterministic reproducibility through the world seed;
+- advanced exploratory/statistical analysis where appropriate.
 
 ---
 
-### Excel
+# 30. Regeneration and Refresh Workflow
 
-This file is also a strong source for the final Excel management workbook.
+When the upstream credit-risk layer changes, performance must be regenerated because `credit_loss`, interest recognition and downstream profitability depend on the loan snapshot.
 
-Useful Excel outputs include:
-
-- monthly executive P&L;
-- annual summary;
-- variance tables;
-- KPI scorecard;
-- management PivotTables;
-- waterfall charts;
-- scenario / sensitivity exercises.
-
----
-
-## Recommended SQL Analytical Objects
-
-### 1. Bank-month performance base
-
-Grain:
+Current workflow:
 
 ```text
-1 row = 1 month
+validated BTYT source files
+        ↓
+generate_loans.py V5.2.0
+        ↓
+generate_loan_monthly_snapshot.py V4.2
+        ↓
+generate_branch_performance.py V3.2.0
+        ↓
+branch_monthly_performance.parquet
+bank_monthly_performance.parquet
+        ↓
+performance reconciliation / validation
+        ↓
+PostgreSQL 23-table full refresh
+        ↓
+refresh analytics materialized views
+        ↓
+Power BI refresh
 ```
 
-Include:
-
-- all bank performance measures;
-- calendar fields;
-- annual macro context;
-- shock-window context.
-
-This is the principal Power BI executive source.
-
----
-
-### 2. Annual management summary
-
-Grain:
+The 2026-10-11 performance regeneration produced:
 
 ```text
-1 row = 1 year
+2,664 branch-month rows
+72 bank-month rows
+SUM(branch) == bank    PASS
+VALIDATION             PASS
 ```
 
-Apply correct temporal semantics:
+Business-result diagnostics are suppressed by default in the generator so the technical audit does not spoil the analytical findings that should be discovered in BI.
 
-```text
-flows → SUM across months
-stocks → monthly AVG and/or year-end
-```
+### Reproducibility condition
+
+Before the next frozen manifest, the world seed/settings used by the performance engine must be synchronized with the active BTYT/01 world identity. See `../README.md` and `credit_risk_calibration.md`.
 
 ---
 
-### 3. P&L component bridge
-
-Grain:
-
-```text
-1 row = 1 month × 1 P&L component
-```
-
-Useful for:
-
-- waterfall charts;
-- revenue/cost decomposition;
-- management storytelling.
-
-The bridge contains both **components** and **totals**. Do not sum every row together as if all rows were independent additive components. Use the `amount_type` / ordering semantics to distinguish components from subtotal/total rows.
-
----
-
-## Macro Join Semantics
-
-`macro.macro_environment` has annual grain:
-
-```text
-1 row = 1 year
-```
-
-Therefore:
-
-```text
-monthly performance
-→ extract year
-→ join annual macro state
-```
-
-The same annual macro values will repeat across the months of that year.
-
-This is expected and should not be mistaken for monthly macro variation.
-
----
-
-## External Shock Semantics
-
-`macro.external_shocks` contains explicit:
-
-- start month;
-- peak month;
-- end month;
-- recovery end month.
-
-A reusable monthly shock calendar expands each shock from start through recovery and distinguishes:
-
-```text
-ACTIVE_SHOCK
-PEAK
-RECOVERY
-```
-
-The recovery window is context after the active shock period; it should not be described as if the shock were still fully active.
-
-If several shocks overlap, the month may contain multiple shock labels.
-
-Do not collapse overlapping shocks into one causal interpretation.
-
----
-
-## Performance Integrity Checks
-
-Before executive analysis, verify:
-
-- one row per `year_month`;
-- complete monthly coverage;
-- non-negative count/stock fields where required;
-- accounting identities;
-- branch-to-bank reconciliation;
-- no impossible branch transaction count greater than total transaction count;
-- consistent stock/flow handling;
-- no accidental UYU/USD mixing when reconciling to lower-level tables.
-
----
-
-## Expected Outputs
-
-By the end of `07_performance.sql`, the project should have:
-
-1. a reusable consolidated bank-month performance base;
-2. macro and external-shock context;
-3. an annual management summary with correct stock/flow treatment;
-4. a reusable P&L bridge;
-5. an executive KPI validation query;
-6. accounting-identity diagnostics;
-7. branch-to-bank reconciliation;
-8. a clean Power BI / DAX handoff;
-9. a clean Excel management handoff;
-10. a clean Python handoff for advanced performance analysis.
-
----
-
-## Analytical Boundary
+# 31. Analytical Boundary
 
 This file should answer:
 
-> **How is BTYT performing as a bank, what are the major drivers of performance, and how does that performance evolve in business, risk and macro context?**
+> **How is BTYT performing as a bank, how do the main components of performance evolve, and what branch-level patterns merit management investigation?**
 
-It should not replace detailed customer, credit, transaction, branch or campaign analytics.
+It should not replace detailed:
 
-It is the executive synthesis layer of Part I.
+- customer analysis;
+- loan and delinquency analysis;
+- transaction/channel analysis;
+- campaign analysis;
+- causal identification.
+
+The performance layer is the **executive synthesis layer of Part I**.
+
+---
+
+# 32. V3 Methodological Summary
+
+The V3 performance engine is intentionally neither purely deterministic nor unconstrained randomness.
+
+It combines:
+
+```text
+economic structure
++ probabilistic heterogeneity
++ reproducible stochastic draws
++ time-varying operational drivers
++ persistent but mean-reverting monthly shocks
+```
+
+The objective is to create a synthetic banking world in which:
+
+- economic relationships remain interpretable;
+- branches can differ meaningfully;
+- exceptional cases can occur;
+- results remain reproducible;
+- analytical findings are not known in advance;
+- management KPIs emerge from the generated system rather than being imposed on it.
+
+That principle is central to the BTYT Part I analytical design.

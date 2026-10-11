@@ -1,10 +1,10 @@
 {
   "world": {
-    "name": "SMOKE",
-    "seed": 3165889979
+    "name": "BTYT",
+    "seed": 3839777825
   },
   "population": {
-    "customers": 50
+    "customers": 107253
   },
   "observation_period": {
     "start_date": "2021-01-01",
@@ -18,5 +18,5 @@
     "mode": "imperfect",
     "level": "realistic"
   },
-  "variant": 33
+  "variant": 1
 }

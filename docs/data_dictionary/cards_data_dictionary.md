@@ -2,9 +2,9 @@
 
 ## Architecture context
 
-**Documentation status:** Canonical-generation contract — updated 2026-09-07  
-**World scope:** Active BTYT world  
-**Routing:** Physical storage is resolved through `scripts/core/paths.py` and `config/active_world.json`.
+**Documentation status:** Table contract — architecture note refreshed 2026-10-11  
+**World scope:** World-relative BTYT datasets  
+**Routing:** Physical storage is selected through `config/active_world.json`; world-level RNG/settings are loaded from `config/world_config.json` through `scripts/core/world.py`.
 
 Paths written as `data/generated/...`, `data/interim/...`, or `data/operational/...`
 are **world-relative paths**. Under the active-world architecture they resolve beneath:
@@ -14,8 +14,8 @@ worlds/<world>/<variant>/
 ```
 
 The dictionary describes the table contract and statistical meaning, not one specific
-materialized world. World identity, seed, population, observation period, execution mode,
-and operational reliability are supplied by the active world configuration.
+materialized world. Physical world routing and world-level RNG/settings are separate
+mechanisms in the current codebase and must be synchronized before canonical regeneration.
 
 > **World Builder configures the world; Python generators realize its history.**
 
@@ -56,7 +56,7 @@ A row represents the continuing card relationship and **not each physical plasti
 
 - Deposit and transactional accounts are represented in `accounts`.
 - Loans are represented in `loans`.
-- Credit limits, balances, utilization, minimum payments and delinquency are not stored here; those belong to `credit_card_monthly_snapshot`.
+- Credit limits, balances, utilization, minimum payments and card-specific delinquency are not stored here. A dedicated monthly card snapshot was designed historically but is **not materialized in the current 23-table Part I model**.
 - Purchases and other card transactions are not stored here; those belong to the relevant transaction tables.
 
 ---
@@ -580,7 +580,7 @@ Therefore the DGP may naturally generate:
 
 # Credit-card economic closure
 
-For P010 and P011, definitive relationship closure must remain economically coherent with later `credit_card_monthly_snapshot` generation.
+For P010 and P011, definitive relationship closure should remain economically coherent with any future card-exposure extension. The current Part I model does **not** materialize a dedicated `credit_card_monthly_snapshot` fact.
 
 A card may stop authorizing purchases before outstanding exposure is fully extinguished, but final `card_status = CLOSED` should normally correspond to payoff, settlement or another internally coherent resolution.
 
@@ -594,9 +594,7 @@ Any non-zero residual exposure after definitive closure should appear only if a 
 
 Credit limits are **not** attributes of `cards`.
 
-They will be modeled in `credit_card_monthly_snapshot`.
-
-Future limit evolution may depend probabilistically on:
+A dedicated monthly card-exposure model is outside the current Part I physical schema. If it is introduced later, limit evolution may depend probabilistically on:
 
 - financial capacity;
 - relationship tenure;

@@ -53,8 +53,8 @@ Validated Relational Model
         │
         ├── SQL analytics
         ├── Power BI
-        ├── Tableau
-        └── Apache Superset
+        ├── Python / Excel
+        └── Tableau
 ```
 
 The separation of responsibilities is intentional:
@@ -727,45 +727,63 @@ The definitive ERD must still represent all **28 actual foreign-key relationship
 
 ## 23. Current status
 
-At this point:
+The relational migration described by this document has already been completed.
+
+Current established model:
 
 ```text
-[PASS] Final 7-schema architecture defined
-[PASS] 23-table distribution defined
-[PASS] apply_relational_model.py updated
-[PASS] Schema migration made atomic
-[PASS] Schema migration made idempotent
-[PASS] 23 primary-key definitions retained
-[PASS] 28 foreign-key definitions retained
-[PASS] 11 NOT NULL rules retained
-[PASS] 27 CHECK constraints retained
+core          4 / 4
+banking       5 / 5
+marketing     3 / 3
+reference     2 / 2
+market        5 / 5
+macro         2 / 2
+performance   2 / 2
 
-[PENDING] Update audit_relational_model.py
-[PENDING] Audit new 7-schema architecture
-[PENDING] Execute --schemas
-[PENDING] Update validation script
-[PENDING] Revalidate historical constraints
-[PENDING] Regenerate final ERD
+Observed BTYT tables: 23 / 23
 ```
+
+The applied model retains:
+
+```text
+23 / 23 primary keys
+28 / 28 foreign keys
+11 / 11 audited NOT NULL rules
+27 / 27 CHECK constraints
+```
+
+The current routine data-refresh process does **not** rerun this script. `load_postgresql.py` now refreshes data inside the already-applied relational model while preserving the structure.
 
 ---
 
-## 24. Next step
+## 24. When to use this script again
 
-The next required step is **not** to redesign the ERD.
+Use `apply_relational_model.py` only when:
 
-The next step is:
+- the relational architecture itself changes;
+- a missing/incorrect constraint must be repaired;
+- a schema migration is intentionally introduced;
+- a fresh database bootstrap process explicitly requires it.
+
+Do not rerun structural migration merely because canonical data was regenerated.
+
+Current normal refresh flow:
 
 ```text
-update audit_relational_model.py
-        ↓
-audit 7-schema architecture
-        ↓
-apply schema migration
-        ↓
-validate
-        ↓
-generate final ERD
+canonical data
+    ↓
+load_postgresql.py
+    ↓
+full refresh of existing 23-table model
+    ↓
+Power BI / downstream analytics refresh
 ```
 
-This keeps the visual documentation aligned with the actual PostgreSQL model rather than designing the diagram before the database architecture is finalized.
+Structural changes should still be followed by:
+
+```text
+audit_relational_model.py
+validate_relational_model.py
+```
+
+before the revised relational architecture is considered accepted.

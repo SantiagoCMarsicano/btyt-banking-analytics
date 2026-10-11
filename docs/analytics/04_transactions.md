@@ -17,7 +17,7 @@ This file must respect the scale of the transaction engine. The transaction tabl
 - failures and exceptions;
 - downstream BI consumption.
 
-The objective is not to create one SQL query for every possible transaction slice. SQL should prepare efficient analytical grains; DAX, Power BI, Superset and Python should consume those grains according to their strengths.
+The objective is not to create one SQL query for every possible transaction slice. SQL should prepare efficient analytical grains; DAX, Power BI and Python should consume those grains according to their strengths.
 
 ---
 
@@ -190,7 +190,7 @@ PostgreSQL analytical aggregation
         ↓
 smaller reusable transaction datasets
         ↓
-Power BI / DAX / Superset / Python
+Power BI / DAX / Python
 ```
 
 The raw event table remains valuable for:
@@ -198,7 +198,7 @@ The raw event table remains valuable for:
 - SQL exploration;
 - detailed forensic queries;
 - operational checks;
-- Superset or direct database analysis;
+- direct PostgreSQL analysis;
 - Python samples / targeted extracts.
 
 But broad BI reporting should generally consume a reduced analytical grain.
@@ -464,7 +464,7 @@ Daily or hourly grains should be used only for targeted questions such as:
 
 ---
 
-## SQL vs DAX vs Python vs Superset Boundary
+## SQL vs DAX vs Python Boundary
 
 ### SQL
 
@@ -531,26 +531,27 @@ Python is the preferred tool for:
 
 Python should work from reduced extracts or aggregated datasets when possible rather than loading the entire transaction table unnecessarily.
 
-### Apache Superset
-
-Superset is particularly appropriate for this topic because it can query PostgreSQL directly.
-
-Good use cases include:
-
-- operational transaction monitoring;
-- failure-rate monitoring;
-- channel activity;
-- recent transfer activity;
-- direct SQL exploration;
-- lightweight dashboards over PostgreSQL aggregates.
-
-Superset should not duplicate the full Power BI executive dashboard.
-
 ---
 
 ## Recommended SQL Analytical Objects
 
 The transaction layer should prefer a small number of reusable datasets rather than dozens of highly specific queries.
+
+### Current implemented materialized object
+
+The current working tree includes:
+
+```text
+scripts/sql/views/05_transaction_channel_monthly_materialized.sql
+```
+
+and the PostgreSQL refresh currently refreshes:
+
+```text
+analytics.transaction_channel_monthly
+```
+
+This object is the implemented reduced transaction/channel layer used by Power BI. Its exact column contract should remain governed by the SQL source; this Markdown file should not invent fields that are not present there.
 
 ### 1. Account-month transaction summary
 
@@ -668,8 +669,7 @@ By the end of `04_transactions.sql`, the project should have:
 5. a reusable counterparty-month transfer base;
 6. a small set of SQL validation summaries;
 7. a clean handoff to Power BI/DAX;
-8. a clean handoff to Superset;
-9. a clean handoff to Python for distributional analysis.
+8. a clean handoff to Python for distributional analysis.
 
 ---
 

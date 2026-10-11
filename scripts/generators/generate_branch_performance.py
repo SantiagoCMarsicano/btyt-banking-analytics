@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +28,28 @@ from scripts.core.rng import make_rng
 #
 # Builds a monthly management-accounting layer from the frozen BTYT datasets.
 # It does not regenerate or modify upstream canonical data.
+#
+# V3 cost architecture:
+#   structural drivers
+#   -> component-specific probability bands
+#   -> persistent branch/component profile draws
+#   -> wage/price/workload/cost-pressure dynamics
+#   -> independent monthly mean-reverting shocks
+#   -> realized operating costs and profitability KPIs
+#
+# No Cost-to-Income target or profitability band is imposed.
+#
+# V3.2 accounting and cost architecture:
+# - direct personnel cost includes a baseline employer social-security burden;
+# - branch P&L is fully loaded with probabilistic allocations of central/shared
+#   banking services (technology, compliance, audit, HR, legal, treasury
+#   operations, cybersecurity, data and other network support);
+# - shared-service allocations are distributed across the existing cost
+#   components rather than forcing any final component percentage;
+# - pre-tax income and corporate income-tax expense are explicitly modeled;
+# - corporate tax is calculated on annual consolidated positive pre-tax income
+#   and allocated back to profitable months/branches for management reporting;
+# - no Cost-to-Income, Net Margin or component-share target is imposed.
 #
 # Outputs:
 #   data/generated/performance/branch_monthly_performance.parquet
@@ -129,7 +152,7 @@ BANK_OUTPUT_PATH = GENERATED_PERFORMANCE_DIR / "bank_monthly_performance.parquet
 BRANCH_OUTPUT_CSV_PATH = GENERATED_PERFORMANCE_DIR / "branch_monthly_performance.csv"
 BANK_OUTPUT_CSV_PATH = GENERATED_PERFORMANCE_DIR / "bank_monthly_performance.csv"
 
-ENGINE_VERSION = "2.1.2"
+ENGINE_VERSION = "3.2.0"
 RNG_NAMESPACE = "branch_performance"
 REPORTING_CURRENCY = "UYU"
 TRANSACTION_BATCH_SIZE = 500_000
@@ -201,6 +224,50 @@ BRANCH_TYPE_FIXED_MULTIPLIER = {
 
 BASE_MONTHLY_LABOR_COST_2021 = 78_000.0
 
+# Baseline employer-side social-security burden used by the synthetic engine.
+# It covers the stable statutory components used for the model:
+# retirement 7.5%, Fonasa 5.0%, FRL 0.10%, and the labor-credit guarantee
+# contribution 0.025%. Variable CCM and activity-specific insurance are not
+# hard-coded here because they depend on worker/activity details unavailable
+# in the synthetic branch layer.
+EMPLOYER_RETIREMENT_RATE = 0.075
+EMPLOYER_FONASA_RATE = 0.050
+EMPLOYER_FRL_RATE = 0.001
+EMPLOYER_LABOR_GUARANTEE_RATE = 0.00025
+EMPLOYER_SOCIAL_SECURITY_RATE = (
+    EMPLOYER_RETIREMENT_RATE
+    + EMPLOYER_FONASA_RATE
+    + EMPLOYER_FRL_RATE
+    + EMPLOYER_LABOR_GUARANTEE_RATE
+)
+
+# Fully-loaded management P&L:
+# direct branch costs are complemented by central/network services that were
+# not represented explicitly in V3.1. Each branch receives a persistent
+# allocation rate. This is an economic modeling assumption, not a KPI target.
+SHARED_SERVICES_ALLOCATION_RANGE = (1.35, 1.75)
+
+# The allocated central cost pool is mapped into the same four reporting
+# components. These weights describe the support-cost pool, not the final
+# branch cost mix.
+SHARED_SERVICES_COMPONENT_MIX = {
+    "personnel": 0.45,
+    "fixed": 0.10,
+    "variable": 0.20,
+    "operational": 0.25,
+}
+
+# Uruguay corporate income-tax assumption used for the synthetic bank P&L.
+CORPORATE_INCOME_TAX_RATE = 0.25
+
+# By default, the terminal audit shows technical validation only so that
+# analytical findings remain for Power BI. Set the environment variable to
+# "full" when a detailed business-result audit is explicitly desired.
+AUDIT_DETAIL_LEVEL = os.getenv(
+    "BTYT_PERFORMANCE_AUDIT_DETAIL",
+    "technical",
+).strip().lower()
+
 ANNUAL_WAGE_INDEX = {
     2021: 1.000,
     2022: 1.090,
@@ -235,8 +302,185 @@ VARIABLE_COST_PRESSURE_BETA = 0.06
 OTHER_COST_PRESSURE_BETA = 0.20
 
 VARIABLE_COST_ELASTICITY = 0.82
-BASE_VARIABLE_COST_SHARE = 0.15
-BASE_OTHER_OPERATIONAL_COST_SHARE = 0.18
+
+# -----------------------------------------------------------------------------
+# Probabilistic component-level cost profiles
+# -----------------------------------------------------------------------------
+# Each branch receives one persistent profile draw for each cost component.
+# The four draws are independent apart from soft structural tilts coming from
+# branch size, branch type, and (where economically relevant) location.
+#
+# IMPORTANT:
+# - These are NOT Cost-to-Income targets.
+# - No profitability KPI is constrained to a preselected interval.
+# - The resulting Cost-to-Income emerges from revenue, risk, workload, branch
+#   structure, profile draws, and the time-varying cost-pressure process.
+#
+# Personnel/fixed profile values are multipliers over their structural bases.
+# Variable/operational profile values are shares of the rigid cost base
+# (personnel + fixed) before workload and cost-pressure adjustments.
+
+COST_BAND_ORDER = (
+    "VERY_LOW",
+    "LOW",
+    "NORMAL",
+    "HIGH",
+    "VERY_HIGH",
+)
+
+COST_BAND_POSITIONS = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype=float)
+
+COST_BAND_BASE_PROBABILITIES = {
+    # Personnel is intentionally more likely to occupy the middle/high bands
+    # on average. This is a probabilistic prior, not a required cost share.
+    "personnel": {
+        "VERY_LOW": 0.05,
+        "LOW": 0.15,
+        "NORMAL": 0.38,
+        "HIGH": 0.28,
+        "VERY_HIGH": 0.14,
+    },
+    "fixed": {
+        "VERY_LOW": 0.10,
+        "LOW": 0.20,
+        "NORMAL": 0.40,
+        "HIGH": 0.20,
+        "VERY_HIGH": 0.10,
+    },
+    "variable": {
+        "VERY_LOW": 0.12,
+        "LOW": 0.26,
+        "NORMAL": 0.40,
+        "HIGH": 0.16,
+        "VERY_HIGH": 0.06,
+    },
+    # Broad allocated overhead remains heterogeneous, but extreme high-cost
+    # operational profiles are deliberately rarer than in V3.0.0.
+    "operational": {
+        "VERY_LOW": 0.15,
+        "LOW": 0.30,
+        "NORMAL": 0.38,
+        "HIGH": 0.13,
+        "VERY_HIGH": 0.04,
+    },
+}
+
+COST_PROFILE_VALUE_RANGES = {
+    # Multipliers over branch staffing cost. Personnel carries a larger
+    # expected role in the operating-cost mix, while branches can still land
+    # anywhere from unusually lean to unusually expensive.
+    "personnel": {
+        "VERY_LOW": (0.90, 1.20),
+        "LOW": (1.20, 1.55),
+        "NORMAL": (1.55, 2.10),
+        "HIGH": (2.10, 2.90),
+        "VERY_HIGH": (2.90, 4.00),
+    },
+    # Multipliers over branch fixed-cost base.
+    "fixed": {
+        "VERY_LOW": (0.55, 0.80),
+        "LOW": (0.80, 1.10),
+        "NORMAL": (1.10, 1.60),
+        "HIGH": (1.60, 2.30),
+        "VERY_HIGH": (2.30, 3.40),
+    },
+    # Shares of rigid_base, subsequently scaled by workload.
+    "variable": {
+        "VERY_LOW": (0.10, 0.20),
+        "LOW": (0.20, 0.35),
+        "NORMAL": (0.35, 0.60),
+        "HIGH": (0.60, 0.90),
+        "VERY_HIGH": (0.90, 1.30),
+    },
+    # Broad branch-allocated technology, administration, compliance, support,
+    # and other operating overhead as a share of rigid_base. V3.1 reduces the
+    # prior dominance of this component while preserving a long right tail.
+    "operational": {
+        "VERY_LOW": (0.12, 0.22),
+        "LOW": (0.22, 0.35),
+        "NORMAL": (0.35, 0.55),
+        "HIGH": (0.55, 0.80),
+        "VERY_HIGH": (0.80, 1.20),
+    },
+}
+
+# Soft structural tilts. These change probabilities, never force a band.
+COST_PROFILE_SIZE_SHIFT = {
+    "personnel": {"SMALL": -0.10, "MEDIUM": 0.00, "LARGE": 0.12},
+    "fixed": {"SMALL": -0.08, "MEDIUM": 0.00, "LARGE": 0.08},
+    "variable": {"SMALL": -0.03, "MEDIUM": 0.00, "LARGE": 0.03},
+    "operational": {"SMALL": -0.05, "MEDIUM": 0.00, "LARGE": 0.06},
+}
+
+COST_PROFILE_TYPE_SHIFT = {
+    "personnel": {"AGENCY": -0.05, "BRANCH": 0.05},
+    "fixed": {"AGENCY": -0.05, "BRANCH": 0.05},
+    "variable": {"AGENCY": -0.02, "BRANCH": 0.02},
+    "operational": {"AGENCY": -0.03, "BRANCH": 0.03},
+}
+
+# Location mainly affects fixed costs. A smaller tilt is retained for personnel
+# and operational complexity; variable cost remains activity-driven.
+COST_PROFILE_LOCATION_BETA = {
+    "personnel": 0.08,
+    "fixed": 0.35,
+    "variable": 0.00,
+    "operational": 0.08,
+}
+
+# Independent branch/component shocks prevent a branch from being mechanically
+# "cheap in everything" or "expensive in everything".
+COST_PROFILE_SHOCK_HALF_WIDTH = {
+    "personnel": 0.28,
+    "fixed": 0.32,
+    "variable": 0.30,
+    "operational": 0.34,
+}
+
+
+# -----------------------------------------------------------------------------
+# Monthly mean-reverting cost dynamics
+# -----------------------------------------------------------------------------
+# Structural bands are persistent. Monthly costs are not.
+#
+# Each branch/component receives its own persistent AR(1)-style process
+# parameters, drawn once from these ranges:
+#
+#   log_shock_t = phi * log_shock_(t-1) + innovation_t
+#
+# The innovation variance is scaled so that `sigma` represents the approximate
+# long-run standard deviation of the log shock. The multiplicative monthly
+# factor is exp(log_shock_t), so it can move above or below 1.0.
+#
+# IMPORTANT:
+# - No monthly cost path is forced to increase.
+# - Personnel/fixed costs still have long-run wage/price trends.
+# - Variable costs additionally respond to actual monthly workload.
+# - All four components have independent monthly processes.
+# - These parameters control persistence/volatility, NOT Cost-to-Income.
+
+MONTHLY_COST_PROCESS_RANGES = {
+    # Relatively smooth, persistent payroll variation.
+    "personnel": {
+        "phi": (0.65, 0.90),
+        "sigma": (0.015, 0.040),
+    },
+    # Sticky but slightly more volatile facility/infrastructure costs.
+    "fixed": {
+        "phi": (0.75, 0.95),
+        "sigma": (0.020, 0.055),
+    },
+    # Activity-linked costs should react faster and fluctuate more.
+    "variable": {
+        "phi": (0.35, 0.70),
+        "sigma": (0.050, 0.120),
+    },
+    # Technology, administration, compliance and support costs sit in between.
+    "operational": {
+        "phi": (0.50, 0.82),
+        "sigma": (0.035, 0.090),
+    },
+}
 
 
 # =============================================================================
@@ -331,6 +575,8 @@ BRANCH_OUTPUT_COLUMNS = [
     "total_operating_cost",
     "credit_loss",
     "pre_provision_profit",
+    "pre_tax_income",
+    "income_tax_expense",
     "net_income",
 ]
 
@@ -355,6 +601,8 @@ MONETARY_COLUMNS = [
     "total_operating_cost",
     "credit_loss",
     "pre_provision_profit",
+    "pre_tax_income",
+    "income_tax_expense",
     "net_income",
 ]
 
@@ -475,6 +723,284 @@ def stable_uniform(key: str, low: float, high: float) -> float:
     stream = int.from_bytes(digest[:4], byteorder="big", signed=False)
     rng = make_rng(WORLD_SEED, RNG_NAMESPACE, stream)
     return float(rng.uniform(low, high))
+
+
+def stable_normal(key: str, mean: float = 0.0, std: float = 1.0) -> float:
+    """Return a deterministic entity-local normal draw from the same namespace."""
+    digest = hashlib.sha256(key.encode("utf-8")).digest()
+    stream = int.from_bytes(digest[:4], byteorder="big", signed=False)
+    rng = make_rng(WORLD_SEED, RNG_NAMESPACE, stream)
+    return float(rng.normal(mean, std))
+
+
+
+def validate_cost_profile_configuration() -> None:
+    """Validate probabilistic cost-profile settings before generation."""
+    shared_mix_sum = float(sum(SHARED_SERVICES_COMPONENT_MIX.values()))
+    if abs(shared_mix_sum - 1.0) > 1e-12:
+        raise ValueError(
+            "SHARED_SERVICES_COMPONENT_MIX must sum to 1.0."
+        )
+    if not (0.0 <= CORPORATE_INCOME_TAX_RATE <= 1.0):
+        raise ValueError(
+            "CORPORATE_INCOME_TAX_RATE must be between 0 and 1."
+        )
+    if SHARED_SERVICES_ALLOCATION_RANGE[0] < 0.0:
+        raise ValueError(
+            "SHARED_SERVICES_ALLOCATION_RANGE cannot be negative."
+        )
+    if SHARED_SERVICES_ALLOCATION_RANGE[1] < SHARED_SERVICES_ALLOCATION_RANGE[0]:
+        raise ValueError(
+            "Invalid SHARED_SERVICES_ALLOCATION_RANGE."
+        )
+    expected_components = {"personnel", "fixed", "variable", "operational"}
+    if set(COST_BAND_BASE_PROBABILITIES) != expected_components:
+        raise ValueError("COST_BAND_BASE_PROBABILITIES must cover all cost components.")
+    if set(COST_PROFILE_VALUE_RANGES) != expected_components:
+        raise ValueError("COST_PROFILE_VALUE_RANGES must cover all cost components.")
+
+    for component in sorted(expected_components):
+        probs = COST_BAND_BASE_PROBABILITIES[component]
+        ranges = COST_PROFILE_VALUE_RANGES[component]
+
+        if tuple(probs) != COST_BAND_ORDER:
+            raise ValueError(
+                f"{component} probability bands must follow COST_BAND_ORDER."
+            )
+        if tuple(ranges) != COST_BAND_ORDER:
+            raise ValueError(
+                f"{component} value ranges must follow COST_BAND_ORDER."
+            )
+
+        total_probability = float(sum(probs.values()))
+        if not np.isclose(total_probability, 1.0, atol=1e-12):
+            raise ValueError(
+                f"{component} base band probabilities sum to "
+                f"{total_probability:.12f}, expected 1.0."
+            )
+
+        for band, probability in probs.items():
+            if probability < 0.0:
+                raise ValueError(
+                    f"{component}/{band} has a negative probability."
+                )
+
+        for band, (low, high) in ranges.items():
+            if low < 0.0 or high <= low:
+                raise ValueError(
+                    f"Invalid {component}/{band} value range: {(low, high)}."
+                )
+
+        if component not in MONTHLY_COST_PROCESS_RANGES:
+            raise ValueError(
+                f"Missing monthly cost-process configuration for {component}."
+            )
+
+        process = MONTHLY_COST_PROCESS_RANGES[component]
+        phi_low, phi_high = process["phi"]
+        sigma_low, sigma_high = process["sigma"]
+
+        if not (0.0 <= phi_low < phi_high < 1.0):
+            raise ValueError(
+                f"Invalid {component} phi range: {(phi_low, phi_high)}."
+            )
+        if not (0.0 < sigma_low < sigma_high):
+            raise ValueError(
+                f"Invalid {component} sigma range: {(sigma_low, sigma_high)}."
+            )
+
+
+def cost_profile_probabilities(
+    component: str,
+    branch_id: str,
+    branch_size: str,
+    branch_type: str,
+    location_multiplier: float,
+) -> tuple[np.ndarray, float]:
+    """
+    Return branch-specific probabilities for one cost component.
+
+    Structural characteristics only tilt the common base distribution. An
+    independent deterministic shock is then added for the branch/component,
+    preserving reproducibility while allowing economically interesting
+    exceptions to the structural pattern.
+    """
+    base = np.array(
+        [
+            COST_BAND_BASE_PROBABILITIES[component][band]
+            for band in COST_BAND_ORDER
+        ],
+        dtype=float,
+    )
+
+    size_shift = COST_PROFILE_SIZE_SHIFT[component].get(str(branch_size), 0.0)
+    type_shift = COST_PROFILE_TYPE_SHIFT[component].get(str(branch_type), 0.0)
+
+    safe_location = max(float(location_multiplier), 1e-9)
+    location_shift = (
+        COST_PROFILE_LOCATION_BETA[component] * np.log(safe_location)
+    )
+
+    shock_half_width = COST_PROFILE_SHOCK_HALF_WIDTH[component]
+    independent_shock = stable_uniform(
+        f"cost-profile-shock|{component}|{branch_id}",
+        -shock_half_width,
+        shock_half_width,
+    )
+
+    total_shift = float(
+        size_shift + type_shift + location_shift + independent_shock
+    )
+
+    # Exponential tilting preserves strictly positive probabilities while
+    # smoothly shifting mass toward lower or higher cost bands.
+    weights = base * np.exp(COST_BAND_POSITIONS * total_shift)
+    probabilities = weights / weights.sum()
+    return probabilities, total_shift
+
+
+def draw_cost_profile(
+    component: str,
+    branch_id: str,
+    branch_size: str,
+    branch_type: str,
+    location_multiplier: float,
+) -> tuple[str, float, float]:
+    """
+    Draw one persistent band and one within-band value for a branch/component.
+    """
+    probabilities, shift = cost_profile_probabilities(
+        component=component,
+        branch_id=branch_id,
+        branch_size=branch_size,
+        branch_type=branch_type,
+        location_multiplier=location_multiplier,
+    )
+
+    band_draw = stable_uniform(
+        f"cost-profile-band|{component}|{branch_id}",
+        0.0,
+        1.0,
+    )
+    cumulative = np.cumsum(probabilities)
+    band_index = int(np.searchsorted(cumulative, band_draw, side="right"))
+    band_index = min(band_index, len(COST_BAND_ORDER) - 1)
+    band = COST_BAND_ORDER[band_index]
+
+    low, high = COST_PROFILE_VALUE_RANGES[component][band]
+    profile_value = stable_uniform(
+        f"cost-profile-value|{component}|{branch_id}",
+        float(low),
+        float(high),
+    )
+    return band, float(profile_value), shift
+
+
+def draw_monthly_cost_process_parameters(
+    component: str,
+    branch_id: str,
+) -> tuple[float, float]:
+    """
+    Draw persistent AR(1)-style parameters for one branch/component.
+
+    The parameter draw itself is reproducible. Different components and
+    different branches receive independent streams.
+    """
+    config = MONTHLY_COST_PROCESS_RANGES[component]
+
+    phi = stable_uniform(
+        f"monthly-cost-phi|{component}|{branch_id}",
+        float(config["phi"][0]),
+        float(config["phi"][1]),
+    )
+    sigma = stable_uniform(
+        f"monthly-cost-sigma|{component}|{branch_id}",
+        float(config["sigma"][0]),
+        float(config["sigma"][1]),
+    )
+    return float(phi), float(sigma)
+
+
+def build_monthly_cost_shocks(
+    frame: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Add independent, reproducible, mean-reverting monthly shock factors.
+
+    Each branch/component has:
+      - one persistent phi draw,
+      - one persistent long-run volatility draw,
+      - one independent innovation per month.
+
+    The state evolves in log space, so exp(state) produces a positive
+    multiplicative factor centered around 1.0 without forcing monotonic paths.
+    """
+    result = frame.copy()
+
+    required = {"branch_id", "year_month"}
+    missing = required - set(result.columns)
+    if missing:
+        raise ValueError(
+            f"Monthly cost-shock input missing columns: {sorted(missing)}"
+        )
+
+    if result.duplicated(["branch_id", "year_month"]).any():
+        raise ValueError(
+            "Monthly cost-shock input contains duplicate branch/month rows."
+        )
+
+    for component in ("personnel", "fixed", "variable", "operational"):
+        factor_col = f"{component}_monthly_shock"
+        phi_col = f"{component}_monthly_phi"
+        sigma_col = f"{component}_monthly_sigma"
+
+        result[factor_col] = np.nan
+        result[phi_col] = np.nan
+        result[sigma_col] = np.nan
+
+        for branch_id, branch_rows in result.groupby(
+            "branch_id",
+            sort=False,
+            observed=True,
+        ):
+            branch_id_str = str(branch_id)
+            phi, sigma = draw_monthly_cost_process_parameters(
+                component,
+                branch_id_str,
+            )
+
+            ordered = branch_rows.sort_values("year_month")
+            indices = ordered.index.to_list()
+
+            # Start from the stationary distribution so the first observed
+            # month does not mechanically begin at exactly 1.0.
+            state = sigma * stable_normal(
+                f"monthly-cost-initial|{component}|{branch_id_str}"
+            )
+
+            innovation_sigma = sigma * np.sqrt(max(1.0 - phi**2, 0.0))
+            factors: list[float] = []
+
+            for row_index in indices:
+                ym = str(result.at[row_index, "year_month"])
+                innovation = innovation_sigma * stable_normal(
+                    f"monthly-cost-innovation|{component}|{branch_id_str}|{ym}"
+                )
+                state = phi * state + innovation
+                factors.append(float(np.exp(state)))
+
+            result.loc[indices, factor_col] = factors
+            result.loc[indices, phi_col] = phi
+            result.loc[indices, sigma_col] = sigma
+
+    shock_columns = [
+        f"{component}_monthly_shock"
+        for component in ("personnel", "fixed", "variable", "operational")
+    ]
+    if result[shock_columns].isna().any().any():
+        raise ValueError("Monthly cost-shock generation produced missing values.")
+
+    return result
 
 
 def monthly_index(year_month: str, annual_index: dict[int, float]) -> float:
@@ -1233,51 +1759,156 @@ def build_transaction_metrics(
 
 def build_branch_structure(branches: pd.DataFrame) -> pd.DataFrame:
     structure = branches[
-        ["branch_id", "branch_name", "branch_type", "branch_size", "opening_year", "closing_year", "region"]
+        [
+            "branch_id",
+            "branch_name",
+            "branch_type",
+            "branch_size",
+            "opening_year",
+            "closing_year",
+            "region",
+        ]
     ].copy()
 
     structure["staff_base"] = structure["branch_size"].map(BASE_STAFF_EQUIVALENTS)
-    structure["staff_base"] *= structure["branch_type"].map(BRANCH_TYPE_STAFF_MULTIPLIER).fillna(1.0)
+    structure["staff_base"] *= (
+        structure["branch_type"]
+        .map(BRANCH_TYPE_STAFF_MULTIPLIER)
+        .fillna(1.0)
+    )
 
-    structure["fixed_base"] = structure["branch_size"].map(BASE_FIXED_MONTHLY_COST_2021)
-    structure["fixed_base"] *= structure["branch_type"].map(BRANCH_TYPE_FIXED_MULTIPLIER).fillna(1.0)
+    structure["fixed_base"] = structure["branch_size"].map(
+        BASE_FIXED_MONTHLY_COST_2021
+    )
+    structure["fixed_base"] *= (
+        structure["branch_type"]
+        .map(BRANCH_TYPE_FIXED_MULTIPLIER)
+        .fillna(1.0)
+    )
 
     if structure["staff_base"].isna().any():
-        unknown = sorted(structure.loc[structure["staff_base"].isna(), "branch_size"].unique())
-        raise ValueError(f"Unknown branch_size for staff calibration: {unknown}")
+        unknown = sorted(
+            structure.loc[
+                structure["staff_base"].isna(),
+                "branch_size",
+            ].unique()
+        )
+        raise ValueError(
+            f"Unknown branch_size for staff calibration: {unknown}"
+        )
     if structure["fixed_base"].isna().any():
-        unknown = sorted(structure.loc[structure["fixed_base"].isna(), "branch_size"].unique())
-        raise ValueError(f"Unknown branch_size for fixed-cost calibration: {unknown}")
+        unknown = sorted(
+            structure.loc[
+                structure["fixed_base"].isna(),
+                "branch_size",
+            ].unique()
+        )
+        raise ValueError(
+            f"Unknown branch_size for fixed-cost calibration: {unknown}"
+        )
 
-    structure["location_multiplier"] = structure["branch_name"].map(LOCATION_COST_MULTIPLIER).fillna(1.0)
-    interior = ~structure["region"].astype("string").str.upper().eq("METROPOLITAN")
-    no_named_override = ~structure["branch_name"].isin(LOCATION_COST_MULTIPLIER)
-    structure.loc[interior & no_named_override, "location_multiplier"] *= 0.92
+    structure["location_multiplier"] = (
+        structure["branch_name"]
+        .map(LOCATION_COST_MULTIPLIER)
+        .fillna(1.0)
+    )
+    interior = ~structure["region"].astype("string").str.upper().eq(
+        "METROPOLITAN"
+    )
+    no_named_override = ~structure["branch_name"].isin(
+        LOCATION_COST_MULTIPLIER
+    )
+    structure.loc[
+        interior & no_named_override,
+        "location_multiplier",
+    ] *= 0.92
 
-    structure["staff_jitter"] = structure["branch_id"].map(
-        lambda branch_id: stable_uniform(f"staff|{branch_id}", 0.93, 1.08)
-    )
-    structure["fixed_jitter"] = structure["branch_id"].map(
-        lambda branch_id: stable_uniform(f"fixed|{branch_id}", 0.90, 1.11)
-    )
-    structure["other_jitter"] = structure["branch_id"].map(
-        lambda branch_id: stable_uniform(f"other|{branch_id}", 0.90, 1.12)
-    )
+    # Draw each cost component independently. The structural characteristics
+    # only tilt probabilities; they do not determine the resulting band.
+    structure["shared_services_allocation_rate"] = [
+        stable_uniform(
+            f"shared_services_allocation_rate|{branch_id}",
+            SHARED_SERVICES_ALLOCATION_RANGE[0],
+            SHARED_SERVICES_ALLOCATION_RANGE[1],
+        )
+        for branch_id in structure["branch_id"].astype(str)
+    ]
+
+    for component in ("personnel", "fixed", "variable", "operational"):
+        draws = [
+            draw_cost_profile(
+                component=component,
+                branch_id=str(row.branch_id),
+                branch_size=str(row.branch_size),
+                branch_type=str(row.branch_type),
+                location_multiplier=float(row.location_multiplier),
+            )
+            for row in structure.itertuples(index=False)
+        ]
+
+        structure[f"{component}_cost_band"] = [
+            draw[0] for draw in draws
+        ]
+        structure[f"{component}_profile_value"] = [
+            draw[1] for draw in draws
+        ]
+        structure[f"{component}_probability_shift"] = [
+            draw[2] for draw in draws
+        ]
+
     return structure
 
 
-def add_costs(performance: pd.DataFrame, branches: pd.DataFrame) -> pd.DataFrame:
-    frame = performance.merge(build_branch_structure(branches), on="branch_id", how="left", validate="many_to_one")
+def add_costs(
+    performance: pd.DataFrame,
+    branches: pd.DataFrame,
+) -> pd.DataFrame:
+    frame = performance.merge(
+        build_branch_structure(branches),
+        on="branch_id",
+        how="left",
+        validate="many_to_one",
+    )
 
-    positive_tx = frame.loc[frame["transaction_count"] > 0, "transaction_count"]
-    positive_branch_tx = frame.loc[frame["branch_transaction_count"] > 0, "branch_transaction_count"]
-    positive_accounts = frame.loc[frame["active_accounts"] > 0, "active_accounts"]
-    positive_loans = frame.loc[frame["active_loan_count"] > 0, "active_loan_count"]
+    positive_tx = frame.loc[
+        frame["transaction_count"] > 0,
+        "transaction_count",
+    ]
+    positive_branch_tx = frame.loc[
+        frame["branch_transaction_count"] > 0,
+        "branch_transaction_count",
+    ]
+    positive_accounts = frame.loc[
+        frame["active_accounts"] > 0,
+        "active_accounts",
+    ]
+    positive_loans = frame.loc[
+        frame["active_loan_count"] > 0,
+        "active_loan_count",
+    ]
 
-    tx_ref = max(float(positive_tx.median()) if len(positive_tx) else 1.0, 1.0)
-    branch_tx_ref = max(float(positive_branch_tx.median()) if len(positive_branch_tx) else 1.0, 1.0)
-    account_ref = max(float(positive_accounts.median()) if len(positive_accounts) else 1.0, 1.0)
-    loan_ref = max(float(positive_loans.median()) if len(positive_loans) else 1.0, 1.0)
+    tx_ref = max(
+        float(positive_tx.median()) if len(positive_tx) else 1.0,
+        1.0,
+    )
+    branch_tx_ref = max(
+        float(positive_branch_tx.median())
+        if len(positive_branch_tx)
+        else 1.0,
+        1.0,
+    )
+    account_ref = max(
+        float(positive_accounts.median())
+        if len(positive_accounts)
+        else 1.0,
+        1.0,
+    )
+    loan_ref = max(
+        float(positive_loans.median())
+        if len(positive_loans)
+        else 1.0,
+        1.0,
+    )
 
     frame["workload_index"] = (
         0.55 * frame["transaction_count"] / tx_ref
@@ -1287,53 +1918,128 @@ def add_costs(performance: pd.DataFrame, branches: pd.DataFrame) -> pd.DataFrame
     ).clip(lower=0.0)
 
     frame["operational_flag"] = [
-        branch_operational_in_year(row.opening_year, row.closing_year, int(row.year))
+        branch_operational_in_year(
+            row.opening_year,
+            row.closing_year,
+            int(row.year),
+        )
         for row in frame.itertuples(index=False)
     ]
 
-    wage_index = frame["year_month"].map(lambda ym: monthly_index(str(ym), ANNUAL_WAGE_INDEX))
-    price_index = frame["year_month"].map(lambda ym: monthly_index(str(ym), ANNUAL_PRICE_INDEX))
+    wage_index = frame["year_month"].map(
+        lambda ym: monthly_index(str(ym), ANNUAL_WAGE_INDEX)
+    )
+    price_index = frame["year_month"].map(
+        lambda ym: monthly_index(str(ym), ANNUAL_PRICE_INDEX)
+    )
     cp = frame["cost_pressure"].clip(-2.5, 2.5).astype(float)
 
-    frame["personnel_cost"] = (
+    # Persistent structural profiles are combined with independent monthly
+    # mean-reverting shocks. This preserves structural identity while still
+    # allowing realized monthly costs to move in either direction.
+    frame = build_monthly_cost_shocks(frame)
+
+    # -----------------------------------------------------------------
+    # Direct branch costs
+    # -----------------------------------------------------------------
+    # The configured labor base is treated as gross remuneration before
+    # employer-side social-security charges. The synthetic branch P&L records
+    # the employer burden inside personnel_cost.
+    frame["direct_personnel_cost"] = (
         frame["staff_base"]
-        * frame["staff_jitter"]
         * BASE_MONTHLY_LABOR_COST_2021
+        * frame["personnel_profile_value"]
+        * frame["personnel_monthly_shock"]
         * wage_index
         * np.exp(PERSONNEL_COST_PRESSURE_BETA * cp)
+        * (1.0 + EMPLOYER_SOCIAL_SECURITY_RATE)
     )
 
-    frame["fixed_cost"] = (
+    frame["direct_fixed_cost"] = (
         frame["fixed_base"]
-        * frame["fixed_jitter"]
+        * frame["fixed_profile_value"]
+        * frame["fixed_monthly_shock"]
         * frame["location_multiplier"]
         * price_index
         * np.exp(FIXED_COST_PRESSURE_BETA * cp)
     )
 
-    rigid_base = frame["personnel_cost"] + frame["fixed_cost"]
+    direct_rigid_base = (
+        frame["direct_personnel_cost"]
+        + frame["direct_fixed_cost"]
+    )
+
     workload_effect = np.power(
-        np.maximum(frame["workload_index"].to_numpy(dtype=float), 0.0),
+        np.maximum(
+            frame["workload_index"].to_numpy(dtype=float),
+            0.0,
+        ),
         VARIABLE_COST_ELASTICITY,
     )
 
-    frame["variable_cost"] = (
-        rigid_base
-        * BASE_VARIABLE_COST_SHARE
+    frame["direct_variable_cost"] = (
+        direct_rigid_base
+        * frame["variable_profile_value"]
+        * frame["variable_monthly_shock"]
         * workload_effect
         * np.exp(VARIABLE_COST_PRESSURE_BETA * cp)
     )
 
-    frame["operational_cost"] = (
-        rigid_base
-        * BASE_OTHER_OPERATIONAL_COST_SHARE
-        * frame["other_jitter"]
+    frame["direct_operational_cost"] = (
+        direct_rigid_base
+        * frame["operational_profile_value"]
+        * frame["operational_monthly_shock"]
         * np.exp(OTHER_COST_PRESSURE_BETA * cp)
     )
 
     closed_mask = ~frame["operational_flag"]
-    for col in ["personnel_cost", "fixed_cost", "variable_cost", "operational_cost"]:
+    direct_columns = [
+        "direct_personnel_cost",
+        "direct_fixed_cost",
+        "direct_variable_cost",
+        "direct_operational_cost",
+    ]
+    for col in direct_columns:
         frame.loc[closed_mask, col] = 0.0
+
+    frame["direct_operating_cost"] = frame[direct_columns].sum(axis=1)
+
+    # -----------------------------------------------------------------
+    # Central/shared banking-service allocation
+    # -----------------------------------------------------------------
+    # V3.1 represented branch-local economics but materially understated the
+    # fully-loaded cost of running the banking network. V3.2 adds central
+    # services such as technology platforms, cybersecurity, compliance, audit,
+    # legal, HR, data, treasury operations and other head-office support.
+    #
+    # The allocation rate is a persistent branch-level draw, so no final
+    # Cost-to-Income or Net Margin is forced.
+    frame["shared_services_cost"] = (
+        frame["direct_operating_cost"]
+        * frame["shared_services_allocation_rate"]
+    )
+    frame.loc[closed_mask, "shared_services_cost"] = 0.0
+
+    frame["personnel_cost"] = (
+        frame["direct_personnel_cost"]
+        + frame["shared_services_cost"]
+        * SHARED_SERVICES_COMPONENT_MIX["personnel"]
+    )
+    frame["fixed_cost"] = (
+        frame["direct_fixed_cost"]
+        + frame["shared_services_cost"]
+        * SHARED_SERVICES_COMPONENT_MIX["fixed"]
+    )
+    frame["variable_cost"] = (
+        frame["direct_variable_cost"]
+        + frame["shared_services_cost"]
+        * SHARED_SERVICES_COMPONENT_MIX["variable"]
+    )
+    frame["operational_cost"] = (
+        frame["direct_operational_cost"]
+        + frame["shared_services_cost"]
+        * SHARED_SERVICES_COMPONENT_MIX["operational"]
+    )
 
     frame["total_operating_cost"] = (
         frame["personnel_cost"]
@@ -1342,6 +2048,161 @@ def add_costs(performance: pd.DataFrame, branches: pd.DataFrame) -> pd.DataFrame
         + frame["operational_cost"]
     )
     return frame
+
+
+def print_cost_profile_diagnostics(branches: pd.DataFrame) -> None:
+    """
+    Print the persistent branch-level profile draws used by the cost engine.
+    """
+    structure = build_branch_structure(branches)
+
+    print("\nProbabilistic cost-profile diagnostics:")
+    for component in ("personnel", "fixed", "variable", "operational"):
+        band_col = f"{component}_cost_band"
+        value_col = f"{component}_profile_value"
+        counts = (
+            structure[band_col]
+            .value_counts()
+            .reindex(COST_BAND_ORDER, fill_value=0)
+        )
+        count_text = " | ".join(
+            f"{band}:{int(counts[band])}"
+            for band in COST_BAND_ORDER
+        )
+        values = structure[value_col].astype(float)
+        print(f"  {component:<12} {count_text}")
+        print(
+            f"    profile value min/median/max: "
+            f"{values.min():.3f} / "
+            f"{values.median():.3f} / "
+            f"{values.max():.3f}"
+        )
+
+
+def print_monthly_cost_shock_diagnostics(frame: pd.DataFrame) -> None:
+    """Print realized monthly shock/process diagnostics before output stripping."""
+    print("\nMonthly cost-process diagnostics:")
+
+    for component in ("personnel", "fixed", "variable", "operational"):
+        factor_col = f"{component}_monthly_shock"
+        phi_col = f"{component}_monthly_phi"
+        sigma_col = f"{component}_monthly_sigma"
+
+        factors = pd.to_numeric(frame[factor_col], errors="raise")
+        phi_values = (
+            frame[["branch_id", phi_col]]
+            .drop_duplicates("branch_id")[phi_col]
+            .astype(float)
+        )
+        sigma_values = (
+            frame[["branch_id", sigma_col]]
+            .drop_duplicates("branch_id")[sigma_col]
+            .astype(float)
+        )
+
+        print(
+            f"  {component:<12} monthly factor "
+            f"P10/median/P90: "
+            f"{factors.quantile(0.10):.3f} / "
+            f"{factors.median():.3f} / "
+            f"{factors.quantile(0.90):.3f}"
+        )
+        print(
+            f"    phi min/median/max: "
+            f"{phi_values.min():.3f} / "
+            f"{phi_values.median():.3f} / "
+            f"{phi_values.max():.3f}"
+        )
+        print(
+            f"    sigma min/median/max: "
+            f"{sigma_values.min():.3f} / "
+            f"{sigma_values.median():.3f} / "
+            f"{sigma_values.max():.3f}"
+        )
+
+
+
+def add_income_tax(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add annual consolidated corporate tax and allocate it for management P&L.
+
+    Tax is calculated on positive annual consolidated pre-tax income. The
+    resulting annual tax provision is allocated first to profitable months and
+    then to profitable branches within each month. This preserves branch-to-bank
+    reconciliation without pretending that each branch is a separate taxpayer.
+
+    Tax-loss carryforwards, deferred tax and permanent/temporary tax
+    differences are outside the current synthetic scope.
+    """
+    result = frame.copy()
+
+    result["pre_tax_income"] = (
+        result["pre_provision_profit"]
+        - result["credit_loss"]
+    )
+    result["income_tax_expense"] = 0.0
+
+    tax_year = result["year_month"].astype(str).str.slice(0, 4).astype(int)
+    result["_tax_year"] = tax_year
+
+    for year in sorted(result["_tax_year"].unique()):
+        year_mask = result["_tax_year"].eq(year)
+        annual_pre_tax = float(
+            result.loc[year_mask, "pre_tax_income"].sum()
+        )
+        annual_tax = max(annual_pre_tax, 0.0) * CORPORATE_INCOME_TAX_RATE
+
+        if annual_tax <= 0.0:
+            continue
+
+        month_pre_tax = (
+            result.loc[year_mask]
+            .groupby("year_month", observed=True)["pre_tax_income"]
+            .sum()
+        )
+        positive_month_pre_tax = month_pre_tax.clip(lower=0.0)
+        positive_month_total = float(positive_month_pre_tax.sum())
+
+        if positive_month_total <= 0.0:
+            continue
+
+        month_tax = (
+            annual_tax
+            * positive_month_pre_tax
+            / positive_month_total
+        )
+
+        for year_month, allocated_month_tax in month_tax.items():
+            if allocated_month_tax <= 0.0:
+                continue
+
+            month_mask = (
+                year_mask
+                & result["year_month"].eq(year_month)
+            )
+            positive_branch_pre_tax = (
+                result.loc[month_mask, "pre_tax_income"]
+                .clip(lower=0.0)
+            )
+            positive_branch_total = float(positive_branch_pre_tax.sum())
+
+            if positive_branch_total <= 0.0:
+                continue
+
+            branch_tax = (
+                allocated_month_tax
+                * positive_branch_pre_tax
+                / positive_branch_total
+            )
+            result.loc[
+                positive_branch_pre_tax.index,
+                "income_tax_expense",
+            ] = branch_tax.to_numpy(dtype=float)
+
+    result["net_income"] = (
+        result["pre_tax_income"]
+        - result["income_tax_expense"]
+    )
+    return result.drop(columns=["_tax_year"])
 
 
 # =============================================================================
@@ -1387,8 +2248,11 @@ def assemble_performance(data: dict[str, pd.DataFrame]) -> pd.DataFrame:
     frame["total_revenue"] = frame["net_interest_income"] + frame["fee_income"]
 
     frame = add_costs(frame, data["branches"])
-    frame["pre_provision_profit"] = frame["total_revenue"] - frame["total_operating_cost"]
-    frame["net_income"] = frame["pre_provision_profit"] - frame["credit_loss"]
+    frame["pre_provision_profit"] = (
+        frame["total_revenue"]
+        - frame["total_operating_cost"]
+    )
+    frame = add_income_tax(frame)
     return frame
 
 
@@ -1426,6 +2290,7 @@ def validate_branch_output(branch_output: pd.DataFrame, branches: pd.DataFrame) 
         "operational_cost",
         "total_operating_cost",
         "credit_loss",
+        "income_tax_expense",
     ]
     for col in nonnegative:
         if (pd.to_numeric(branch_output[col], errors="coerce") < -0.01).any():
@@ -1441,7 +2306,8 @@ def validate_branch_output(branch_output: pd.DataFrame, branches: pd.DataFrame) 
             + branch_output["operational_cost"]
         ),
         "pre_provision_identity": branch_output["pre_provision_profit"] - (branch_output["total_revenue"] - branch_output["total_operating_cost"]),
-        "net_income_identity": branch_output["net_income"] - (branch_output["pre_provision_profit"] - branch_output["credit_loss"]),
+        "pre_tax_income_identity": branch_output["pre_tax_income"] - (branch_output["pre_provision_profit"] - branch_output["credit_loss"]),
+        "net_income_identity": branch_output["net_income"] - (branch_output["pre_tax_income"] - branch_output["income_tax_expense"]),
     }
     for name, residual in checks.items():
         if residual.abs().max() > 0.05:
@@ -1594,6 +2460,20 @@ def print_audit(branch_output: pd.DataFrame, bank_output: pd.DataFrame) -> None:
     print(f"Bank-month rows: {len(bank_output):,}")
     print(f"Reporting currency: {REPORTING_CURRENCY}-equivalent")
 
+    if AUDIT_DETAIL_LEVEL != "full":
+        print("\nBusiness-result diagnostics: SUPPRESSED")
+        print(
+            "Set BTYT_PERFORMANCE_AUDIT_DETAIL=full only when a detailed "
+            "analytical audit is explicitly desired."
+        )
+        print("\nReconciliation:")
+        print(
+            "  SUM(branch_monthly_performance) == "
+            "bank_monthly_performance   PASS"
+        )
+        print("\nVALIDATION: PASS")
+        return
+
     bank = bank_output.copy()
     bank["year"] = bank["year_month"].str.slice(0, 4).astype(int)
     annual = (
@@ -1608,6 +2488,8 @@ def print_audit(branch_output: pd.DataFrame, bank_output: pd.DataFrame) -> None:
             total_operating_cost=("total_operating_cost", "sum"),
             credit_loss=("credit_loss", "sum"),
             pre_provision_profit=("pre_provision_profit", "sum"),
+            pre_tax_income=("pre_tax_income", "sum"),
+            income_tax_expense=("income_tax_expense", "sum"),
             net_income=("net_income", "sum"),
         )
     )
@@ -1626,6 +2508,8 @@ def print_audit(branch_output: pd.DataFrame, bank_output: pd.DataFrame) -> None:
         "total_operating_cost",
         "credit_loss",
         "pre_provision_profit",
+        "pre_tax_income",
+        "income_tax_expense",
         "net_income",
     ]:
         display[col] = display[col] / 1_000_000.0
@@ -1749,6 +2633,8 @@ def main(write_csv: bool = False) -> None:
     print(f"Observation window: {OBS_START} -> {OBS_END}")
     print("=" * 84)
 
+    validate_cost_profile_configuration()
+
     print("Loading frozen canonical inputs...")
     print("Canonical-first transition-aware input resolution enabled.")
     data = normalize_inputs(load_inputs())
@@ -1763,10 +2649,12 @@ def main(write_csv: bool = False) -> None:
     print(f"Account-month balance rows: {len(data['account_balances']):,}")
     print(f"Branch-year states: {len(data['branch_state']):,}")
 
+    print_cost_profile_diagnostics(data["branches"])
     print_input_coverage_diagnostics(data)
 
     print("\nBuilding monthly branch economics...")
     raw = assemble_performance(data)
+    print_monthly_cost_shock_diagnostics(raw)
     branch_output = finalize_branch_output(raw)
 
     bank_output = build_bank_output(branch_output)

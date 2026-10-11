@@ -2,9 +2,9 @@
 
 ## Architecture context
 
-**Documentation status:** Canonical-generation contract — updated 2026-09-07  
-**World scope:** Active BTYT world  
-**Routing:** Physical storage is resolved through `scripts/core/paths.py` and `config/active_world.json`.
+**Documentation status:** Table contract — architecture note refreshed 2026-10-11  
+**World scope:** World-relative BTYT datasets  
+**Routing:** Physical storage is selected through `config/active_world.json`; world-level RNG/settings are loaded from `config/world_config.json` through `scripts/core/world.py`.
 
 Paths written as `data/generated/...`, `data/interim/...`, or `data/operational/...`
 are **world-relative paths**. Under the active-world architecture they resolve beneath:
@@ -14,8 +14,8 @@ worlds/<world>/<variant>/
 ```
 
 The dictionary describes the table contract and statistical meaning, not one specific
-materialized world. World identity, seed, population, observation period, execution mode,
-and operational reliability are supplied by the active world configuration.
+materialized world. Physical world routing and world-level RNG/settings are separate
+mechanisms in the current codebase and must be synchronized before canonical regeneration.
 
 > **World Builder configures the world; Python generators realize its history.**
 
@@ -181,7 +181,7 @@ denominated in one currency. - `MULTI` indicates that the product may
 operate across more than one currency depending on the specific customer
 relationship or linked account. - `N/A` indicates that currency is not
 an intrinsic characteristic of the product itself. - For account transactions, currency is not stored redundantly in `transactions`; it is derived through `transactions.account_id → accounts.product_id → products.currency`.
-- For credit-card transactions, monetary values are stored in UYU-equivalent analytical terms as defined in `credit_card_transactions`.
+- The current Part I physical model does not materialize a separate `credit_card_transactions` table; implemented transaction behavior is represented through `banking.transactions` and its documented currency semantics.
 - Cross-currency transaction and exchange-rate mechanics are outside the scope of the current BTYT dataset.
 
 **Product mapping:**
