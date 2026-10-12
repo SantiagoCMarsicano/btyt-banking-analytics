@@ -152,7 +152,7 @@ BANK_OUTPUT_PATH = GENERATED_PERFORMANCE_DIR / "bank_monthly_performance.parquet
 BRANCH_OUTPUT_CSV_PATH = GENERATED_PERFORMANCE_DIR / "branch_monthly_performance.csv"
 BANK_OUTPUT_CSV_PATH = GENERATED_PERFORMANCE_DIR / "bank_monthly_performance.csv"
 
-ENGINE_VERSION = "3.2.0"
+ENGINE_VERSION = "3.3.0"
 RNG_NAMESPACE = "branch_performance"
 REPORTING_CURRENCY = "UYU"
 TRANSACTION_BATCH_SIZE = 500_000
@@ -243,19 +243,44 @@ EMPLOYER_SOCIAL_SECURITY_RATE = (
 
 # Fully-loaded management P&L:
 # direct branch costs are complemented by central/network services that were
-# not represented explicitly in V3.1. Each branch receives a persistent
-# allocation rate. This is an economic modeling assumption, not a KPI target.
-SHARED_SERVICES_ALLOCATION_RANGE = (1.35, 1.75)
+# not represented explicitly in V3.1. The central pool is intentionally
+# calibrated above the V3.2 level because the previous fully-loaded P&L still
+# produced unrealistically high consolidated net margins. The range below is
+# a structural calibration, not a hard Cost-to-Income or Net-Margin target.
+# Annual profitability is still allowed to emerge from revenue, credit losses,
+# branch cost pressure, monthly shocks and the tax layer.
+SHARED_SERVICES_ALLOCATION_RANGE = (2.45, 3.15)
 
-# The allocated central cost pool is mapped into the same four reporting
-# components. These weights describe the support-cost pool, not the final
-# branch cost mix.
+# Shared/network intensity also reflects branch structure. Large full-service
+# branches consume more central technology, compliance, treasury, HR, audit,
+# cybersecurity and data capacity than small agencies. These are soft
+# multipliers over the persistent branch-level allocation draw.
+SHARED_SERVICES_SIZE_MULTIPLIER = {
+    "SMALL": 0.92,
+    "MEDIUM": 1.00,
+    "LARGE": 1.08,
+}
+
+SHARED_SERVICES_TYPE_MULTIPLIER = {
+    "AGENCY": 0.94,
+    "BRANCH": 1.04,
+}
+
+# Center of the reporting allocation. The realized component mix is drawn
+# independently for every branch around this center and normalized back to
+# 100%, avoiding an artificial 45/10/20/25 split in every branch.
 SHARED_SERVICES_COMPONENT_MIX = {
     "personnel": 0.45,
     "fixed": 0.10,
     "variable": 0.20,
     "operational": 0.25,
 }
+SHARED_SERVICES_COMPONENT_JITTER_RANGE = (0.88, 1.12)
+
+# Diagnostic reference only. Generation does not solve backwards to these
+# margins; the audit reports whether annual realized profitability falls in
+# the intended broad banking range after the structural recalibration.
+NET_MARGIN_DIAGNOSTIC_RANGE = (0.15, 0.30)
 
 # Uruguay corporate income-tax assumption used for the synthetic bank P&L.
 CORPORATE_INCOME_TAX_RATE = 0.25
@@ -733,6 +758,23 @@ def stable_normal(key: str, mean: float = 0.0, std: float = 1.0) -> float:
     return float(rng.normal(mean, std))
 
 
+def draw_shared_services_component_mix(branch_id: str) -> dict[str, float]:
+    """Draw a reproducible branch-specific shared-services reporting mix."""
+    low, high = SHARED_SERVICES_COMPONENT_JITTER_RANGE
+    raw = {
+        component: base_share
+        * stable_uniform(
+            f"shared-services-mix|{component}|{branch_id}",
+            low,
+            high,
+        )
+        for component, base_share in SHARED_SERVICES_COMPONENT_MIX.items()
+    }
+    total = float(sum(raw.values()))
+    if total <= 0.0:
+        raise ValueError("Shared-services component mix produced a non-positive total.")
+    return {component: value / total for component, value in raw.items()}
+
 
 def validate_cost_profile_configuration() -> None:
     """Validate probabilistic cost-profile settings before generation."""
@@ -753,6 +795,20 @@ def validate_cost_profile_configuration() -> None:
         raise ValueError(
             "Invalid SHARED_SERVICES_ALLOCATION_RANGE."
         )
+    for name, mapping in [
+        ("SHARED_SERVICES_SIZE_MULTIPLIER", SHARED_SERVICES_SIZE_MULTIPLIER),
+        ("SHARED_SERVICES_TYPE_MULTIPLIER", SHARED_SERVICES_TYPE_MULTIPLIER),
+    ]:
+        if any(float(value) <= 0.0 for value in mapping.values()):
+            raise ValueError(f"{name} values must be positive.")
+    jitter_low, jitter_high = SHARED_SERVICES_COMPONENT_JITTER_RANGE
+    if jitter_low <= 0.0 or jitter_high < jitter_low:
+        raise ValueError(
+            "Invalid SHARED_SERVICES_COMPONENT_JITTER_RANGE."
+        )
+    margin_low, margin_high = NET_MARGIN_DIAGNOSTIC_RANGE
+    if not (0.0 <= margin_low < margin_high <= 1.0):
+        raise ValueError("Invalid NET_MARGIN_DIAGNOSTIC_RANGE.")
     expected_components = {"personnel", "fixed", "variable", "operational"}
     if set(COST_BAND_BASE_PROBABILITIES) != expected_components:
         raise ValueError("COST_BAND_BASE_PROBABILITIES must cover all cost components.")
@@ -1825,14 +1881,36 @@ def build_branch_structure(branches: pd.DataFrame) -> pd.DataFrame:
 
     # Draw each cost component independently. The structural characteristics
     # only tilt probabilities; they do not determine the resulting band.
-    structure["shared_services_allocation_rate"] = [
-        stable_uniform(
+    allocation_rates: list[float] = []
+    realized_shared_mixes: list[dict[str, float]] = []
+
+    for row in structure.itertuples(index=False):
+        branch_id = str(row.branch_id)
+        base_rate = stable_uniform(
             f"shared_services_allocation_rate|{branch_id}",
             SHARED_SERVICES_ALLOCATION_RANGE[0],
             SHARED_SERVICES_ALLOCATION_RANGE[1],
         )
-        for branch_id in structure["branch_id"].astype(str)
-    ]
+        size_multiplier = SHARED_SERVICES_SIZE_MULTIPLIER.get(
+            str(row.branch_size),
+            1.0,
+        )
+        type_multiplier = SHARED_SERVICES_TYPE_MULTIPLIER.get(
+            str(row.branch_type),
+            1.0,
+        )
+        allocation_rates.append(
+            float(base_rate * size_multiplier * type_multiplier)
+        )
+        realized_shared_mixes.append(
+            draw_shared_services_component_mix(branch_id)
+        )
+
+    structure["shared_services_allocation_rate"] = allocation_rates
+    for component in ("personnel", "fixed", "variable", "operational"):
+        structure[f"shared_services_{component}_share"] = [
+            mix[component] for mix in realized_shared_mixes
+        ]
 
     for component in ("personnel", "fixed", "variable", "operational"):
         draws = [
@@ -2023,22 +2101,22 @@ def add_costs(
     frame["personnel_cost"] = (
         frame["direct_personnel_cost"]
         + frame["shared_services_cost"]
-        * SHARED_SERVICES_COMPONENT_MIX["personnel"]
+        * frame["shared_services_personnel_share"]
     )
     frame["fixed_cost"] = (
         frame["direct_fixed_cost"]
         + frame["shared_services_cost"]
-        * SHARED_SERVICES_COMPONENT_MIX["fixed"]
+        * frame["shared_services_fixed_share"]
     )
     frame["variable_cost"] = (
         frame["direct_variable_cost"]
         + frame["shared_services_cost"]
-        * SHARED_SERVICES_COMPONENT_MIX["variable"]
+        * frame["shared_services_variable_share"]
     )
     frame["operational_cost"] = (
         frame["direct_operational_cost"]
         + frame["shared_services_cost"]
-        * SHARED_SERVICES_COMPONENT_MIX["operational"]
+        * frame["shared_services_operational_share"]
     )
 
     frame["total_operating_cost"] = (
@@ -2055,6 +2133,22 @@ def print_cost_profile_diagnostics(branches: pd.DataFrame) -> None:
     Print the persistent branch-level profile draws used by the cost engine.
     """
     structure = build_branch_structure(branches)
+
+    allocation = structure["shared_services_allocation_rate"].astype(float)
+    print("\nShared-services allocation diagnostics:")
+    print(
+        f"  allocation rate min/median/max: "
+        f"{allocation.min():.3f} / {allocation.median():.3f} / {allocation.max():.3f}"
+    )
+    for component in ("personnel", "fixed", "variable", "operational"):
+        shares = structure[f"shared_services_{component}_share"].astype(float)
+        print(
+            f"  {component:<12} shared-service share "
+            f"P10/median/P90: "
+            f"{shares.quantile(0.10):.3f} / "
+            f"{shares.median():.3f} / "
+            f"{shares.quantile(0.90):.3f}"
+        )
 
     print("\nProbabilistic cost-profile diagnostics:")
     for component in ("personnel", "fixed", "variable", "operational"):
@@ -2495,6 +2589,7 @@ def print_audit(branch_output: pd.DataFrame, bank_output: pd.DataFrame) -> None:
     )
     annual["cost_to_income"] = annual["total_operating_cost"] / annual["total_revenue"].replace(0, np.nan)
     annual["credit_loss_ratio"] = annual["credit_loss"] / annual["average_loan_balance"].replace(0, np.nan)
+    annual["net_margin"] = annual["net_income"] / annual["total_revenue"].replace(0, np.nan)
 
     print("\nAnnual consolidated performance:")
     display = annual.copy()
@@ -2526,12 +2621,33 @@ def print_audit(branch_output: pd.DataFrame, bank_output: pd.DataFrame) -> None:
                 "net_income",
                 "cost_to_income",
                 "credit_loss_ratio",
+                "net_margin",
             ]
         ]
         .round(3)
         .to_string(index=False)
     )
     print("Monetary values above are UYU millions.")
+
+    margin_low, margin_high = NET_MARGIN_DIAGNOSTIC_RANGE
+    outside_margin_band = annual.loc[
+        ~annual["net_margin"].between(margin_low, margin_high, inclusive="both"),
+        ["year", "net_margin"],
+    ]
+    if outside_margin_band.empty:
+        print(
+            f"Annual net-margin diagnostic: PASS "
+            f"({margin_low:.0%}-{margin_high:.0%} reference range)"
+        )
+    else:
+        detail = ", ".join(
+            f"{int(row.year)}={row.net_margin:.2%}"
+            for row in outside_margin_band.itertuples(index=False)
+        )
+        print(
+            f"Annual net-margin diagnostic: REVIEW "
+            f"({margin_low:.0%}-{margin_high:.0%} reference range) | {detail}"
+        )
 
     annual["deposit_to_loan_ratio"] = (
         annual["average_deposits"]
