@@ -84,7 +84,7 @@ The current `load_postgresql.py` assumes the 23 target tables already exist with
 
 Therefore an empty PostgreSQL database bootstrap is a separate concern from the normal full-refresh workflow. Do not describe the current loader as a complete zero-to-database bootstrap script unless that capability is explicitly reintroduced.
 
-## Latest full refresh — 2026-10-11
+## Documented full-refresh checkpoint — 2026-10-11
 
 ```text
 Preflight                        23 / 23 compatible
@@ -106,6 +106,19 @@ banking.transactions              76,799,360
 performance.bank_monthly_performance      72
 performance.branch_monthly_performance 2,664
 ```
+
+
+### Current canonical transaction layer
+
+The transaction universe was regenerated/reloaded after the checkpoint above. The current canonical counts used by the final BI layer are:
+
+```text
+banking.transactions total       74,774,125
+completed transactions           72,746,246
+failed transactions               2,027,879
+```
+
+The 76,799,360 count below is retained only as the documented 2026-10-11 historical refresh checkpoint.
 
 ## Safety rule
 

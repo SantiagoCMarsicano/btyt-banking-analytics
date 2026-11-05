@@ -619,7 +619,7 @@ Suggested measures:
 
 ## Performance Considerations
 
-Because this file works with the largest fact table in Part I (~76.8M rows in the canonical world), it is designed for **section-by-section execution**, not routine `Run All`.
+Because this file works with the largest fact table in Part I (**74,774,125 rows** in the current canonical world), it is designed for **section-by-section execution**, not routine `Run All`.
 
 Because this file works with the largest fact table in Part I:
 

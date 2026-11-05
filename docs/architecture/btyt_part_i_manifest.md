@@ -6,7 +6,7 @@
 **Status:** Manifest refresh required after October 2026 recalibration  
 **Purpose:** Cryptographically inventory and freeze the finalized BTYT Part I dataset without modifying upstream data.
 
-> **Current status — 2026-10-11:** the previously frozen manifest no longer describes the current materialized loan / loan-snapshot / performance files because those layers were regenerated during the credit-risk recalibration. A new manifest/fingerprint must **not** be issued until the active-world path and world-level RNG configuration are synchronized and the affected outputs are reverified.
+> **Current status — 2026-11-04:** the previously frozen manifest no longer describes the complete current materialized Part I state. Credit-risk/performance layers were recalibrated and the canonical transaction layer was subsequently regenerated/reloaded. A replacement manifest/fingerprint must **not** be issued until the active-world path and world-level RNG configuration are synchronized and all affected outputs are reverified.
 
 ---
 

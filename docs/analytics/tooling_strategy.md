@@ -10,12 +10,17 @@ The goal is not maximum tool count. The goal is a coherent portfolio in which ea
 
 ## 2. Current Part I stack
 
-The portfolio-ready Part I release uses:
+The Part I core currently uses:
 
 ```text
 Python
 PostgreSQL + SQL
 Power BI + DAX
+```
+
+Planned Part I extensions:
+
+```text
 Excel
 Tableau
 ```
@@ -33,7 +38,7 @@ They may be revisited later if they solve a concrete portfolio or reproducibilit
 
 Pentaho is also not part of the current dashboard path. It remains a possible tool for the later deliberately “dirty world” / ETL practice module.
 
-## 3. Current phase — 2026-10-11
+## 3. Current phase — 2026-11-04
 
 ```text
 Synthetic world / generators        implemented
@@ -41,15 +46,13 @@ PostgreSQL relational model         implemented
 00–07 thematic SQL                  complete
 KPI catalog                         complete
 Reusable analytics views            implemented
-Power BI pages 01–03                functionally closed
-Power BI page 04                    in progress
-Power BI pages 05–06                pending
-Python analytical deliverables      pending
-Excel deliverable                   pending
-Tableau deliverable                 pending
+Power BI pages 01–06                final
+Python generation / validation      implemented
+Excel deliverable                   planned
+Tableau deliverable                 planned
 ```
 
-The old “runtime SQL smoke-test pending” status is obsolete.
+The Power BI build and final visual-polish phase are complete. The old “runtime SQL smoke-test pending” status is obsolete.
 
 ## 4. PostgreSQL / SQL
 
@@ -69,7 +72,7 @@ SQL should not precompute every interactive dashboard combination.
 
 ### Current scale rule
 
-The raw transaction fact contains approximately 76.8M rows.
+The current canonical raw transaction fact contains **74,774,125 rows**, of which **72,746,246** are completed and **2,027,879** are failed attempts.
 
 Preferred pattern:
 
@@ -97,7 +100,7 @@ It should not reproduce major banking logic that already exists in SQL.
 
 ## 6. Power BI / DAX
 
-Power BI is the **primary corporate BI surface** for Part I.
+Power BI is the **primary implemented corporate BI surface** for Part I and its six-page report is final.
 
 DAX owns:
 
@@ -211,7 +214,7 @@ S  = Superset
 P  = Python
 ```
 
-Because Superset is not part of the current Part I release, current documentation reassigns Superset-primary transaction KPIs to **Power BI** where they fit the planned `Transacciones y Canales` page.
+Because Superset is not part of the current Part I release, current documentation reassigns Superset-primary transaction KPIs to **Power BI** where they fit the implemented `Transacciones y Canales` page.
 
 The catalog remains an analytical priority map, not a requirement to implement every KPI in its originally proposed tool.
 

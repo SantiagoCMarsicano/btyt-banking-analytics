@@ -1,135 +1,271 @@
+<p align="center">
+  <img src="docs/assets/logo.png" alt="BTYT Bank" width="240">
+</p>
+
 # BTYT Banking Analytics
 
-**Banking data turned into financial performance, customer and credit-risk insights.**
+**End-to-end banking analytics project built around a fictional Uruguayan commercial bank.**
 
-An end-to-end portfolio project by **Santiago Castillo Marsicano · Economics & Sociology**. Built around a fictional Uruguayan commercial bank, BTYT connects a Python synthetic-data pipeline, PostgreSQL analytics and interactive Power BI reporting.
+**Python · PostgreSQL · SQL · Power BI · DAX**
 
-**Python · PostgreSQL · SQL · Power BI · DAX**  
-**107K customers · 76.8M transactions · 37 branches · 2021–2026**
+**107K customers · 37 branches · 72.75M completed transactions · 2021–2026**
 
-![Power BI credit-risk dashboard showing delinquency trends, loan types, customer segments and origination cohorts](docs/assets/powerbi-credit-risk.png)
+> **Part I — Business Intelligence & Performance Management: Core implementation complete · Excel & Tableau extensions planned**
 
-*Credit Risk dashboard — current development preview. All data and financial results are synthetic. DPD = days past due.*
+<p align="center">
+  <img src="docs/assets/Pag1.png" alt="BTYT Executive Overview" width="900">
+</p>
 
-[Explore the Power BI files](powerbi/) · [Browse SQL analysis](scripts/sql/exploration/) · [Read the documentation](docs/README.md)
+BTYT is not only a dashboard. The project builds a complete synthetic banking environment and carries the data through the full analytical lifecycle:
 
-## What can this project help analyze?
+**Synthetic banking world → Python generation & validation → PostgreSQL → SQL analytics → BI & reporting**
 
-| Business question | Analytical approach |
-|---|---|
-| Is revenue growth translating into profit? | Monthly and annual revenue, operating costs, net income and cost-to-income analysis. |
-| Where is credit exposure concentrated? | Loan-type comparisons, customer segmentation and delinquency indicators. |
-| How does credit quality evolve? | Payment shortfalls, 30+ / 90+ DPD exposure and origination-cohort analysis. |
-| How do branches and customer groups differ? | Branch performance reporting and customer/account analysis. |
-
-## From business question to SQL result
-
-The annual performance query summarizes **72 monthly observations** into six years of reporting. It averages monthly active customers, sums financial flows and calculates cost-to-income from annual totals.
-
-![PostgreSQL annual performance query and results for 2021–2026](docs/assets/postgresql-annual-performance.png)
-
-**Example finding from the simulated bank:** revenue rises from UYU 23,805.79 million in 2025 to UYU 24,134.91 million in 2026, while net income falls from UYU 6,194.30 million to UYU 5,057.29 million. Cost-to-income increases from **61.56% to 62.50%**.
-
-This creates a management question: **what explains the gap between revenue growth and profitability?** Answering it requires a breakdown of operating costs, credit losses and taxes; the annual summary alone does not establish the cause.
-
-[View the performance SQL](scripts/sql/exploration/07_performance.sql)
-
-## Python: building the analytical universe
-
-BTYT includes a **World Builder application** to configure synthetic banking scenarios and manage their generation pipeline. The interface exposes world settings, execution stages, progress and verification output.
-
-![BTYT World Builder showing a completed 50-customer smoke run and final manifest verification](docs/assets/python-world-builder.png)
-
-*Demonstration run: Smoke profile, 50 customers, variant 33. The interface reports FROZEN status and final manifest verification PASS. This is a separate test world, not the 107,253-customer analytical world used for BI.*
-
-[Explore the application](world_builder/) · [Explore the generators](scripts/generators/) · [Explore validation scripts](scripts/audits/)
-
-## How the pieces connect
-
-**Python generation → Parquet / CSV → PostgreSQL → SQL analytical views → Power BI / DAX**
-
-- **Python:** synthetic customers, products, transactions, credit histories and financial performance, with validation scripts and world-management tooling.
-- **PostgreSQL:** 23 physical tables across seven schemas, relational constraints and reusable analytical views/materialized views.
-- **SQL:** thematic analysis of customers, accounts, loans, transactions, branches, campaigns and bank performance.
-- **Power BI:** semantic modeling, interactive filters, time intelligence and business-facing reporting.
-
-Heavy transaction aggregations happen in PostgreSQL. The raw **76.8M-row transaction table is not imported directly into Power BI**.
-
-## Current delivery status
-
-| Area | Status |
-|---|---|
-| Synthetic data, relational model and SQL/KPI layer | Implemented; canonical analytical world available. |
-| Executive Overview, Branches, Customers & Accounts | Functionally complete; visual polish ongoing. |
-| Credit Risk | KPI layer implemented; dashboard preview shown above, visual refinement ongoing. |
-| Remaining thematic dashboard pages | In progress / planned. |
-| Excel, Tableau and focused Python analyses | Planned downstream extensions. |
-| Part II — predictive credit-risk modeling | Planned; not presented as an implemented capability. |
-
-The current portfolio focuses on **Part I — Business Intelligence & Performance Management**.
-
-<details>
-<summary><strong>Technical detail: data scale, modeling and analytical safeguards</strong></summary>
-
-### Canonical data scale
-
-World: `worlds/BTYT/01` · Observation window: January 2021–December 2026.
-
-| Entity | Records / count |
-|---|---:|
-| Customers | 107,253 |
-| Accounts | 228,945 |
-| Cards | 297,775 |
-| Loans | 233,441 |
-| Loan-month snapshots | 4,109,490 |
-| Transactions | 76,799,360 |
-| Branches / agencies | 37 |
-
-Generated datasets are kept outside normal Git history where appropriate. The screenshots provide a preview without requiring a local database or a full data-generation run.
-
-### Relational model
-
-| Schema | Tables | Purpose |
-|---|---:|---|
-| `core` | 4 | Customers, branches, products and accounts |
-| `banking` | 5 | Cards, loans, transactions, balances and loan snapshots |
-| `marketing` | 3 | Campaigns, targeting and exposure |
-| `reference` | 2 | Campaign dimensions |
-| `market` | 5 | Banks, institutions and market dynamics |
-| `macro` | 2 | Macroeconomic environment and shocks |
-| `performance` | 2 | Bank and branch monthly performance |
-
-### Analytical safeguards
-
-- **Grain:** transactions are individual events; balances and credit snapshots are account-month and loan-month observations; performance is bank-month or branch-month.
-- **Stocks vs. flows:** balances require an explicit time rule; revenue, costs and other flows can be accumulated over a period.
-- **Historical state:** master-record statuses represent cutoff attributes unless documented otherwise. Monthly snapshots support historical analysis.
-- **Currency:** the performance schema stores UYU-equivalent reporting values. BI applies explicit reporting-currency conversion.
-- **Transactions:** financial volume uses completed transactions; failed attempts remain operational events.
-- **Campaigns:** a `POSITIVE` response indicates receptivity, not automatically product conversion. Segmentation alone is not an A/B experiment.
-- **Financial logic:** net interest income plus fees produces revenue; operating costs, credit losses and taxes reconcile it to net income.
-- **Validation scope:** the displayed World Builder verification applies to the smoke run. A separate full-world cross-system audit was interrupted by a memory limit during transaction/balance reconciliation; its successful preceding checks do not establish completion of that run.
-
-</details>
-
-## Explore the project
-
-| Resource | Contents |
-|---|---|
-| [Documentation map](docs/README.md) | Entry point to project documentation |
-| [SQL exploration](scripts/sql/exploration/) | Eight thematic analysis modules, `00–07` |
-| [KPI catalog](docs/analytics/kpi_catalog.md) | Metric definitions and analytical ownership |
-| [Power BI documentation](docs/powerbi/) | Semantic model, measures and report pages |
-| [Database workflow](docs/dbprocess/) | PostgreSQL lifecycle and refresh process |
-| [Data dictionary](docs/data_dictionary/) | Dataset definitions and semantics |
-| [Credit-risk calibration](docs/analytics/credit_risk_calibration.md) | Credit-quality methodology |
-
-**Power BI files:** `powerbi/BTYT_Banking_Analytics.pbix` is the main analytical file; `powerbi/BTYT PRESENTATION.pbix` is the presentation copy.
-
-**Next phase:** Part II will reuse the banking universe for credit-risk modeling, with explicit target definitions, temporal train/validation/test splits, leakage controls and model evaluation.
+All data, customers, transactions, financial results and credit events are **synthetic**.
 
 ---
 
-**Author:** [Santiago Castillo Marsicano](https://github.com/SantiagoCMarsicano) · Economics & Sociology · Data Analytics & Business Intelligence
+## End-to-end architecture
 
-**Data disclaimer:** BTYT is fictional and all customer, transaction, financial and credit-event data is synthetic. No confidential banking information is used. Real institution names, where present, are structural references; associated synthetic values are not real reported results.
+```text id="rq0q3w"
+BTYT banking world
+        │
+        ▼
+Python generation
+        │
+        ├── Customers
+        ├── Accounts
+        ├── Cards
+        ├── Loans
+        ├── Transactions
+        ├── Credit histories
+        ├── Branches
+        ├── Campaigns
+        └── Financial performance
+        │
+        ▼
+Validation & World Builder
+        │
+        ▼
+Parquet / CSV
+        │
+        ▼
+PostgreSQL
+        │
+        ├── Relational model
+        ├── Constraints
+        ├── Analytical views
+        └── Materialized aggregations
+        │
+        ▼
+SQL analytical layer
+        │
+        ▼
+Business Intelligence
+        │
+        ├── Power BI + DAX
+        ├── Excel          [planned]
+        └── Tableau        [planned]
+```
+
+---
+
+## 1. Python — Building the banking universe
+
+The first layer of BTYT is a synthetic-data generation system written in Python.
+
+It creates a coherent banking universe with customers, products, accounts, loans, transactions, credit behavior, campaigns, branches and financial performance across **2021–2026**.
+
+A dedicated **World Builder** is used to configure scenarios, control executions and validate generated worlds.
+
+<p align="center">
+  <img src="docs/assets/python-world-builder.png" alt="BTYT Python World Builder" width="900">
+</p>
+
+The objective is to reproduce the complexity of a real analytical environment without using confidential banking information.
+
+[Explore the World Builder](world_builder/) · [Generators](scripts/generators/) · [Validation scripts](scripts/audits/)
+
+---
+
+## 2. PostgreSQL & SQL — From generated data to analytics
+
+Generated datasets are loaded into PostgreSQL, which acts as the central analytical database.
+
+The database organizes the banking universe into domains covering:
+
+- customers and accounts;
+- cards and loans;
+- transactions and balances;
+- credit-risk snapshots;
+- branches;
+- campaigns;
+- market information;
+- financial performance.
+
+SQL is then used to transform the relational model into reusable analytical views and aggregations.
+
+<p align="center">
+  <img src="docs/assets/postgresql-annual-performance.png" alt="BTYT PostgreSQL and SQL analysis" width="900">
+</p>
+
+Heavy calculations are performed upstream whenever appropriate. This is especially important for the transaction layer, where tens of millions of individual events are aggregated before reaching the BI tools.
+
+[Explore SQL analysis](scripts/sql/exploration/) · [Database workflow](docs/dbprocess/)
+
+---
+
+## 3. Power BI — Business Intelligence layer
+
+Power BI is the main implemented analytical surface of Part I.
+
+The semantic model combines PostgreSQL analytical layers with DAX measures, temporal logic, dynamic metrics and interactive filtering.
+
+The final report contains **six business-focused pages**.
+
+### 01 — Resumen Ejecutivo
+
+Overall financial performance, revenue, net income, operating costs, efficiency and profitability.
+
+<p align="center">
+  <img src="docs/assets/Pag1.png" alt="Resumen Ejecutivo" width="900">
+</p>
+
+### 02 — Sucursales
+
+Branch revenue, profitability, operating costs, regional performance and network health.
+
+<p align="center">
+  <img src="docs/assets/Pag2.png" alt="Sucursales" width="900">
+</p>
+
+### 03 — Clientes y Cuentas
+
+Customer evolution, active accounts, deposits, loans, relationship depth and dynamic customer rankings.
+
+<p align="center">
+  <img src="docs/assets/Pag3.png" alt="Clientes y Cuentas" width="900">
+</p>
+
+### 04 — Riesgo de Crédito
+
+Credit exposure, 30+ and 90+ DPD delinquency, payment shortfalls, customer segments, loan types and origination cohorts.
+
+<p align="center">
+  <img src="docs/assets/Pag4.png" alt="Riesgo de Crédito" width="900">
+</p>
+
+### 05 — Transacciones y Canales
+
+Completed transactions, transaction volume, channel mix, transaction types and operational failure rates.
+
+<p align="center">
+  <img src="docs/assets/Pag5.png" alt="Transacciones y Canales" width="900">
+</p>
+
+### 06 — Mercado y Campañas
+
+Market share, competitive positioning, campaign coverage, positive response and product targeting.
+
+<p align="center">
+  <img src="docs/assets/Pag6.png" alt="Mercado y Campañas" width="900">
+</p>
+
+---
+
+## Analytical design
+
+The project applies explicit analytical rules instead of treating every metric the same way:
+
+- **Flows** such as transactions, revenue and costs are accumulated over time.
+- **Stocks** such as deposits and outstanding balances use appropriate monthly-period logic.
+- Monetary reporting in the BI layer is standardized in **USD** where conversion is required.
+- FX conversion is applied according to the year of each observation.
+- Failed transactions remain available for operational analysis but are separated from completed financial volume.
+- Credit risk distinguishes between **30+ DPD** and **90+ DPD** exposure.
+- Campaign response is treated as customer receptivity, not automatically as product conversion.
+- Large transaction aggregations are handled in PostgreSQL rather than importing the complete raw event table into Power BI.
+
+---
+
+## Technology stack
+
+| Layer | Technology |
+|---|---|
+| Synthetic data generation | Python |
+| Data storage | Parquet / CSV |
+| Database | PostgreSQL |
+| Data analysis | SQL |
+| Semantic modeling & BI | Power BI / DAX |
+| Additional BI surfaces | Excel / Tableau — planned |
+| Validation | Python / SQL |
+| Version control | Git / GitHub / Git LFS |
+
+---
+
+## Repository
+
+```text id="sk75bi"
+BTYT Banking Analytics
+│
+├── config/             # project and generation configuration
+├── data/               # generated analytical data
+├── docs/               # technical and analytical documentation
+├── manifests/          # generation manifests
+├── powerbi/            # Power BI report
+├── scripts/
+│   ├── generators/     # synthetic-data generation
+│   ├── audits/         # validations and controls
+│   └── sql/            # database and analytical SQL
+├── world_builder/      # synthetic-world management application
+└── worlds/             # banking-world definitions
+```
+
+---
+
+## Documentation
+
+[Power BI](docs/powerbi/) ·
+[KPI catalog](docs/analytics/kpi_catalog.md) ·
+[SQL analysis](scripts/sql/exploration/) ·
+[Data dictionary](docs/data_dictionary/) ·
+[Database workflow](docs/dbprocess/) ·
+[Full documentation](docs/README.md)
+
+---
+
+## Roadmap
+
+### Part I — Business Intelligence & Performance Management
+
+**Core end-to-end implementation complete**
+
+Implemented:
+
+**Python synthetic-data pipeline → PostgreSQL → SQL analytical layer → Power BI**
+
+Planned extensions:
+
+- **Excel** — selected KPI analysis, reporting and business-user workflows.
+- **Tableau** — complementary interactive visualization and analytical storytelling.
+
+These extensions will reuse the same analytical universe and KPI framework rather than creating a separate dataset.
+
+### Part II — Credit Risk & Predictive Analytics
+
+Next major analytical phase:
+
+**feature engineering → temporal validation → predictive modeling → model evaluation → explainability → business interpretation**
+
+---
+
+## Author
+
+**Santiago Castillo Marsicano**
+
+Economics & Sociology · Data Analytics · Business Intelligence
+
+[GitHub](https://github.com/SantiagoCMarsicano)
+
+---
+
+> **Disclaimer:** BTYT is a fictional bank. All customer, transaction, financial, credit-risk and campaign data are synthetic. No confidential banking information is used.

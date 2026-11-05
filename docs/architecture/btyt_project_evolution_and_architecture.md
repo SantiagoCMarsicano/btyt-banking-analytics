@@ -3,8 +3,8 @@
 **Project:** Banco de Treinta y Tres (BTYT) Banking Analytics  
 **Document type:** Architecture history, current state and roadmap  
 **Status:** Active architecture reference  
-**Current phase:** Part I — Power BI implementation and analytical delivery  
-**Last updated:** 2026-10-11
+**Current phase:** Part I — core end-to-end implementation complete; Excel/Tableau extensions planned  
+**Last updated:** 2026-11-04
 
 ---
 
@@ -18,7 +18,7 @@ This document records:
 - what is implemented today;
 - which historical decisions are superseded;
 - how the current Part I analytical stack fits together;
-- what remains before Part I is portfolio-ready;
+- what remains as optional/extended Part I delivery;
 - how Part II will reuse the same banking universe.
 
 It is an architecture reference, not a daily progress log.
@@ -184,7 +184,7 @@ cards                        297,775
 loans                        233,441
 loan-month snapshots       4,109,490
 account-month balances     7,525,724
-transactions              76,799,360
+transactions              74,774,125
 branches                         37
 observation months               72
 ```
@@ -367,15 +367,15 @@ Current semantic model contains 15 tables.
 Current page status:
 
 ```text
-01 Resumen Ejecutivo         closed functionally
-02 Sucursales                closed functionally
-03 Clientes y Cuentas        closed functionally
-04 Riesgo de Crédito         KPI row complete / visuals in progress
-05 Transacciones y Canales   pending
-06 Mercado y Campañas        pending
+01 Resumen Ejecutivo         final
+02 Sucursales                final
+03 Clientes y Cuentas        final
+04 Riesgo de Crédito         final
+05 Transacciones y Canales   final
+06 Mercado y Campañas        final
 ```
 
-Final theming is intentionally deferred until functional completion.
+The Power BI report is functionally complete and visually frozen for the current portfolio checkpoint.
 
 ---
 
@@ -405,27 +405,32 @@ Customer/account active-window logic and portfolio stock averages use explicit w
 
 ## 15. Current risk page checkpoint
 
-Current headline risk KPIs after refresh:
+Final headline risk KPIs:
 
 ```text
-Exposición crediticia          ≈ US$4.338B
-Exposición 90+ DPD              5.16%
-Cartera reestructurada          0.64%
-Pérdida crediticia / cartera    0.63%
+Exposición crediticia
+Exposición 30+ DPD
+Exposición 90+ DPD
+Pagos incumplidos
 ```
 
-These are synthetic management analytics.
+The page also includes loan-type, customer-segment, annual-trend and origination-cohort views. These are synthetic management analytics.
 
 ---
 
 ## 16. Tooling strategy for the current Part I release
 
-Implemented / planned in the active release:
+Implemented core:
 
 ```text
+Python
 PostgreSQL + SQL
 Power BI + DAX
-Python
+```
+
+Planned Part I extensions:
+
+```text
 Excel
 Tableau
 ```
@@ -501,26 +506,28 @@ Smoke-test material should not be mixed into the canonical commit.
 Current technical priorities:
 
 ```text
-1. finish Power BI Page 04
-2. build Pages 05–06
-3. final visual polish
-4. complete/update documentation
-5. resolve world-config / active-world seed synchronization
-6. reverify affected generated layers
-7. regenerate manifest/fingerprint
-8. finish remaining Part I deliverables
+1. update/finalize repository documentation
+2. preserve final Power BI screenshots and PBIX
+3. resolve world-config / active-world seed synchronization
+4. reverify affected RNG-driven generated layers
+5. regenerate manifest/fingerprint
+6. add Excel extension when useful
+7. add Tableau extension when useful
+8. prepare Part II credit-risk modeling
 ```
 
 ---
 
 ## 21. Part I remaining analytical deliverables
 
-After Power BI:
+The core end-to-end Part I implementation is complete.
 
-- focused Python analysis;
-- advanced Excel management workbook;
-- Tableau geographic storytelling;
-- final portfolio documentation.
+Remaining extensions:
+
+- advanced Excel management / ad-hoc workbook;
+- Tableau geographic / analytical storytelling.
+
+Python is already a core implemented layer through synthetic generation, validation and supporting analysis. Excel and Tableau should complement rather than duplicate Power BI.
 
 These deliverables should complement rather than duplicate one another.
 
@@ -587,4 +594,4 @@ It is the coherence between:
 - business questions;
 - downstream presentation.
 
-The immediate objective is to finish Part I as a portfolio-ready analytical product while preserving enough reproducibility that Part II can build on the same universe.
+The immediate objective is to preserve Part I as a portfolio-ready end-to-end analytical product, complete its remaining Excel/Tableau extensions when useful, and maintain enough reproducibility for Part II to build on the same universe.

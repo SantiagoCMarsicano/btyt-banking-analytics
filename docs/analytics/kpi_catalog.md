@@ -784,7 +784,7 @@ Revenue growth rate - operating-cost growth rate
 
 BTYT-specific measurement rules
 
-Current Power BI implementation note (October 2026): Page 04 uses **Exposición 90+ DPD** as the severe-delinquency headline and **Cartera reestructurada** as an additional headline KPI. The catalog's 30+ DPD metric remains valid for secondary analysis but is not currently a top-row KPI.
+Current Power BI implementation note (November 2026): the final Page 04 headline row uses **Exposición crediticia**, **Exposición 30+ DPD**, **Exposición 90+ DPD** and **Pagos incumplidos**. `Cartera reestructurada` and `Pérdida crediticia / cartera` remain valid catalog metrics but are not current top-row KPIs.
 
 
 Profitability is synthetic operating performance. The performance layer contains revenue, operating costs, credit loss and resulting net income. Do not label these as audited statutory net income, ROE, ROA or regulatory capital returns without corresponding accounting and balance-sheet data.

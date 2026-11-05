@@ -26,24 +26,24 @@ The analytical principle is:
 - `kpi_catalog.md`
 - `tooling_strategy.md`
 
-## Current status — 2026-10-11
+## Current status — 2026-11-04
 
 ```text
 Relational model                   validated / stable
 00–07 thematic SQL                 complete
 KPI catalog                        complete
 Reusable analytics views           implemented
-Power BI pages 01–03               functionally closed
-Power BI page 04                   KPI row complete; visuals in progress
-Power BI pages 05–06               pending
-Python / Excel / Tableau            later Part I deliverables
+Python generation / validation     implemented
+Power BI pages 01–06               final
+Excel extension                    planned
+Tableau extension                  planned
 ```
 
-The old “SQL freeze candidate / runtime smoke test pending” status is obsolete.
+The Power BI report is no longer in a page-construction or visual-polish phase.
 
-## Reusable analytics objects currently in the working tree
+## Reusable analytics objects
 
-The SQL view layer includes the established 00–07 objects plus later Power BI-oriented additions. Current working-tree filenames include:
+The SQL view layer includes the established 00–07 objects plus later BI-oriented additions. Working-tree filenames include:
 
 ```text
 00_create_analytics_schema.sql
@@ -60,7 +60,7 @@ The SQL view layer includes the established 00–07 objects plus later Power BI-
 11_customer_transaction_yearly_materialized.sql
 ```
 
-The exact contract of any newly added view must be documented from its SQL source before the next analytical freeze. This documentation does not infer definitions that are not present in the source files.
+The exact contract of any newly added view must be documented from its SQL source before the next analytical freeze.
 
 ## Canonical analytical sequence
 
@@ -111,9 +111,19 @@ Lower-level banking facts preserve native UYU / USD semantics.
 
 `performance.*` monetary fields are UYU-equivalent reporting values.
 
-Power BI may convert selected reporting measures to USD using the documented annual FX convention; this presentation conversion does not change the underlying PostgreSQL storage semantics.
+Power BI converts selected reporting measures to USD using the documented annual FX convention; this presentation conversion does not change PostgreSQL storage semantics.
 
 ### Transactions
+
+Current canonical scale:
+
+```text
+TOTAL      74,774,125
+COMPLETED  72,746,246
+FAILED      2,027,879
+```
+
+Semantics:
 
 ```text
 FAILED     → attempted operational event
@@ -137,9 +147,9 @@ Monthly credit quality is represented by `loan_monthly_snapshot` DPD and delinqu
 | PostgreSQL / SQL | Stable grains, joins, reusable views, heavy aggregation, reconciliation |
 | Power Query | Connection and light shaping |
 | DAX / Power BI | Dynamic filter-aware measures and interactive BI |
-| Python | Statistical / distributional / trajectory analysis |
-| Excel | Management and ad-hoc analysis |
-| Tableau | Geographic / spatial storytelling |
+| Python | Synthetic generation, validation and statistical analysis |
+| Excel | Planned management / ad-hoc extension |
+| Tableau | Planned geographic / storytelling extension |
 
 Apache Superset is outside the current Part I release.
 

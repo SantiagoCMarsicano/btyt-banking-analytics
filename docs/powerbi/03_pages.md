@@ -1,5 +1,20 @@
 # Power BI — Pages
 
+Estado general: **seis páginas finalizadas**.
+
+Capturas definitivas:
+
+```text
+docs/assets/Pag1.png
+docs/assets/Pag2.png
+docs/assets/Pag3.png
+docs/assets/Pag4.png
+docs/assets/Pag5.png
+docs/assets/Pag6.png
+```
+
+---
+
 ## 01 — Resumen Ejecutivo
 
 ### Pregunta principal
@@ -8,10 +23,10 @@
 
 ### KPIs
 
-- Ingresos Totales
-- Resultado Neto
-- Costos Operativos / Cost-to-Income según versión visual
-- Margen Neto
+- Ingresos totales
+- Resultado neto
+- Costos / Ingresos
+- Margen neto
 
 ### Visuales
 
@@ -21,13 +36,13 @@
 
 ### Filtros
 
-Selector anual 2021–2026.
+- Tamaño de sucursal
+- Región
+- 1 año / 3 años / 5 años / Todos
 
 ### Estado
 
-**Funcionalmente cerrada.**
-
-El pulido visual final queda para el cierre de todas las páginas.
+**Final.**
 
 ---
 
@@ -39,23 +54,26 @@ El pulido visual final queda para el cierre de todas las páginas.
 
 ### KPIs
 
-- Ingresos
-- Resultado Neto
-- Costos Operativos
-- Cost-to-Income
+- Ingresos totales
+- Resultado neto
+- Costos operativos
+- Costos / Ingresos
 
 ### Visuales
 
-- Ranking de resultado neto por sucursal
-- Ingresos vs Resultado Neto por sucursal / región
-- Rentabilidad de la red:
-  - rentables;
-  - deficitarias;
-  - proporción rentable.
+- Resultado Neto por Sucursal
+- Ingresos vs Resultado Neto por Sucursal
+- Rentabilidad de la Red
+
+### Filtros
+
+- Tamaño de sucursal
+- Región
+- 1 año / 3 años / 5 años / Todos
 
 ### Estado
 
-**Funcionalmente cerrada.**
+**Final.**
 
 ---
 
@@ -63,70 +81,28 @@ El pulido visual final queda para el cierre de todas las páginas.
 
 ### Pregunta principal
 
-> **¿Cómo crece la base de clientes de BTYT y qué tan profunda es la relación con el banco, diferenciando Personas y Empresas?**
+> **¿Cómo evoluciona la base de clientes y qué tan profunda es su relación con BTYT?**
 
 ### KPIs
 
-- Clientes Activos
-- Cuentas Activas
+- Promedio mensual de clientes activos
+- Cuentas activas
 - Depósitos promedio
 - Préstamos promedio
 
 ### Filtros
 
-#### Residencia
-
-Dropdown compacto.
-
-Los casos sin residencia uruguaya visible se presentan como:
-
-```text
-Extranjeros
-```
-
-#### Tipo de cliente
-
-Etiquetas visibles:
-
-```text
-Personas
-Empresas
-```
-
-#### Analysis Window
-
-```text
-1M
-3M
-6M
-12M
-All
-```
+- Residencia
+- Tipo de cliente
+- 1 año / 3 años / 5 años / Todos
 
 ### Semántica temporal
 
-#### Clientes activos
-
-Clientes distintos activos al menos una vez dentro de la ventana.
-
-#### Cuentas activas
-
-Cuentas distintas activas al menos una vez dentro de la ventana.
-
-#### Depósitos promedio
-
-Promedio mensual del stock agregado de depósitos dentro de la ventana.
-
-#### Préstamos promedio
-
-Promedio mensual del stock agregado de deuda vigente dentro de la ventana.
-
-Por tanto:
-
-```text
-1M  → snapshot mensual
-All → promedio mensual histórico
-```
+- **Clientes activos:** promedio mensual dentro del período visible.
+- **Cuentas activas:** stock con regla temporal explícita; no se suma entre meses.
+- **Depósitos promedio:** promedio mensual del stock agregado, convertido a USD por año.
+- **Préstamos promedio:** promedio mensual del stock de deuda vigente, convertido a USD por año.
+- **Volumen transaccionado:** flujo acumulado dentro del período visible, convertido a USD por año.
 
 ### Visuales
 
@@ -135,12 +111,8 @@ All → promedio mensual histórico
   - Depósitos
   - Deuda vigente
   - Volumen transaccionado
-- Profundidad de Relación:
-  - Básica
-  - Vinculada
-  - Profunda
-  - Integral
-- Matriz de Análisis de Cartera
+- Profundidad de Relación
+- Análisis de Cartera
 
 ### Matriz de cartera
 
@@ -167,7 +139,7 @@ Coef. Var.
 
 ### Estado
 
-**Funcionalmente cerrada.**
+**Final.**
 
 ---
 
@@ -175,75 +147,132 @@ Coef. Var.
 
 ### Pregunta principal
 
-> **¿Cuánta exposición crediticia tiene BTYT, cuánto está en mora y qué tan severo es ese riesgo?**
+> **¿Cuánta exposición crediticia tiene BTYT, cuánto está en mora y dónde se concentra el riesgo?**
 
-### KPIs actuales
+### KPIs
 
-```text
-Exposición crediticia
-Exposición 90+ DPD
-Cartera reestructurada
-Pérdida crediticia / cartera
-```
+- Exposición crediticia
+- Exposición 30+ DPD
+- Exposición 90+ DPD
+- Pagos incumplidos
 
-### Estado actual observado
+### Visuales
 
-```text
-Exposición crediticia          ≈ US$4.338B
-Exposición 90+ DPD              5.16%
-Cartera reestructurada          0.64%
-Pérdida crediticia / cartera    0.63%
-```
+- Evolución anual de Pagos incumplidos / 30+ DPD / 90+ DPD
+- Riesgo y exposición por tipo de préstamo
+- Exposición 30+ / 90+ DPD por segmento de cliente
+- Exposición y mora por cohorte de originación
 
-### Decisión sobre 30+ DPD
+### Filtros
 
-El 30+ DPD sigue siendo una métrica analítica válida, pero no se usa como KPI principal en la fila superior.
+- Tipo de cliente
+- Tipo de préstamo
+- Estado del préstamo
+- Moneda
 
-La página prioriza 90+ DPD como señal de severidad y cartera reestructurada como estado contractual relevante.
+### Helpers
 
-### Fuente
+- `DPD Exposure Selector`
+- `DPD Rate Switch`
 
-- `Credit Risk`
-- `Bank Performance`
-- `DimDate`
-- `Customer Accounts` para contexto de cliente
+Cumplen funciones diferentes y se conservan por diseño.
 
-### Próximo paso
+### Estado
 
-Construir 3–4 visuales útiles sin sobrecargar la página.
-
-La prioridad es terminar funcionalmente la página antes de entrar en pulido visual.
+**Final.**
 
 ---
 
 ## 05 — Transacciones y Canales
 
+### Pregunta principal
+
+> **¿Cómo transaccionan los clientes, por qué canales y con qué nivel de fallas operativas?**
+
+### KPIs
+
+- Transacciones completadas
+- Volumen transaccional
+- Participación por canal
+- Tasa de fallas
+
+### Visuales
+
+- Evolución de transacciones y volumen
+- Distribución por canal
+- Canal por tipo de transacción
+- Tasa de fallas por canal
+
+### Filtros
+
+- 1 año / 3 años / 5 años / Todos
+- Tipo de cliente
+- Tipo de transacción
+- Canal
+- Moneda
+
+### Fuente
+
+La página consume una capa agregada de PostgreSQL / analytics; no importa por defecto la fact cruda de transacciones.
+
+Escala canónica:
+
+```text
+74,774,125 transacciones totales
+72,746,246 completadas
+2,027,879 fallidas
+```
+
 ### Estado
 
-**Pendiente.**
-
-La capa SQL/materializada ya reduce el volumen de la fact cruda para evitar importar por defecto los ~76.8M eventos a Power BI.
+**Final.**
 
 ---
 
 ## 06 — Mercado y Campañas
 
+### Pregunta principal
+
+> **¿Cómo se posiciona BTYT en el mercado simulado y cómo responden sus campañas?**
+
+### KPIs
+
+- Participación de mercado BTYT
+- Posición de BTYT
+- Cobertura de campaña
+- Respuesta positiva
+
+### Visuales
+
+- Ranking de participación de mercado
+- Evolución de la participación de BTYT
+- Cobertura vs respuesta positiva por campaña
+- Respuesta positiva por producto objetivo
+
+### Filtros
+
+- Tipo de campaña
+- Tipo de cliente
+- Producto objetivo
+- Tipo de banco
+
+La página no usa selector temporal global porque sus dos fuentes tienen una semántica temporal/grano diferente y el diseño final no lo requiere.
+
 ### Estado
 
-**Pendiente.**
-
-`Market Performance` y `Campaign Performance` permanecen desconectadas intencionalmente cuando su grano no justifica una relación física con el resto del modelo.
+**Final.**
 
 ---
 
 ## Cierre visual
 
-Una vez finalizadas las seis páginas:
+El reporte final mantiene:
 
-- unificar tema;
-- revisar alineación;
-- normalizar títulos y unidades;
-- revisar slicers;
-- ajustar espaciados;
-- validar navegación;
-- publicar versión final de presentación.
+- fondo oscuro/grafito;
+- títulos y etiquetas visibles en español;
+- DAX/objetos técnicos en inglés;
+- paleta analítica azul/cian/violeta;
+- branding BTYT usado de forma puntual;
+- navegación y alineación consistentes entre las seis páginas.
+
+No se requiere agregar nuevas páginas para cerrar el núcleo Power BI de Part I.

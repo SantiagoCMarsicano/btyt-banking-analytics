@@ -131,20 +131,22 @@ The result moved through the following sequence during diagnosis:
 
 The final value was accepted because the mechanics were corrected and the resulting KPI emerged from the model. No further tuning was performed merely to hit a round target.
 
-## Current Power BI risk KPI row
+## Final Power BI risk KPI row
 
-After PostgreSQL refresh, the Power BI page showed:
+The calibration checkpoint above remains useful for documenting the accepted severe-delinquency result.
+
+The final Power BI Page 04 headline row is:
 
 ```text
-Exposición crediticia          ≈ US$4.338M displayed
-Exposición 90+ DPD              5.16%
-Cartera reestructurada          0.64%
-Pérdida crediticia / cartera    0.63%
+Exposición crediticia
+Exposición 30+ DPD
+Exposición 90+ DPD
+Pagos incumplidos
 ```
 
-Power BI display units use the current dashboard formatting convention; underlying calculations retain full precision.
+The final page therefore keeps both 30+ and 90+ DPD visible as different severity signals and adds payment shortfall as an operational credit-quality indicator.
 
-The earlier 30+ DPD headline KPI was removed from the top row because it added little decision value in the previous calibration. It may still be used as a secondary diagnostic or trend measure.
+`Cartera reestructurada` and `Pérdida crediticia / cartera` remain available as valid analytical metrics, but they are not headline KPIs in the final report.
 
 ## Modeling principles preserved
 

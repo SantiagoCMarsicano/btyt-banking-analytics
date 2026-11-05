@@ -291,7 +291,7 @@ analytics.customer_segment_monthly_mv
 analytics.transaction_channel_monthly
 ```
 
-## Latest successful full refresh — 2026-10-11
+## Documented successful full-refresh checkpoint — 2026-10-11
 
 The current loader completed:
 
@@ -317,6 +317,19 @@ banking.transactions                  76,799,360
 performance.bank_monthly_performance         72
 performance.branch_monthly_performance    2,664
 ```
+
+
+### Current canonical transaction state
+
+A later transaction regeneration/reload superseded the transaction count shown in the 2026-10-11 checkpoint:
+
+```text
+banking.transactions total       74,774,125
+completed transactions           72,746,246
+failed transactions               2,027,879
+```
+
+The older 76,799,360 figure remains in this document only as a historical record of that dated refresh.
 
 ## Current relationship with the other database scripts
 

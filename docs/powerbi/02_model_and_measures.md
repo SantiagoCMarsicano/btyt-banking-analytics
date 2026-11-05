@@ -2,7 +2,9 @@
 
 ## Modelo actual
 
-El modelo visible en Power BI contiene 15 tablas:
+El modelo final visible en Power BI contiene las tablas analíticas principales, dimensiones y helpers necesarios para las seis páginas.
+
+Tablas principales y auxiliares:
 
 ```text
 _Measures
@@ -17,12 +19,14 @@ Customer Ranking Metric
 DimCustomerType
 DimDate
 DimRelationshipDepth
+DPD Exposure Selector
+DPD Rate Switch
 Market Performance
 Portfolio Metric
 Transactions and Channels
 ```
 
-`Customer Segment Monthly` fue eliminado del modelo de Power BI porque no aportaba valor adicional en la capa semántica actual.
+`Customer Segment Monthly` fue eliminado del modelo porque no aportaba valor adicional en la capa semántica final.
 
 ## Relaciones principales
 
@@ -62,7 +66,9 @@ Customer Accounts
 Customer Monthly
 ```
 
-## Tablas desconectadas intencionalmente
+## Tablas desconectadas / helpers
+
+Se mantienen desconectadas cuando su función es parametrizar un visual o conservar un grano independiente:
 
 ```text
 Market Performance
@@ -71,15 +77,17 @@ Analysis Window
 Customer Ranking Metric
 DimRelationshipDepth
 Portfolio Metric
+DPD Exposure Selector
+DPD Rate Switch
 ```
 
-Las tablas auxiliares de parámetros permanecen desconectadas por diseño.
+`DPD Exposure Selector` y `DPD Rate Switch` cumplen funciones distintas en la página de Riesgo de Crédito y deben conservarse.
 
 ## DimDate
 
 `DimDate` es una tabla de fechas explícita y Auto date/time está desactivado.
 
-La tabla incluye:
+Incluye, entre otros:
 
 ```text
 Year
@@ -109,6 +117,10 @@ UYU per USD
 
 Los importes de `performance.*` llegan en UYU-equivalente y las measures de presentación los convierten a USD según el año.
 
+### Customer Monthly
+
+Variables monetarias UYU, como depósitos, deuda vigente y volumen transaccionado, se convierten a USD usando el FX correspondiente al año de cada observación.
+
 ### Credit Risk
 
 `Credit Risk[currency]` define la moneda nativa del préstamo:
@@ -128,62 +140,68 @@ dimensiones
 porcentajes
 ```
 
-## Analysis Window
+## Semántica temporal final
 
-Valores:
+Los selectores visibles usan:
 
 ```text
-1M
-3M
-6M
-12M
-All
+1 año
+3 años
+5 años
+Todos
 ```
+
+Las measures finales que deben reaccionar al período respetan directamente el contexto de `DimDate`.
+
+### Flujos
+
+Ejemplo:
+
+```text
+Transaction Volume
+```
+
+Se suman dentro del período seleccionado, después de aplicar la conversión monetaria correspondiente.
+
+### Stocks
+
+Ejemplos:
+
+```text
+Outstanding Debt
+Customer Deposits
+Active Accounts
+Period Deposits
+Period Loan Balance
+```
+
+No se suman mecánicamente entre meses. Para el análisis de cartera se usan promedios mensuales dentro del período seleccionado.
 
 ### Clientes activos
 
-Cuenta clientes distintos activos al menos una vez dentro de la ventana seleccionada.
-
-No es un promedio mensual.
-
-### Cuentas activas
-
-Cuenta cuentas distintas activas al menos una vez dentro de la ventana.
-
-`Customer Accounts` contiene columnas reutilizables:
-
-```text
-active_accounts_1m
-active_accounts_3m
-active_accounts_6m
-active_accounts_12m
-active_accounts_all
-```
-
-### Depósitos promedio / Préstamos promedio
-
-Son stocks de cartera promediados entre los meses de la ventana.
-
-```text
-1M  → snapshot mensual actual
-All → promedio mensual histórico del período
-```
-
-No son sumas acumuladas de stock.
+`Active Customers Period` se interpreta como promedio mensual de clientes activos en el período visible.
 
 ## Measures — Clientes y Cuentas
 
 Entre las measures activas se encuentran:
 
 ```text
-Active Customers
-Active Accounts Period
-Average Deposits
-Average Loan Balance
-New Customers
-Closed Customers
-Net Customer Growth
-Active Card Penetration
+Active Customers Period
+Active Accounts
+Period Deposits
+Period Loan Balance
+Transaction Volume
+Outstanding Debt
+Customer Deposits
+Customer Ranking Value
+```
+
+`Customer Ranking Value` selecciona dinámicamente:
+
+```text
+0 → Transaction Volume
+1 → Outstanding Debt
+2 → Customer Deposits
 ```
 
 La página también usa parámetros para:
@@ -196,48 +214,46 @@ Relationship Depth
 
 ## Measures — Riesgo de Crédito
 
-### Total Credit Exposure
-
-Exposición del último mes disponible, convertida a USD respetando la moneda nativa del préstamo.
-
-### 90+ DPD Exposure Rate
+La página final prioriza:
 
 ```text
-exposición con days_past_due > 90
-/
-exposición total
+Total Credit Exposure
+30+ DPD Exposure
+90+ DPD Exposure
+Payment Shortfall
 ```
 
-La condición `> 90` coincide con el bucket canónico `DPD_90_PLUS`.
+También usa medidas de tasa y selectores auxiliares para comparar 30+ / 90+ DPD por segmento, préstamo y cohorte.
 
-### Restructured Exposure Rate
+## Measures — Transacciones y Canales
+
+Medidas principales:
 
 ```text
-exposición con loan_status = RESTRUCTURED
-/
-exposición total
+Completed Transactions
+Completed Transaction Volume
+Channel Share
+Failed Transaction Rate
 ```
 
-### Credit Loss Ratio
+La capa SQL/materializada reduce el volumen antes de la ingestión en Power BI.
 
-Measure de pérdida crediticia anualizada respecto de la cartera media en el contexto temporal seleccionado.
+## Measures — Mercado y Campañas
 
-El resultado debe interpretarse como KPI sintético de gestión, no como ratio regulatorio.
-
-## Valores actuales observados — Página 04
-
-Después del refresh de PostgreSQL y Power BI:
+Medidas principales:
 
 ```text
-Total Credit Exposure        ≈ US$4.338B
-90+ DPD Exposure Rate          5.16%
-Restructured Exposure Rate     0.64%
-Credit Loss Ratio              0.63%
+BTYT Market Share
+BTYT Market Rank
+Campaign Coverage Rate
+Positive Response Rate
 ```
+
+`Market Performance` y `Campaign Performance` pueden permanecer desconectadas cuando su grano no justifica una relación física con el resto del modelo.
 
 ## Principio de mantenimiento
 
-Antes de agregar una tabla o view nueva:
+Antes de agregar una tabla, view o measure:
 
 ```text
 pregunta de negocio
@@ -247,4 +263,4 @@ pregunta de negocio
     └─ no → SQL reusable
 ```
 
-Evitar crear measures temporales o tablas auxiliares solo para resolver un visual aislado.
+Evitar crear objetos auxiliares solo para resolver un visual aislado y no eliminar measures/tables que tengan dependencias visuales sin validar primero todas las páginas.

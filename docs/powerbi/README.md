@@ -4,50 +4,71 @@
 
 Documentar la capa de visualización de **BTYT Banking Analytics — Part I: Business Intelligence & Performance Management**.
 
-Power BI es la superficie principal de BI corporativo del proyecto.
+Power BI es la principal superficie de BI corporativo implementada en Part I.
+
+## Estado actual
+
+**Dashboard finalizado.**
+
+El reporte contiene seis páginas funcionales y visualmente cerradas:
+
+| # | Página | Estado |
+|---|---|---|
+| 01 | Resumen Ejecutivo | Final |
+| 02 | Sucursales | Final |
+| 03 | Clientes y Cuentas | Final |
+| 04 | Riesgo de Crédito | Final |
+| 05 | Transacciones y Canales | Final |
+| 06 | Mercado y Campañas | Final |
+
+Capturas finales:
+
+```text
+docs/assets/Pag1.png
+docs/assets/Pag2.png
+docs/assets/Pag3.png
+docs/assets/Pag4.png
+docs/assets/Pag5.png
+docs/assets/Pag6.png
+```
 
 ## Convenciones
 
 ```text
 Tablas / columnas / measures / DAX → inglés
-Títulos / etiquetas visibles         → español
+Títulos / etiquetas visibles       → español
 ```
 
-### Moneda de presentación
+## Moneda de presentación
 
-El dashboard presenta importes seleccionados en USD.
+Los importes monetarios finales del dashboard se presentan en USD cuando corresponde.
 
 - `performance.*` llega desde PostgreSQL en UYU-equivalente.
 - Las measures monetarias convierten a USD con el tipo de cambio anual documentado.
-- En `Credit Risk`, los saldos nativos USD permanecen en USD; los saldos UYU se convierten.
-- Ratios, conteos y porcentajes no se convierten por FX.
+- En `Credit Risk`, los saldos nativos USD permanecen en USD y los saldos UYU se convierten.
+- En `Customer Monthly`, los importes UYU se convierten por año antes de su agregación de presentación.
+- Ratios, conteos, fechas y porcentajes no se convierten por FX.
 
-## Páginas
+Tipo de cambio anual usado en BI:
 
-| # | Página | Estado |
-|---|---|---|
-| 01 | Resumen Ejecutivo | Funcionalmente cerrada |
-| 02 | Sucursales | Funcionalmente cerrada |
-| 03 | Clientes y Cuentas | Funcionalmente cerrada |
-| 04 | Riesgo de Crédito | KPIs cerrados; visuales analíticos en construcción |
-| 05 | Transacciones y Canales | Pendiente |
-| 06 | Mercado y Campañas | Pendiente |
+| Año | UYU / USD |
+|---|---:|
+| 2021 | 43.6 |
+| 2022 | 41.2 |
+| 2023 | 38.8 |
+| 2024 | 40.3 |
+| 2025 | 42.0 |
+| 2026 | 43.5 |
 
-El pulido visual final, tema, colores y alineación global se deja para el cierre funcional de las seis páginas.
+## Archivo PBIX
 
-## Archivos PBIX
-
-En el repositorio existen dos archivos con funciones distintas:
+Archivo canónico:
 
 ```text
 powerbi/BTYT_Banking_Analytics.pbix
-    → archivo base/canónico del modelo
-
-powerbi/BTYT PRESENTATION.pbix
-    → copia de trabajo utilizada para construir la presentación visual actual
 ```
 
-Ambos pueden versionarse mediante Git LFS.
+El PBIX se versiona mediante Git LFS.
 
 ## Fuente
 
@@ -57,7 +78,15 @@ Fuente principal:
 PostgreSQL
 ```
 
-El 2026-10-11 se completó un full refresh de las 23 tablas físicas y se refrescaron las materialized views de `analytics`.
+La capa BI consume tablas/vistas analíticas y agregaciones reutilizables. La fact cruda de transacciones no se importa directamente por defecto.
+
+Escala canónica actual de transacciones:
+
+```text
+Total       74,774,125
+Completed   72,746,246
+Failed       2,027,879
+```
 
 ## Período analítico
 
@@ -67,16 +96,24 @@ El 2026-10-11 se completó un full refresh de las 23 tablas físicas y se refres
 
 ## Selector temporal
 
-No existe un único selector universal para todas las páginas.
+Las páginas con análisis longitudinal usan controles visibles:
 
-- Resumen Ejecutivo / Sucursales usan principalmente contexto anual.
-- Clientes y Cuentas usa `Analysis Window`:
-  - `1M`
-  - `3M`
-  - `6M`
-  - `12M`
-  - `All`
-- La semántica del selector depende del KPI: clientes/cuentas activos son únicos dentro de la ventana; depósitos/préstamos son stocks mensuales promediados en la ventana.
+```text
+1 año
+3 años
+5 años
+Todos
+```
+
+La implementación final respeta el contexto temporal de `DimDate`.
+
+Regla semántica:
+
+- **flujos**: se acumulan dentro del período seleccionado;
+- **stocks**: se evalúan con una regla temporal explícita, normalmente promedio mensual para análisis de cartera;
+- **ratios**: se recalculan desde numerador/denominador en el contexto seleccionado.
+
+Esto evita sumar stocks mensuales de forma mecánica.
 
 ## Principio de construcción
 
@@ -90,26 +127,30 @@ pregunta de negocio
 
 No se modifica el modelo físico por una necesidad aislada de un gráfico.
 
-## Estado actual de riesgo
+## Alcance de Part I
 
-La fila superior de Página 04 ya está validada después de la recalibración:
+Implementado:
 
 ```text
-Exposición crediticia          ≈ US$4.338B
-Exposición 90+ DPD              5.16%
-Cartera reestructurada          0.64%
-Pérdida crediticia / cartera    0.63%
+Python → PostgreSQL → SQL → Power BI
 ```
 
-Estos son resultados sintéticos del mundo BTYT y no métricas regulatorias.
+Extensiones previstas:
+
+```text
+Excel
+Tableau
+```
+
+Excel y Tableau deben complementar el mismo universo analítico, no duplicar un segundo pipeline independiente.
 
 ## Reproducibilidad pendiente antes del próximo freeze
 
-Los resultados actuales están cargados y funcionando en Power BI, pero antes de generar un nuevo manifest/fingerprint del dataset debe resolverse la sincronización entre `active_world.json` y `world_config.json`.
+Antes de generar un nuevo manifest/fingerprint del dataset debe resolverse la sincronización entre `active_world.json` y `world_config.json` y revalidarse cualquier salida RNG-driven afectada.
 
 Ver:
 
 ```text
 docs/README.md
-docs/analytics/credit_risk_calibration.md
+docs/architecture/btyt_part_i_manifest.md
 ```

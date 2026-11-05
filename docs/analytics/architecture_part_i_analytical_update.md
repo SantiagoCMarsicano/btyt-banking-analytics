@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This document defines the **current** analytical ownership model for BTYT Part I after completion of the relational model, thematic SQL layer, KPI catalog, reusable analytics objects and the first Power BI pages.
+This document defines the **current** analytical ownership model for BTYT Part I after completion of the relational model, thematic SQL layer, KPI catalog, reusable analytics objects and the final six-page Power BI report.
 
 The governing principle is:
 
@@ -180,7 +180,7 @@ Apache Superset and Docker are not part of the current Part I release.
 
 ## 8. Transaction-scale architecture
 
-The raw transaction fact contains approximately 76.8M rows.
+The current canonical raw transaction fact contains **74,774,125 rows**; **72,746,246** are completed and **2,027,879** are failed attempts.
 
 Preferred pattern:
 
@@ -283,15 +283,15 @@ The Power BI model currently uses 15 tables, including:
 ## 13. Current Power BI pages
 
 ```text
-01 Resumen Ejecutivo         functionally closed
-02 Sucursales                functionally closed
-03 Clientes y Cuentas        functionally closed
-04 Riesgo de Crédito         KPI row complete / visuals in progress
-05 Transacciones y Canales   pending
-06 Mercado y Campañas        pending
+01 Resumen Ejecutivo         final
+02 Sucursales                final
+03 Clientes y Cuentas        final
+04 Riesgo de Crédito         final
+05 Transacciones y Canales   final
+06 Mercado y Campañas        final
 ```
 
-Final visual theming is deferred until the functional build is complete.
+The Power BI report is functionally complete and visually frozen for the current Part I portfolio checkpoint.
 
 ## 14. Current analytical flow
 
@@ -306,24 +306,23 @@ KPI catalog
         ↓
 Power BI + DAX
         ↓
-Python / Excel / Tableau deliverables
+Excel / Tableau extensions
         ↓
 Part I portfolio publication
 ```
 
-## 15. Current project status — 2026-10-11
+## 15. Current project status — 2026-11-04
 
 ```text
 Relational model                  ✅
-23-table full refresh             ✅
+23-table refresh architecture     ✅
 00–07 thematic SQL                ✅
 KPI catalog                       ✅
 Analytics views                   ✅
-Power BI pages 01–03              ✅ functional
-Power BI page 04                  🟡 in progress
-Power BI pages 05–06              ⏳
-Python / Excel / Tableau          ⏳
-Final visual polish               ⏳
+Python generation / validation    ✅
+Power BI pages 01–06              ✅ final
+Excel extension                   ⏳ planned
+Tableau extension                 ⏳ planned
 New manifest / fingerprint        ⏳ after reproducibility check
 ```
 

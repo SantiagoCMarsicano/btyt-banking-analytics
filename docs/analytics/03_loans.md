@@ -489,29 +489,27 @@ Python should not be created merely for symmetry with SQL.
 
 ## Current Power BI implementation
 
-The current **Riesgo de Crédito** page is organized around the question:
+The final **Riesgo de Crédito** page is organized around the question:
 
-> **¿Cuánta exposición crediticia tiene BTYT, cuánto está en mora y qué tan severo es ese riesgo?**
+> **¿Cuánta exposición crediticia tiene BTYT, cuánto está en mora y dónde se concentra el riesgo?**
 
-Current headline KPIs:
+Final headline KPIs:
 
 ```text
 Exposición crediticia
+Exposición 30+ DPD
 Exposición 90+ DPD
-Cartera reestructurada
-Pérdida crediticia / cartera
+Pagos incumplidos
 ```
 
-The 30+ DPD rate remains analytically valid but is no longer a headline KPI on the page. It may be used as secondary trend/context when it adds decision value.
+The page also uses:
 
-The current 2026-12 headline state after the database refresh is approximately:
+- annual evolution of payment shortfalls / 30+ DPD / 90+ DPD;
+- risk and exposure by loan type;
+- 30+ / 90+ DPD exposure by customer segment;
+- exposure and delinquency by origination cohort.
 
-```text
-Exposición crediticia          US$4.338B
-Exposición 90+ DPD              5.16%
-Cartera reestructurada          0.64%
-Pérdida crediticia / cartera    0.63%
-```
+`Cartera reestructurada` and `Pérdida crediticia / cartera` remain analytically valid metrics in the broader model/catalog, but they are not headline KPIs in the final Page 04 layout.
 
 These are synthetic analytical results, not regulatory banking metrics.
 
