@@ -35,6 +35,7 @@ from scripts.core.paths import (
     GENERATED_DATA_DIR,
     GENERATED_PERFORMANCE_DIR,
     GENERATED_TRANSACTIONS_DIR,
+    GENERATED_WORLD_DIR,
     INTERIM_AUDITS_DIR,
     INTERIM_CREDIT_DIR,
     INTERIM_DATA_DIR,
@@ -55,6 +56,7 @@ GENERATED_CREDIT = GENERATED_CREDIT_DIR
 GENERATED_TRANSACTIONS = GENERATED_TRANSACTIONS_DIR
 GENERATED_CAMPAIGNS = GENERATED_CAMPAIGNS_DIR
 GENERATED_PERFORMANCE = GENERATED_PERFORMANCE_DIR
+GENERATED_WORLD = GENERATED_WORLD_DIR
 
 INTERIM = INTERIM_DATA_DIR
 INTERIM_WORLD = INTERIM_WORLD_DIR
@@ -1019,6 +1021,9 @@ def main():
         ),
         "external_shocks": resolve_dataset(
             "external_shocks",
+            # generate_external_shocks.py writes the master shock calendar to
+            # generated/world/. The other locations are legacy fallbacks.
+            GENERATED_WORLD / "external_shocks",
             GENERATED_PERFORMANCE / "external_shocks",
             GENERATED_CORE / "external_shocks",
         ),
