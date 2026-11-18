@@ -1,18 +1,18 @@
 # BTYT Part I — KPI Catalog and Tier List
 
-Analytical ranking proposed for what BTYT Part I can support and should show. This is the assistant’s independent assessment, separate from Santiago’s annotated vote. A tier is not proof that its source SQL has been verified.
+Analytical ranking of the KPIs that BTYT Part I can support and should show. A tier reflects analytical priority; it is not proof that its source SQL has been verified.
 
 Scope and interpretation
 
 S: central to BTYT’s performance story; A: strong addition; B: useful contextual analysis; C: situational or drill-down; D: supporting measure rather than a headline KPI.
 
-Number is the identifier in the reduced 52-item game. Original is the identifier in the initial 82-item PDF.
+Number is the KPI identifier in this 52-item catalog. Original is the identifier in the initial 82-item KPI inventory.
 
 The ranking weighs decision value, distinctiveness for the synthetic BTYT bank, and likely support in its modeled data. Implementation status must be checked against source tables and audited SQL separately.
 
 Primary output code: PW = Power BI, E = Excel, T = Tableau, P = Python. Exactly one code is assigned per KPI as its intended main output; PostgreSQL remains the shared calculation layer. Superset is outside the current Part I release, so transaction KPIs that were previously assigned to S are now assigned to PW.
 
-The earlier Executive / Thematic / Supporting terminology described dashboard placement. It is not equivalent to the S–D vote and is superseded as a priority ranking here.
+The earlier Executive / Thematic / Supporting terminology described dashboard placement. It is not equivalent to the S–D tiers and is superseded as a priority ranking here.
 
 Tool ownership is allowed to evolve when the implemented Part I product proves a different primary home. The current assignments reflect actual or planned delivery as of October 2026 rather than the earliest catalog proposal.
 

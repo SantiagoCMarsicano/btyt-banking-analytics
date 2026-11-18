@@ -26,7 +26,7 @@ All data, customers, transactions, financial results and credit events are **syn
 
 ## End-to-end architecture
 
-```text id="rq0q3w"
+```text
 BTYT banking world
         │
         ▼
@@ -204,7 +204,7 @@ The project applies explicit analytical rules instead of treating every metric t
 
 ## Repository
 
-```text id="sk75bi"
+```text
 BTYT Banking Analytics
 │
 ├── config/             # project and generation configuration
