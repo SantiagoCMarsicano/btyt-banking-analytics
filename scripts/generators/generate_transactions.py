@@ -58,8 +58,8 @@ CUSTOMERS_PARQUET_PATH = GENERATED_CORE_DIR / "customers.parquet"
 CUSTOMERS_CSV_PATH = GENERATED_CORE_DIR / "customers.csv"
 ACCOUNTS_PARQUET_PATH = GENERATED_CORE_DIR / "accounts.parquet"
 ACCOUNTS_CSV_PATH = GENERATED_CORE_DIR / "accounts.csv"
-CARDS_PARQUET_PATH = GENERATED_CREDIT_DIR / "cards.parquet"
-CARDS_CSV_PATH = GENERATED_CREDIT_DIR / "cards.csv"
+CARDS_PARQUET_PATH = GENERATED_CORE_DIR / "cards.parquet"
+CARDS_CSV_PATH = GENERATED_CORE_DIR / "cards.csv"
 LOANS_PARQUET_PATH = GENERATED_CORE_DIR / "loans.parquet"
 LOANS_CSV_PATH = GENERATED_CORE_DIR / "loans.csv"
 LOAN_SNAPSHOT_PARQUET_PATH = GENERATED_CREDIT_DIR / "loan_monthly_snapshot.parquet"
@@ -2464,12 +2464,15 @@ def main():
     roles = build_roles(accounts, d["customers"])
     traits = build_traits(d["customers"], accounts)
     debit = debit_links(d["cards"])
+
+    # IMPORTANT: --fresh clears STAGE_ROOT. Do this BEFORE building
+    # loan_intent_staging, because that file lives inside STAGE_ROOT.
+    fingerprint = world_fingerprint(accounts)
+    checkpoint = load_checkpoint(fingerprint, args.chunk_size, fresh=args.fresh)
+
     loan_intent_path = build_loan_intent_staging(
         d["loans"], d["loan_snapshot"], d["loan_bridge"], accounts, roles
     )
-
-    fingerprint = world_fingerprint(accounts)
-    checkpoint = load_checkpoint(fingerprint, args.chunk_size, fresh=args.fresh)
 
     print("="*84)
     print(f"BTYT TRANSACTION ENGINE — V{ENGINE_VERSION}")
