@@ -784,9 +784,36 @@ def generate(chunk_size: int = 5_000):
 
     return df, branches
 
+# Expected INDIVIDUAL share: the generator draws the business share from
+# U(0.08, 0.15) (see generate()), so the expected share lies in [0.85, 0.92].
+INDIVIDUAL_SHARE_BOUNDS = (0.85, 0.92)
+# Two-sided 99.9% normal quantile used to absorb binomial sampling noise.
+SHARE_TOLERANCE_Z = 3.29
+
+
+def individual_share_bounds(n):
+    """Acceptance band for the realized INDIVIDUAL share of n customers.
+
+    The realized share adds binomial sampling noise to the expected share.
+    That noise dominates in small smoke worlds: with 50 customers a single
+    customer moves the share by 2 percentage points, so a fixed [0.85, 0.92]
+    band rejected about a third of valid 50-customer seeds. Each bound is
+    widened by SHARE_TOLERANCE_Z binomial standard errors evaluated at that
+    bound. For large worlds the band converges to [0.85, 0.92].
+    """
+    lo, hi = INDIVIDUAL_SHARE_BOUNDS
+    se_lo = math.sqrt(lo * (1 - lo) / n)
+    se_hi = math.sqrt(hi * (1 - hi) / n)
+    return (
+        max(0.0, lo - SHARE_TOLERANCE_Z * se_lo),
+        min(1.0, hi + SHARE_TOLERANCE_Z * se_hi),
+    )
+
+
 def validate(df,b):
     err=[];ind=df[df.customer_type=='INDIVIDUAL'];bus=df[df.customer_type=='BUSINESS']
-    if not .85<=len(ind)/len(df)<=.92:err.append('customer_type share')
+    share=len(ind)/len(df);share_lo,share_hi=individual_share_bounds(len(df))
+    if not share_lo<=share<=share_hi:err.append(f'customer_type share {share:.3f} outside [{share_lo:.3f}, {share_hi:.3f}]')
     if df.customer_id.duplicated().any() or df.document_id.duplicated().any():err.append('duplicate IDs')
     if ind[['first_name','last_name']].isna().any().any() or ind.company_name.notna().any():err.append('individual name structure')
     if bus.first_name.notna().any() or bus.last_name.notna().any() or bus.company_name.isna().any():err.append('business name structure')
