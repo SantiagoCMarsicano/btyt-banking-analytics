@@ -518,11 +518,22 @@ def audit_shocks(master_shocks, customer_state, idio):
     if id_col:
         record(section, f"{id_col} primary key", unique_nonnull(master_shocks, id_col))
 
-    date_cols = [c for c in ["start_date", "end_date"] if c in master_shocks]
-    if len(date_cols) == 2:
+    # generate_external_shocks.py emits monthly periods (start_month /
+    # end_month as YYYY-MM). Daily start_date / end_date remain supported.
+    if {"start_date", "end_date"}.issubset(master_shocks.columns):
         s = parse_date(master_shocks["start_date"])
         e = parse_date(master_shocks["end_date"])
-        record(section, "shock start <= end", (s <= e).all())
+    elif {"start_month", "end_month"}.issubset(master_shocks.columns):
+        s = parse_month(master_shocks["start_month"])
+        e = parse_month(master_shocks["end_month"])
+    else:
+        s = e = None
+        skip(section, "shock start <= end",
+             "no start_date/end_date or start_month/end_month columns")
+    if s is not None:
+        # Unparseable or missing periods compare as False and count as invalid.
+        invalid = int((~(s <= e)).sum())
+        record(section, "shock start <= end", invalid == 0, f"invalid={invalid}")
 
     if customer_state is not None and not customer_state.empty:
         if {"customer_id", "year_month"}.issubset(customer_state.columns):
@@ -530,9 +541,16 @@ def audit_shocks(master_shocks, customer_state, idio):
                    ~customer_state.duplicated(["customer_id", "year_month"]).any())
 
     if idio is not None and not idio.empty:
-        iid = "event_id" if "event_id" in idio else None
+        # The generator names the key idio_event_id; event_id is accepted
+        # for older outputs.
+        iid = next((c for c in ("idio_event_id", "event_id") if c in idio.columns), None)
         if iid:
-            record(section, "idiosyncratic event primary key", unique_nonnull(idio, iid))
+            duplicates = int(idio[iid].dropna().duplicated().sum())
+            record(section, "idiosyncratic event primary key", duplicates == 0,
+                   f"{iid} duplicates={duplicates}")
+        else:
+            skip(section, "idiosyncratic event primary key",
+                 "no idio_event_id or event_id column")
 
 
 def audit_campaigns(campaigns, campaign_customers, exposures, customers):
