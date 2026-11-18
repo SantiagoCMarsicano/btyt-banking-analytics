@@ -41,7 +41,6 @@ import pandas as pd
 from scripts.core.paths import (
     GENERATED_CAMPAIGNS_DIR,
     GENERATED_CORE_DIR,
-    GENERATED_CREDIT_DIR,
     GENERATED_WORLD_DIR,
     INTERIM_AUDITS_DIR,
     INTERIM_WORLD_DIR,
@@ -87,7 +86,7 @@ PRODUCTS_PATH = GENERATED_CORE_DIR / "products.csv"
 
 CUSTOMERS_PATH = GENERATED_CORE_DIR / "customers.parquet"
 ACCOUNTS_PATH = GENERATED_CORE_DIR / "accounts.parquet"
-CARDS_PATH = GENERATED_CREDIT_DIR / "cards.parquet"
+CARDS_PATH = GENERATED_CORE_DIR / "cards.parquet"
 LOANS_PATH = GENERATED_CORE_DIR / "loans.parquet"
 BRANCHES_PATH = GENERATED_CORE_DIR / "branches.csv"
 
