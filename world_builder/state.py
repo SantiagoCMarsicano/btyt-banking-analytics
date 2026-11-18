@@ -94,6 +94,22 @@ def make_world_id(name: str, variant: int, seed: int) -> str:
     return f"{world_slug(name)}-{variant:02d}-{seed}"
 
 
+def to_stored_path(path: Path) -> str:
+    """Serialize a project path as a portable, project-relative POSIX string."""
+    return path.relative_to(PROJECT_ROOT).as_posix()
+
+
+def normalize_stored_path(raw_path: Any) -> str:
+    """
+    Normalize a stored project-relative path for comparison.
+
+    Older pointers and registry records were written on Windows with
+    backslash separators (for example ``worlds\\BTYT\\01``). They are still
+    accepted and compared in POSIX form.
+    """
+    return str(raw_path or "").strip().replace("\\", "/").rstrip("/")
+
+
 def load_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
         return default

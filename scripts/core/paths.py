@@ -70,7 +70,10 @@ def _resolve_active_world() -> tuple[dict[str, Any] | None, Path | None]:
             f"{ACTIVE_WORLD_PATH}"
         )
 
-    world_root = Path(raw_path)
+    # Pointers written by older World Builder versions on Windows use
+    # backslash separators (e.g. "worlds\\BTYT\\01"). Normalize them so the
+    # same pointer resolves on Windows, Linux and macOS.
+    world_root = Path(raw_path.strip().replace("\\", "/"))
 
     if not world_root.is_absolute():
         world_root = PROJECT_ROOT / world_root

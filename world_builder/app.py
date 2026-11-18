@@ -36,9 +36,11 @@ from .state import (
     load_json,
     make_world_id,
     materialize_reference_assets,
+    normalize_stored_path,
     normalize_world_name,
     persist_builder_state,
     reconstruct_world_state,
+    to_stored_path,
     utc_now_iso,
     world_progress,
     world_root_for,
@@ -981,7 +983,7 @@ class WorldBuilder(ctk.CTk):
         metadata.setdefault("status", "READY")
         metadata.setdefault("created_at_utc", utc_now_iso())
 
-        relative_world_path = str(world_root.relative_to(PROJECT_ROOT))
+        relative_world_path = to_stored_path(world_root)
         active_pointer = {
             "world_name": definition["world_name"],
             "variant": definition["variant"],
@@ -1007,7 +1009,7 @@ class WorldBuilder(ctk.CTk):
         expected_name = definition["world_name"]
         expected_variant = definition["variant"]
         expected_seed = definition["seed"]
-        expected_path = Path(str(world_root.relative_to(PROJECT_ROOT)))
+        expected_path = to_stored_path(world_root)
 
         world_section = config.get("world", {}) if isinstance(config.get("world", {}), dict) else {}
         if world_section.get("name") != expected_name:
@@ -1064,7 +1066,7 @@ class WorldBuilder(ctk.CTk):
             raise RuntimeError("active_world.json world_name does not match selected world.")
         if int(active.get("variant", -1)) != expected_variant:
             raise RuntimeError("active_world.json variant does not match selected world.")
-        if Path(str(active.get("path", ""))) != expected_path:
+        if normalize_stored_path(active.get("path")) != expected_path:
             raise RuntimeError("active_world.json path does not match selected world directory.")
 
     def _update_registry(
@@ -1081,7 +1083,7 @@ class WorldBuilder(ctk.CTk):
             "variant": definition["variant"],
             "seed": definition["seed"],
             "canonical": definition["canonical"],
-            "path": str(world_root.relative_to(PROJECT_ROOT)),
+            "path": to_stored_path(world_root),
             "status": status,
             "updated_at_utc": utc_now_iso(),
         }
