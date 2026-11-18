@@ -1,4 +1,6 @@
-# BTYT Banking Analytics
+# BTYT World Builder
+
+This document covers the world-generation layer of **BTYT Banking Analytics**: the World Builder application, the generation pipeline, the synthetic banking universe it produces and how that universe reaches PostgreSQL. For the project overview, SQL analytics and the Power BI report, see the [main README](../README.md).
 
 Banco de Treinta y Tres (BTYT) is a fictional Uruguayan commercial bank used as the analytical universe for an end-to-end banking data project.
 
@@ -7,6 +9,107 @@ BTYT Banking Analytics combines synthetic data generation, banking-domain modeli
 **Fiction, yes. Fantasy, no.**
 
 The data is synthetic, but the relationships, temporal dynamics, business rules, and accounting constraints are designed to remain economically and operationally plausible.
+
+---
+
+## Quick Start
+
+Tested with **Python 3.14.7 (64-bit) on Windows 11**. All commands run from the repository root.
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/SantiagoCMarsicano/btyt-banking-analytics.git
+cd btyt-banking-analytics
+python -m venv .venv
+```
+
+Activate the virtual environment:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+```bash
+source .venv/bin/activate
+```
+
+Install the pinned dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Notes:
+
+* World Builder uses Tk. It ships with the python.org installers for Windows and macOS; on Debian/Ubuntu install `python3-tk`.
+* Git LFS is only needed to download the Power BI report (`powerbi/*.pbix`). The generation pipeline does not depend on it.
+
+### 2. Launch World Builder
+
+```bash
+python -m world_builder.app
+```
+
+### 3. Create or select a SMOKE world
+
+The repository ships `worlds/SMOKE/33` as a small reference world (50 customers, 2021–2026). To generate a world without overwriting that versioned example, create a new variant with the same profile:
+
+| Field | Value |
+|---|---|
+| World Name | `SMOKE` |
+| Variant | `34` (any unused number) |
+| Canonical World | unchecked |
+| Execution Profile | `Full` |
+| Population | `Fixed` · `50` customers |
+| Observation Period | `2021-01-01` → `2026-12-31` |
+| Data Reliability | `realistic` |
+| Start from / Run through | `Beginning` / `Final` |
+| Auto-finalize after full pipeline | checked |
+
+The world seed is derived from the world name and variant (`SMOKE` + `33` → `3165889979`), so the same identity always reproduces the same world.
+
+To reopen an existing world, select it under **Registered Worlds** and click **LOAD SELECTED WORLD**.
+
+### 4. Generate
+
+Click **GENERATE WORLD**. World Builder then:
+
+1. activates the world by writing `config/world_config.json`, `config/active_world.json` and `worlds/registry.json`;
+2. runs the 15-stage pipeline (`scripts.generate_btyt`), ending with the cross-system audit;
+3. with auto-finalize enabled, writes the dataset manifest and verifies it.
+
+The status moves through `READY → GENERATING → GENERATED → AUDITED → MANIFESTED → VERIFIED → FROZEN`. Outputs are written to `worlds/SMOKE/<variant>/` (`data/`, `manifests/`, `audit/`), which Git ignores.
+
+Activating a world modifies the three tracked configuration files listed above. If you were only testing, restore them before committing:
+
+```bash
+git restore config/world_config.json config/active_world.json worlds/registry.json
+```
+
+### 5. Validate from the command line
+
+These commands act on the world currently referenced by `config/active_world.json`.
+
+Check repository structure, the active world and stage availability without running anything:
+
+```bash
+python -m scripts.generate_btyt --check-only
+```
+
+Re-run the integrated cross-system audit (rewrites the audit reports):
+
+```bash
+python -m scripts.generate_btyt --only cross_system_audit
+```
+
+Verify every generated file against the world's manifest fingerprint:
+
+```bash
+python -m scripts.generate_manifest --verify-only
+```
+
+Once a world has been activated, the full pipeline can also run without the GUI with `python -m scripts.generate_btyt` (see `--help` for `--from-stage`, `--to-stage` and `--only`).
 
 ---
 
@@ -24,11 +127,10 @@ Part I builds, validates, stores, and analyzes the synthetic banking universe th
 * relational database design;
 * SQL analytics;
 * banking KPIs;
-* Power BI;
-* Power Query and DAX;
-* Tableau and geographic analysis;
-* Apache Superset;
+* Power BI, Power Query and DAX;
 * customer, product, branch, transaction, lending, and profitability analysis.
+
+Planned Part I extensions: **Excel** and **Tableau**, reusing the same universe and KPI framework.
 
 ### Part II — Credit Risk Analytics & Machine Learning
 
@@ -49,54 +151,34 @@ No disconnected replacement dataset is created for Part II.
 
 ## Current Project Status
 
-BTYT has completed its **canonical world generation, validation, and PostgreSQL ingestion stages**.
+**Part I core end-to-end implementation is complete:** Python synthetic-data pipeline → PostgreSQL → SQL analytical layer → Power BI.
 
-The current canonical world has been generated through the reproducible world-based architecture, validated through the project auditing system, persisted as CSV/Parquet datasets, and loaded into PostgreSQL through a dedicated Python ingestion pipeline.
+The canonical world (`worlds/BTYT/01`) was generated through the reproducible world-based architecture, validated through the project auditing system, persisted as CSV/Parquet datasets, and loaded into PostgreSQL, where the relational model and the analytical views are applied.
 
-The PostgreSQL database currently contains:
+The PostgreSQL database contains:
 
-* **5 functional schemas**;
-* **23 analytical tables**;
-* approximately **90 million rows** across the complete database;
-* **76,799,360 transaction records**;
+* **7 functional schemas** with **23 base tables**, plus an `analytics` schema of views and materialized views;
+* about **88 million rows** across the base tables;
+* **74,774,125 transaction records** (72,746,246 completed and 2,027,879 failed);
 * large monthly account-balance and credit-performance histories;
 * customer, account, product, branch, card, loan, campaign, market, macroeconomic, and performance data.
 
-All 23 source datasets were successfully loaded and their PostgreSQL row counts validated against the corresponding generated files.
-
 ### Completed
 
-* [x] World-based generation architecture
-* [x] Deterministic world configuration
+* [x] World-based generation architecture and deterministic world configuration
 * [x] Canonical BTYT world generation
 * [x] Cross-system validation
 * [x] CSV / Parquet persistence
 * [x] Manifest and reproducibility architecture
-* [x] PostgreSQL database creation
-* [x] Python-to-PostgreSQL ingestion pipeline
-* [x] Functional schema architecture
-* [x] 23 datasets loaded
-* [x] Source-to-database row-count validation
+* [x] PostgreSQL ingestion and validated full refresh
+* [x] Relational model: semantic types, primary keys, foreign keys, `CHECK` / `NOT NULL` constraints and indexes
+* [x] SQL exploration, KPI and analytical-view layers
+* [x] Power BI report (six pages) with Power Query and DAX
 
-### Current Database Engineering Stage
+### Planned Part I Extensions
 
-* [ ] Data-type refinement
-* [ ] Primary keys
-* [ ] Unique constraints
-* [ ] Foreign keys
-* [ ] Referential-integrity validation
-* [ ] `NOT NULL` and business constraints
-* [ ] Database indexes
-* [ ] Final relational-model validation
-
-### Next Analytical Stage
-
-* [ ] Analytical SQL
-* [ ] Banking KPI layer
-* [ ] Power BI
-* [ ] Power Query / DAX
+* [ ] Excel
 * [ ] Tableau
-* [ ] Apache Superset
 
 ---
 
@@ -154,16 +236,16 @@ The BTYT World Builder supports:
 * live stage status;
 * per-stage progress;
 * global pipeline progress;
-* pause / resume / stop controls;
+* resume / stop controls;
 * manifest generation;
 * manifest verification;
 * world-folder access;
 * execution logging.
 
-Current development launch command:
+Launch it from the repository root (see [Quick Start](#quick-start)):
 
-```powershell
-.\.venv\Scripts\python.exe -m world_builder.app
+```bash
+python -m world_builder.app
 ```
 
 A standalone Windows executable is considered a packaging enhancement rather than a dependency of the analytical project.
@@ -308,7 +390,7 @@ It also models:
 
 The canonical BTYT world contains:
 
-**76,799,360 transaction records**
+**74,774,125 transaction records** — 72,746,246 completed and 2,027,879 failed
 
 Because of this scale, transaction data is persisted in **Parquet** rather than normal Git history and loaded into PostgreSQL in batches.
 
@@ -332,9 +414,9 @@ The lending system contains retail and business credit products and a monthly lo
 * maturity;
 * open exposures.
 
-The canonical PostgreSQL database contains more than **5.1 million monthly loan-snapshot observations**.
+The canonical PostgreSQL database contains more than **4.1 million monthly loan-snapshot observations**.
 
-This credit history will later provide the analytical foundation for Part II.
+This credit history also provides the analytical foundation for Part II.
 
 ---
 
@@ -477,25 +559,25 @@ Relational Model
 SQL / BI / Analytics
 ```
 
-The ingestion pipeline is implemented in:
+The loader is implemented in:
 
 ```text
 scripts/database/load_postgresql.py
 ```
 
-The loader:
+It performs a validated full refresh of the existing 23-table relational model, preserving table definitions and constraints:
 
-* recursively discovers generated datasets;
-* uses explicit source-table-to-schema mapping;
-* prefers Parquet when both CSV and Parquet representations exist;
-* preserves identifier columns;
-* normalizes column names;
-* processes large Parquet datasets in batches;
-* loads data through SQLAlchemy;
-* detects partially loaded tables;
-* compares PostgreSQL row counts with source row counts;
-* resets incomplete loads when necessary;
-* validates every completed table against its source dataset.
+```text
+preflight
+→ multi-table TRUNCATE
+→ COPY reload
+→ row-count validation against the source files
+→ ANALYZE
+→ commit
+→ analytics materialized-view refresh
+```
+
+It uses an explicit source-table-to-schema mapping and prefers Parquet when both CSV and Parquet representations exist. If the load fails inside the transaction, PostgreSQL rolls back the base-table refresh. See [`docs/dbprocess/`](../docs/dbprocess/) for the full database workflow.
 
 The physical folder structure of generated files is deliberately separated from the logical PostgreSQL schema architecture.
 
@@ -503,7 +585,7 @@ The physical folder structure of generated files is deliberately separated from 
 
 ## PostgreSQL Schema Architecture
 
-The database is organized into five functional schemas.
+The database is organized into seven functional schemas.
 
 ### `core`
 
@@ -549,22 +631,42 @@ marketing
 
 ### `market`
 
-Competitive, financial, macroeconomic, shock, and performance environment.
+Competitive and financial banking environment.
 
 ```text
 market
 ├── bank_financials
 ├── bank_market_weights
-├── bank_monthly_performance
 ├── bank_world_parameters
 ├── banks
-├── branch_monthly_performance
+└── financial_institutions
+```
+
+**5 tables**
+
+### `macro`
+
+Macroeconomic conditions and external shocks.
+
+```text
+macro
 ├── external_shocks
-├── financial_institutions
 └── macro_environment
 ```
 
-**9 tables**
+**2 tables**
+
+### `performance`
+
+Monthly branch and consolidated bank profitability.
+
+```text
+performance
+├── bank_monthly_performance
+└── branch_monthly_performance
+```
+
+**2 tables**
 
 ### `reference`
 
@@ -584,35 +686,31 @@ reference
 core          4
 banking       5
 marketing     3
-market        9
 reference     2
+market        5
+macro         2
+performance   2
 ----------------
 TOTAL        23
 ```
+
+On top of these base tables, the `analytics` schema holds the reporting views and materialized views consumed by Power BI ([`scripts/sql/views/`](../scripts/sql/views/)).
 
 ---
 
 ## PostgreSQL Load Validation
 
-The canonical ingestion completed successfully:
+The full refresh validates every one of the 23 tables against its source dataset before committing.
 
-```text
-Loaded : 23
-Skipped: 0
-Failed : 0
-
-All BTYT datasets are loaded and row-count validated.
-```
-
-Major PostgreSQL tables include:
+Current canonical row counts (`worlds/BTYT/01`):
 
 | Table                           |       Rows |
 | ------------------------------- | ---------: |
-| `banking.transactions`          | 76,799,360 |
+| `banking.transactions`          | 74,774,125 |
 | `banking.account_balances`      |  7,525,724 |
-| `banking.loan_monthly_snapshot` |  5,116,730 |
+| `banking.loan_monthly_snapshot` |  4,109,490 |
 | `banking.cards`                 |    297,775 |
-| `banking.loans`                 |    233,852 |
+| `banking.loans`                 |    233,441 |
 | `core.accounts`                 |    228,945 |
 | `marketing.campaign_exposures`  |    204,010 |
 | `marketing.campaign_customers`  |    141,248 |
@@ -630,31 +728,21 @@ CSV and Parquet remain the reproducible persisted representation of the syntheti
 
 Loading the datasets is intentionally separated from relational modeling.
 
-The ingestion pipeline does not automatically impose primary keys, foreign keys, business constraints, or analytical indexes.
+The relational model is applied as structural migration logic, outside the routine data refresh, and covers:
 
-The current database-engineering phase will explicitly review and implement:
+1. semantic data types;
+2. primary and unique constraints;
+3. foreign-key relationships and referential-integrity validation;
+4. nullability and business `CHECK` constraints;
+5. analytical indexes.
 
-1. data types;
-2. candidate primary keys;
-3. duplicate detection;
-4. nullability;
-5. primary and unique constraints;
-6. foreign-key relationships;
-7. referential-integrity validation;
-8. business `CHECK` constraints;
-9. analytical indexes.
+| Script | Role |
+|---|---|
+| `scripts/database/apply_relational_model.py` | Applies or repairs the seven-schema model and its constraints |
+| `scripts/database/audit_relational_model.py` | Read-only inspection of the structure and relational contract |
+| `scripts/database/validate_relational_model.py` | Validates the tracked FK / `CHECK` constraints and final relational state |
 
-For each table, the project will document:
-
-* primary key;
-* foreign keys;
-* referenced tables;
-* grain;
-* cardinality;
-* temporal keys;
-* validated join paths.
-
-The final Entity-Relationship Diagram will be derived from the implemented PostgreSQL relational model rather than inferred visually from the Python generators.
+The Entity-Relationship Diagram ([`docs/architecture/relational_model_btyt.png`](../docs/architecture/relational_model_btyt.png)) is derived from the implemented PostgreSQL model rather than inferred from the Python generators.
 
 ---
 
@@ -690,18 +778,34 @@ btyt-banking-analytics/
 │   ├── core/
 │   ├── generators/
 │   ├── audits/
+│   ├── validation/
+│   ├── diagnostics/
 │   ├── database/
-│   │   └── load_postgresql.py
+│   │   ├── load_postgresql.py
+│   │   ├── apply_relational_model.py
+│   │   ├── audit_relational_model.py
+│   │   └── validate_relational_model.py
+│   ├── sql/
+│   │   ├── exploration/
+│   │   ├── kpis/
+│   │   └── views/
 │   ├── generate_btyt.py
 │   └── generate_manifest.py
 │
 ├── world_builder/
-│   └── app.py
+│   ├── app.py
+│   └── state.py
+│
+├── powerbi/
+│   └── BTYT_Banking_Analytics.pbix
 │
 ├── docs/
+│   ├── analytics/
 │   ├── architecture/
-│   ├── database/
-│   └── data_dictionary/
+│   ├── data_dictionary/
+│   ├── dbprocess/
+│   ├── methodology/
+│   └── powerbi/
 │
 └── README.md
 ```
@@ -781,6 +885,8 @@ rather than storing every production output directly in version control.
 
 The canonical Parquet datasets and the local PostgreSQL physical database are therefore not intended to be committed to normal Git history.
 
+The small `worlds/SMOKE/33` world (50 customers) is the exception: it is versioned as a reproducible repository example.
+
 ---
 
 ## Technology Stack
@@ -795,31 +901,24 @@ The canonical Parquet datasets and the local PostgreSQL physical database are th
 * SQLAlchemy
 * psycopg
 * SQL
+* PostgreSQL relational modeling, constraints and indexing
+* analytical SQL views and materialized views
+* Power BI
+* Power Query
+* DAX
 * Git
-* GitHub
+* GitHub / Git LFS
 * CustomTkinter
 * deterministic RNG architecture
 * cross-system auditing
 * reproducible database ingestion
 
-### Current Stage
+### Planned Part I Extensions
 
-* PostgreSQL relational modeling
-* SQL
-* database constraints
-* referential-integrity validation
-* database indexing
-
-### Next Analytical Stage
-
-* analytical SQL
-* Power BI
-* Power Query
-* DAX
+* Excel
 * Tableau
-* Apache Superset
 
-### Later Stages
+### Later Stages (Part II)
 
 * scikit-learn
 * credit-risk modeling
@@ -837,7 +936,7 @@ Technologies are added to the implemented stack only when their corresponding pr
 
 **How is BTYT performing, and where are the main opportunities and risks across its loan portfolio, deposits, products, customer segments, branches, channels, and banking relationships?**
 
-Part I will answer this through:
+Part I answers this through:
 
 * a validated PostgreSQL relational model;
 * SQL analytical queries and views;
@@ -846,8 +945,8 @@ Part I will answer this through:
 * customer and product analysis;
 * transaction and channel analysis;
 * lending and delinquency analysis;
-* geographic analysis;
-* business-intelligence dashboards.
+* market and campaign analysis;
+* a six-page Power BI report.
 
 ---
 
