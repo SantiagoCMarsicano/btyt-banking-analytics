@@ -1,26 +1,52 @@
 # Power BI — Pages
 
-Estado general: **siete páginas finalizadas** (Resumen ejecutivo + seis páginas de analista). El detalle del Resumen ejecutivo está en [04_resumen_ejecutivo.md](04_resumen_ejecutivo.md); la antigua página "Resumen Ejecutivo" descripta abajo pasó a llamarse **Rentabilidad y costos**.
+Estado general: **siete páginas finalizadas**. La primera es un resumen ejecutivo de cierre de año; las otras seis son páginas de análisis por área.
 
 Capturas definitivas:
 
 ```text
-docs/assets/Pag1.png
-docs/assets/Pag2.png
-docs/assets/Pag3.png
-docs/assets/Pag4.png
-docs/assets/Pag5.png
-docs/assets/Pag6.png
-docs/assets/Pag7.png
+docs/assets/Pag1.png   Resumen ejecutivo
+docs/assets/Pag2.png   Rentabilidad y costos
+docs/assets/Pag3.png   Sucursales
+docs/assets/Pag4.png   Clientes y Cuentas
+docs/assets/Pag5.png   Riesgo de Crédito
+docs/assets/Pag6.png   Transacciones y Canales
+docs/assets/Pag7.png   Mercado y Campañas
 ```
+
+Todas las páginas comparten la misma grilla:
+- arriba, cuatro indicadores a la izquierda, los filtros al centro y el selector de año a la derecha;
+- abajo, cuatro paneles (o un panel alto y dos chicos).
 
 ---
 
-## 01 — Resumen Ejecutivo
+## 01 — Resumen ejecutivo
 
 ### Pregunta principal
 
-> **¿Cómo está funcionando BTYT?**
+> **¿Cómo cerró BTYT el año y qué lo explica?**
+
+### Contenido
+
+- **Titular automático** en dos líneas: ingresos y resultado neto contra el año anterior; pérdida de crédito, mes pico y cuota de mercado.
+- **Seis indicadores**: ingresos, resultado neto, costos / ingresos, margen neto, pérdida de crédito y cuota de mercado. Cada uno muestra el valor, la variación interanual (verde si mejora, rojo si empeora) y la tendencia de seis años.
+- **Qué movió el resultado neto**: puente del año anterior al actual, con cada partida a tipo de cambio del año anterior y el efecto cambiario aparte. El subtítulo lista todas las variaciones.
+- **Resultado neto y pérdida de crédito por mes**: en rojo, los meses con pérdida mayor al doble de la mediana de los 12 meses previos.
+- **Cuota de mercado de BTYT** y **nota sobre los datos** (aviso automático sobre el último mes observado).
+
+### Filtros
+
+- Año analizado: abre en 2026. No filtra las tendencias.
+
+Detalle técnico: [04_resumen_ejecutivo.md](04_resumen_ejecutivo.md).
+
+---
+
+## 02 — Rentabilidad y costos
+
+### Pregunta principal
+
+> **¿Cómo evolucionan los ingresos, los costos y la rentabilidad del banco?**
 
 ### KPIs
 
@@ -31,23 +57,19 @@ docs/assets/Pag7.png
 
 ### Visuales
 
-- Evolución de Ingresos y Resultado Neto
-- Composición de Costos Operativos
-- Eficiencia y Rentabilidad por Año
+- Evolución de ingresos y resultado neto (mensual, con línea de cero)
+- Composición de costos operativos (personal, operativos, variables, fijos)
+- Eficiencia y rentabilidad por año (costos / ingresos y margen neto en un mismo eje)
 
 ### Filtros
 
 - Tamaño de sucursal
 - Región
-- 1 año / 3 años / 5 años / Todos
-
-### Estado
-
-**Final.**
+- Año
 
 ---
 
-## 02 — Sucursales
+## 03 — Sucursales
 
 ### Pregunta principal
 
@@ -62,23 +84,19 @@ docs/assets/Pag7.png
 
 ### Visuales
 
-- Resultado Neto por Sucursal
-- Ingresos vs Resultado Neto por Sucursal
-- Rentabilidad de la Red
+- Resultado neto por sucursal: ranking con las sucursales deficitarias en rojo.
+- Ingresos vs. resultado neto por sucursal, por región.
+- Rentabilidad de la red: proporción de sucursales rentables.
 
 ### Filtros
 
 - Tamaño de sucursal
 - Región
-- 1 año / 3 años / 5 años / Todos
-
-### Estado
-
-**Final.**
+- Año
 
 ---
 
-## 03 — Clientes y Cuentas
+## 04 — Clientes y Cuentas
 
 ### Pregunta principal
 
@@ -91,60 +109,30 @@ docs/assets/Pag7.png
 - Depósitos promedio
 - Préstamos promedio
 
-### Filtros
-
-- Residencia
-- Tipo de cliente
-- 1 año / 3 años / 5 años / Todos
-
 ### Semántica temporal
 
 - **Clientes activos:** promedio mensual dentro del período visible.
-- **Cuentas activas:** stock con regla temporal explícita; no se suma entre meses.
-- **Depósitos promedio:** promedio mensual del stock agregado, convertido a USD por año.
-- **Préstamos promedio:** promedio mensual del stock de deuda vigente, convertido a USD por año.
+- **Cuentas activas:** saldo con regla temporal explícita; no se suma entre meses.
+- **Depósitos promedio:** promedio mensual del saldo agregado, convertido a USD por año.
+- **Préstamos promedio:** promedio mensual de la deuda vigente, convertido a USD por año.
 - **Volumen transaccionado:** flujo acumulado dentro del período visible, convertido a USD por año.
 
 ### Visuales
 
-- Clientes Activos y Bajas de Clientes por Año
-- Top 10 clientes dinámico por:
-  - Depósitos
-  - Deuda vigente
-  - Volumen transaccionado
-- Profundidad de Relación
-- Análisis de Cartera
+- **Clientes activos y bajas por año**, separados en empresas y personas.
+- **Top 10 clientes dinámico** por depósitos, deuda vigente o volumen transaccionado, según el selector de la esquina. Las empresas aparecen con su razón social y las personas como "Cliente + ID".
+- **Profundidad de la relación:** básica, vinculada, profunda e integral.
+- **Análisis de cartera:** total, promedio, mediana, desvío estándar y coeficiente de variación por cliente para depósitos, deuda vigente, volumen transaccionado, transacciones, cuentas activas y préstamos activos.
 
-### Matriz de cartera
+### Filtros
 
-Filas:
-
-```text
-Depósitos
-Deuda vigente
-Volumen transaccionado
-Transacciones
-Cuentas activas
-Préstamos activos
-```
-
-Columnas:
-
-```text
-Total
-Promedio
-Mediana
-Desv. Est.
-Coef. Var.
-```
-
-### Estado
-
-**Final.**
+- Residencia
+- Tipo de cliente
+- Año
 
 ---
 
-## 04 — Riesgo de Crédito
+## 05 — Riesgo de Crédito
 
 ### Pregunta principal
 
@@ -159,10 +147,10 @@ Coef. Var.
 
 ### Visuales
 
-- Evolución anual de Pagos incumplidos / 30+ DPD / 90+ DPD
-- Riesgo y exposición por tipo de préstamo
-- Exposición 30+ / 90+ DPD por segmento de cliente
-- Exposición y mora por cohorte de originación
+- Pagos incumplidos, 30+ DPD y 90+ DPD por año, las tres tasas en un mismo eje.
+- Riesgo y exposición por tipo de préstamo: mora 90+ contra exposición, con el tamaño según los pagos incumplidos.
+- Exposición 30+ o 90+ DPD por segmento de cliente, con botones 30+ / 90+ (`DPD Exposure Selector`).
+- Exposición y mora por cohorte de originación, con botones 30+ / 90+ (`DPD Rate Switch`).
 
 ### Filtros
 
@@ -171,20 +159,9 @@ Coef. Var.
 - Estado del préstamo
 - Moneda
 
-### Helpers
-
-- `DPD Exposure Selector`
-- `DPD Rate Switch`
-
-Cumplen funciones diferentes y se conservan por diseño.
-
-### Estado
-
-**Final.**
-
 ---
 
-## 05 — Transacciones y Canales
+## 06 — Transacciones y Canales
 
 ### Pregunta principal
 
@@ -194,43 +171,39 @@ Cumplen funciones diferentes y se conservan por diseño.
 
 - Transacciones completadas
 - Volumen transaccional
-- Participación por canal
+- Participación digital (móvil + web)
 - Tasa de fallas
 
 ### Visuales
 
-- Evolución de transacciones y volumen
-- Distribución por canal
-- Canal por tipo de transacción
-- Tasa de fallas por canal
+- Evolución de transacciones y volumen.
+- Distribución de transacciones por canal.
+- Distribución de canales por tipo de transacción.
+- Tasa de fallas por canal.
+
+Cada canal tiene un color fijo en toda la página: Móvil azul, Web gris, Sucursal dorado, POS verde, Cajero automático violeta, Automático coral.
 
 ### Filtros
 
-- 1 año / 3 años / 5 años / Todos
 - Tipo de cliente
-- Tipo de transacción
+- Transacción
 - Canal
 - Moneda
+- Año
 
 ### Fuente
 
-La página consume una capa agregada de PostgreSQL / analytics; no importa por defecto la fact cruda de transacciones.
-
-Escala canónica:
+La página usa una capa agregada de PostgreSQL; no importa la tabla de hechos de transacciones individuales.
 
 ```text
 74,774,125 transacciones totales
 72,746,246 completadas
-2,027,879 fallidas
+ 2,027,879 fallidas
 ```
-
-### Estado
-
-**Final.**
 
 ---
 
-## 06 — Mercado y Campañas
+## 07 — Mercado y Campañas
 
 ### Pregunta principal
 
@@ -238,17 +211,17 @@ Escala canónica:
 
 ### KPIs
 
-- Participación de mercado BTYT
+- Cuota de mercado
 - Posición de BTYT
 - Cobertura de campaña
 - Respuesta positiva
 
 ### Visuales
 
-- Ranking de participación de mercado
-- Evolución de la participación de BTYT
-- Cobertura vs respuesta positiva por campaña
-- Respuesta positiva por producto objetivo
+- Participación de mercado por banco: BTYT resaltado en azul y el resto en gris.
+- Evolución de la participación de mercado de BTYT.
+- Cobertura y respuesta de las campañas, con el tamaño según los clientes expuestos.
+- Respuesta positiva por producto objetivo.
 
 ### Filtros
 
@@ -257,23 +230,16 @@ Escala canónica:
 - Producto objetivo
 - Tipo de banco
 
-La página no usa selector temporal global porque sus dos fuentes tienen una semántica temporal/grano diferente y el diseño final no lo requiere.
-
-### Estado
-
-**Final.**
+La página no tiene selector de año: el mercado es anual y las campañas tienen fechas propias.
 
 ---
 
-## Cierre visual
+## Criterios visuales
 
-El reporte final mantiene:
-
-- fondo oscuro/grafito;
-- títulos y etiquetas visibles en español;
-- DAX/objetos técnicos en inglés;
-- paleta analítica azul/cian/violeta;
-- branding BTYT usado de forma puntual;
-- navegación y alineación consistentes entre las siete páginas.
-
-No se requiere agregar nuevas páginas para cerrar el núcleo Power BI de Part I.
+- Tema **BTYT Oscuro** (`powerbi/themes/BTYT_Oscuro.json`), con Segoe UI y una escala de tamaños única.
+- **Colores con significado:**
+  - azul: BTYT o valores normales;
+  - gris: contexto;
+  - verde y rojo: solo para mejora o empeoramiento.
+- Títulos en español y con mayúscula solo al inicio; DAX y objetos técnicos en inglés.
+- Gráficos de torta o dona solo para partes de un todo con pocas categorías.
