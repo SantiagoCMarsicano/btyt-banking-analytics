@@ -12,6 +12,8 @@
 
 **Python · PostgreSQL · SQL · Power BI · DAX**
 
+[![Check](https://github.com/SantiagoCMarsicano/btyt-banking-analytics/actions/workflows/check.yml/badge.svg)](https://github.com/SantiagoCMarsicano/btyt-banking-analytics/actions/workflows/check.yml)
+
 **107K customers · 37 branches · 72.75M completed transactions · 2021–2026**
 
 > **Part I — Business Intelligence & Performance Management: Core implementation complete · Excel & Tableau extensions planned**
@@ -98,7 +100,7 @@ Create a small SMOKE world, generate the banking datasets and validate the resul
 
 **[Complete World Builder Quick Start](world_builder/README.md#quick-start)**
 
-To validate the active world without generating data:
+The repository ships the test world `worlds/SMOKE/33`. After selecting it in World Builder (or pointing `config/active_world.json` to `worlds/SMOKE/33`), validate the setup without generating data:
 
 ```bash
 python -m scripts.generate_btyt --check-only

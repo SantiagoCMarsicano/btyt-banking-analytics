@@ -12,6 +12,8 @@
 
 **Python · PostgreSQL · SQL · Power BI · DAX**
 
+[![Check](https://github.com/SantiagoCMarsicano/btyt-banking-analytics/actions/workflows/check.yml/badge.svg)](https://github.com/SantiagoCMarsicano/btyt-banking-analytics/actions/workflows/check.yml)
+
 **107 mil clientes · 37 sucursales · 72,75 millones de transacciones completadas · 2021–2026**
 
 > **Parte I — Inteligencia de negocios y gestión del desempeño:** implementación principal finalizada. Extensiones para Excel y Tableau previstas.
@@ -95,7 +97,7 @@ World Builder permite crear un mundo de prueba **SMOKE** con pocos clientes, eje
 
 **[Guía detallada de World Builder](world_builder/README.md#quick-start)**
 
-Para comprobar la configuración del mundo activo sin generar datos:
+El repositorio incluye el mundo de prueba `worlds/SMOKE/33`. Después de seleccionarlo en World Builder (o de apuntar `config/active_world.json` a `worlds/SMOKE/33`), se puede comprobar la configuración sin generar datos:
 
 ```powershell
 python -m scripts.generate_btyt --check-only

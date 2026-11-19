@@ -1,0 +1,37 @@
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Install, compile and preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # LFS objects (the PBIX) are not needed and are not downloaded.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Compile every module
+        run: python -m compileall -q scripts world_builder
+
+      # The committed pointer targets the author's local world; CI uses the
+      # SMOKE world that ships with the repository.
+      - name: Select the SMOKE world
+        run: |
+          printf '{\n  "world_name": "SMOKE",\n  "variant": 33,\n  "path": "worlds/SMOKE/33"\n}\n' > config/active_world.json
+
+      - name: Repository and orchestrator preflight
+        run: python -m scripts.generate_btyt --check-only
