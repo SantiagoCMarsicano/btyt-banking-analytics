@@ -43,7 +43,7 @@ python -m pip install -r requirements.txt
 Notes:
 
 * World Builder uses Tk. It ships with the python.org installers for Windows and macOS; on Debian/Ubuntu install `python3-tk`.
-* Git LFS is only needed to download the Power BI report (`powerbi/*.pbix`). The generation pipeline does not depend on it.
+* The Power BI report is a text-based project (`powerbi/*.pbip`); the generation pipeline does not depend on it.
 
 ### 2. Launch World Builder
 
@@ -797,7 +797,7 @@ btyt-banking-analytics/
 │   └── state.py
 │
 ├── powerbi/
-│   └── BTYT_Banking_Analytics.pbix
+│   └── BTYT_Banking_Analytics.pbip
 │
 ├── docs/
 │   ├── analytics/

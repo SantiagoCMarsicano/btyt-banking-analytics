@@ -10,16 +10,17 @@ Power BI es la principal superficie de BI corporativo implementada en Part I.
 
 **Dashboard finalizado.**
 
-El reporte contiene seis páginas funcionales y visualmente cerradas:
+El reporte contiene siete páginas: un resumen ejecutivo de cierre de año y seis páginas de analista.
 
 | # | Página | Estado |
 |---|---|---|
-| 01 | Resumen Ejecutivo | Final |
-| 02 | Sucursales | Final |
-| 03 | Clientes y Cuentas | Final |
-| 04 | Riesgo de Crédito | Final |
-| 05 | Transacciones y Canales | Final |
-| 06 | Mercado y Campañas | Final |
+| 01 | Resumen ejecutivo | Final |
+| 02 | Rentabilidad y costos | Final |
+| 03 | Sucursales | Final |
+| 04 | Clientes y Cuentas | Final |
+| 05 | Riesgo de Crédito | Final |
+| 06 | Transacciones y Canales | Final |
+| 07 | Mercado y Campañas | Final |
 
 Capturas finales:
 
@@ -30,6 +31,7 @@ docs/assets/Pag3.png
 docs/assets/Pag4.png
 docs/assets/Pag5.png
 docs/assets/Pag6.png
+docs/assets/Pag7.png
 ```
 
 ## Convenciones
@@ -60,15 +62,15 @@ Tipo de cambio anual usado en BI:
 | 2025 | 42.0 |
 | 2026 | 43.5 |
 
-## Archivo PBIX
+## Proyecto Power BI (.pbip)
 
 Archivo canónico:
 
 ```text
-powerbi/BTYT_Banking_Analytics.pbix
+powerbi/BTYT_Banking_Analytics.pbip
 ```
 
-El PBIX se versiona mediante Git LFS.
+El informe se versiona en formato PBIR (JSON por página y visual) y el modelo en TMDL (texto). La caché de datos (`.pbi/cache.abf`) no se versiona: al abrir el proyecto, actualizar contra PostgreSQL.
 
 ## Fuente
 

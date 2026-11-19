@@ -1,6 +1,6 @@
 # Power BI — Pages
 
-Estado general: **seis páginas finalizadas**.
+Estado general: **siete páginas finalizadas** (Resumen ejecutivo + seis páginas de analista). El detalle del Resumen ejecutivo está en [04_resumen_ejecutivo.md](04_resumen_ejecutivo.md); la antigua página "Resumen Ejecutivo" descripta abajo pasó a llamarse **Rentabilidad y costos**.
 
 Capturas definitivas:
 
@@ -11,6 +11,7 @@ docs/assets/Pag3.png
 docs/assets/Pag4.png
 docs/assets/Pag5.png
 docs/assets/Pag6.png
+docs/assets/Pag7.png
 ```
 
 ---
@@ -273,6 +274,6 @@ El reporte final mantiene:
 - DAX/objetos técnicos en inglés;
 - paleta analítica azul/cian/violeta;
 - branding BTYT usado de forma puntual;
-- navegación y alineación consistentes entre las seis páginas.
+- navegación y alineación consistentes entre las siete páginas.
 
 No se requiere agregar nuevas páginas para cerrar el núcleo Power BI de Part I.

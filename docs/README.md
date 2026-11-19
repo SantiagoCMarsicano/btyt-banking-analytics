@@ -71,23 +71,24 @@ The established refresh process preserves schemas, table definitions, PKs, FKs, 
 
 ### Power BI
 
-The six-page Power BI report is functionally complete and visually frozen for the current Part I portfolio checkpoint.
+The seven-page Power BI report (executive summary + six analyst pages) is complete for the current Part I portfolio checkpoint.
 
 | Page | Status |
 |---|---|
-| 01 — Resumen Ejecutivo | Final |
-| 02 — Sucursales | Final |
-| 03 — Clientes y Cuentas | Final |
-| 04 — Riesgo de Crédito | Final |
-| 05 — Transacciones y Canales | Final |
-| 06 — Mercado y Campañas | Final |
+| 01 — Resumen ejecutivo | Final |
+| 02 — Rentabilidad y costos | Final |
+| 03 — Sucursales | Final |
+| 04 — Clientes y Cuentas | Final |
+| 05 — Riesgo de Crédito | Final |
+| 06 — Transacciones y Canales | Final |
+| 07 — Mercado y Campañas | Final |
 
-Final screenshots are stored in `docs/assets/Pag1.png` through `Pag6.png`.
+Final screenshots are stored in `docs/assets/Pag1.png` through `Pag7.png`.
 
-The canonical analytical PBIX is:
+The canonical Power BI project (PBIR report + TMDL model) is:
 
 ```text
-powerbi/BTYT_Banking_Analytics.pbix
+powerbi/BTYT_Banking_Analytics.pbip
 ```
 
 ### Part I status

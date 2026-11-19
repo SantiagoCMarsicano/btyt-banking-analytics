@@ -118,57 +118,75 @@ Heavy calculations are performed upstream whenever appropriate. This is especial
 
 Power BI is the main implemented analytical surface of Part I.
 
-The semantic model combines PostgreSQL analytical layers with DAX measures, temporal logic, dynamic metrics and interactive filtering.
+The semantic model combines PostgreSQL analytical layers with DAX measures, temporal logic, dynamic metrics and interactive filtering. It is versioned as a **Power BI Project (`.pbip`)**: the report is stored as PBIR JSON and the model as TMDL text, so every measure, relationship and visual is reviewable in Git.
 
-The final report contains **six business-focused pages**.
+Semantic-model highlights:
 
-### 01 — Resumen Ejecutivo
+- **Calculation group** `Comparación temporal` (Actual, Año anterior, Variación, Variación %) drives every year-over-year comparison.
+- **107 measures** organised in display folders by business area, each with a Spanish description.
+- A single date dimension related to every fact table, including annual market data and campaigns.
+- No implicit aggregations: every visual uses an explicit measure.
+- Automatic Spanish narrative, a constant-FX net income bridge and a rolling-median credit-loss anomaly flag.
 
-Overall financial performance, revenue, net income, operating costs, efficiency and profitability.
+The report is framed as a **year-end close**: one executive summary followed by six analyst pages.
 
-<p align="center">
-  <img src="docs/assets/Pag1.png" alt="Resumen Ejecutivo" width="900">
-</p>
+### 01 — Resumen ejecutivo
 
-### 02 — Sucursales
-
-Branch revenue, profitability, operating costs, regional performance and network health.
-
-<p align="center">
-  <img src="docs/assets/Pag2.png" alt="Sucursales" width="900">
-</p>
-
-### 03 — Clientes y Cuentas
-
-Customer evolution, active accounts, deposits, loans, relationship depth and dynamic customer rankings.
+Automatic headline, six KPIs with change versus the previous year and six-year trend, the net income bridge (each item at the previous year's exchange rate, FX effect shown separately), monthly credit-loss anomalies and BTYT's market share.
 
 <p align="center">
-  <img src="docs/assets/Pag3.png" alt="Clientes y Cuentas" width="900">
+  <img src="docs/assets/Pag1.png" alt="Resumen ejecutivo" width="900">
 </p>
 
-### 04 — Riesgo de Crédito
+### 02 — Rentabilidad y costos
+
+Revenue and net income evolution, operating cost composition, cost-to-income and net margin by year.
+
+<p align="center">
+  <img src="docs/assets/Pag2.png" alt="Rentabilidad y costos" width="900">
+</p>
+
+### 03 — Sucursales
+
+Branch net income ranking (loss-making branches in red), revenue versus net income by region and network profitability.
+
+<p align="center">
+  <img src="docs/assets/Pag3.png" alt="Sucursales" width="900">
+</p>
+
+### 04 — Clientes y Cuentas
+
+Active customers and closures, dynamic top-10 ranking, relationship depth and portfolio distribution statistics.
+
+<p align="center">
+  <img src="docs/assets/Pag4.png" alt="Clientes y Cuentas" width="900">
+</p>
+
+### 05 — Riesgo de Crédito
 
 Credit exposure, 30+ and 90+ DPD delinquency, payment shortfalls, customer segments, loan types and origination cohorts.
 
 <p align="center">
-  <img src="docs/assets/Pag4.png" alt="Riesgo de Crédito" width="900">
+  <img src="docs/assets/Pag5.png" alt="Riesgo de Crédito" width="900">
 </p>
 
-### 05 — Transacciones y Canales
+### 06 — Transacciones y Canales
 
-Completed transactions, transaction volume, channel mix, transaction types and operational failure rates.
+Completed transactions and volume, digital share, channel mix by transaction type and failure rates by channel.
 
 <p align="center">
-  <img src="docs/assets/Pag5.png" alt="Transacciones y Canales" width="900">
+  <img src="docs/assets/Pag6.png" alt="Transacciones y Canales" width="900">
 </p>
 
-### 06 — Mercado y Campañas
+### 07 — Mercado y Campañas
 
-Market share, competitive positioning, campaign coverage, positive response and product targeting.
+Market share and ranking, campaign coverage versus positive response, and response by target product.
 
 <p align="center">
-  <img src="docs/assets/Pag6.png" alt="Mercado y Campañas" width="900">
+  <img src="docs/assets/Pag7.png" alt="Mercado y Campañas" width="900">
 </p>
+
+**Opening the report:** open `powerbi/BTYT_Banking_Analytics.pbip` in Power BI Desktop and refresh against the local PostgreSQL database (the data cache is not versioned).
 
 ---
 
@@ -211,10 +229,11 @@ BTYT Banking Analytics
 ├── data/               # generated analytical data
 ├── docs/               # technical and analytical documentation
 ├── manifests/          # generation manifests
-├── powerbi/            # Power BI report
+├── powerbi/            # Power BI project (.pbip: PBIR report + TMDL model) and themes
 ├── scripts/
 │   ├── generators/     # synthetic-data generation
 │   ├── audits/         # validations and controls
+│   ├── dashboard/      # Power BI build scripts (theme, executive page)
 │   └── sql/            # database and analytical SQL
 ├── world_builder/      # synthetic-world management application
 └── worlds/             # banking-world definitions
