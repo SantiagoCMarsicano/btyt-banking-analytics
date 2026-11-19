@@ -1,292 +1,285 @@
- <p align="center">
-  <img src="docs/assets/logo.png" alt="BTYT Bank" width="240">
+<p align="center">
+  <img src="docs/assets/logo.png" alt="Banco BTYT" width="240">
+</p>
+
+<p align="center">
+  <strong>Español</strong> · <a href="README_EN.md">Versión en inglés</a>
 </p>
 
 # BTYT Banking Analytics
 
-**End-to-end banking analytics project built around a fictional Uruguayan commercial bank.**
+**Proyecto integral de analítica bancaria basado en un banco comercial uruguayo ficticio.**
 
 **Python · PostgreSQL · SQL · Power BI · DAX**
 
-**107K customers · 37 branches · 72.75M completed transactions · 2021–2026**
+**107 mil clientes · 37 sucursales · 72,75 millones de transacciones completadas · 2021–2026**
 
-> **Part I — Business Intelligence & Performance Management: Core implementation complete · Excel & Tableau extensions planned**
+> **Parte I — Inteligencia de negocios y gestión del desempeño:** implementación principal finalizada. Extensiones para Excel y Tableau previstas.
 
 <p align="center">
-  <img src="docs/assets/Pag1.png" alt="BTYT Executive Summary" width="900">
+  <img src="docs/assets/Pag1.png" alt="Resumen ejecutivo de BTYT" width="900">
 </p>
 
-BTYT is more than a dashboard. The project builds a configurable synthetic banking universe and carries its data through the complete analytical lifecycle:
+BTYT es más que un tablero de indicadores. El proyecto construye un universo bancario sintético configurable y desarrolla todo su proceso analítico:
 
-**World Builder → Python generation & validation → PostgreSQL → SQL analytics → Power BI**
+**World Builder → Generación y validación con Python → PostgreSQL → Análisis con SQL → Power BI**
 
-All banking data, transactions, financial results and credit events are **synthetic**.
+Todos los datos de clientes, operaciones, resultados financieros y eventos crediticios son **sintéticos**.
 
 ---
 
-## End-to-End Architecture
+## Arquitectura integral
 
 ```text
 World Builder
       │
-      ├── World configuration
-      ├── Deterministic seeds
-      └── Scenario management
+      ├── Configuración de mundos
+      ├── Semillas reproducibles
+      └── Gestión de escenarios
       │
       ▼
-Python Generation
+Generación con Python
       │
-      ├── Customers, accounts and cards
-      ├── Loans and credit histories
-      ├── Transactions and balances
-      ├── Branches and campaigns
-      └── Financial performance
-      │
-      ▼
-Validation & Auditing
+      ├── Clientes, cuentas y tarjetas
+      ├── Préstamos e historiales crediticios
+      ├── Transacciones y saldos
+      ├── Sucursales y campañas
+      └── Resultados financieros
       │
       ▼
-Parquet / CSV
+Validación y auditoría
+      │
+      ▼
+Archivos Parquet / CSV
       │
       ▼
 PostgreSQL
       │
-      ├── Relational model
-      ├── Analytical views
-      └── Materialized aggregations
+      ├── Modelo relacional
+      ├── Vistas analíticas
+      └── Agregaciones materializadas
       │
       ▼
 Power BI + DAX
       │
-      ├── Executive reporting
-      ├── Business analysis
-      └── Credit risk monitoring
+      ├── Informes ejecutivos
+      ├── Análisis del negocio
+      └── Seguimiento del riesgo crediticio
 ```
 
-The same banking universe supports descriptive analytics in Part I and future predictive modeling in Part II.
+El mismo universo bancario permite realizar análisis descriptivos en la Parte I y desarrollar modelos predictivos en la Parte II.
 
 ---
 
-## Quick Start
+## Inicio rápido
 
-The generation pipeline was tested with **Python 3.14.7 on Windows 11**.
+El proceso de generación fue probado con **Python 3.14.7 en Windows 11**.
 
-```bash
+Clonar el repositorio y crear un entorno virtual:
+
+```powershell
 git clone https://github.com/SantiagoCMarsicano/btyt-banking-analytics.git
 cd btyt-banking-analytics
 python -m venv .venv
 ```
 
-Activate the virtual environment and install dependencies:
+Activar el entorno, instalar las dependencias e iniciar World Builder:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-```
-
-Launch World Builder:
-
-```bash
 python -m world_builder.app
 ```
 
-Create a small SMOKE world, generate the banking datasets and validate the results.
+World Builder permite crear un mundo de prueba **SMOKE** con pocos clientes, ejecutar la generación y validar los resultados.
 
-**[Complete World Builder Quick Start](world_builder/README.md#quick-start)**
+**[Guía detallada de World Builder](world_builder/README.md#quick-start)**
 
-To validate the active world without generating data:
+Para comprobar la configuración del mundo activo sin generar datos:
 
-```bash
+```powershell
 python -m scripts.generate_btyt --check-only
 ```
 
-PostgreSQL is **not required** to explore the source code, SQL queries, DAX measures or dashboard screenshots. Reproducing the complete analytical pipeline and refreshing Power BI requires a compatible PostgreSQL database.
+No se necesita PostgreSQL para explorar el código, las consultas SQL, las medidas DAX o las capturas del informe. Para reproducir el proceso completo y actualizar Power BI sí se requiere una base de datos PostgreSQL compatible.
 
 ---
 
-## 1. Python — Building the Banking Universe
+## 1. Python — Construcción del universo bancario
 
-Instead of using a predefined banking dataset, BTYT generates interconnected customers, accounts, cards, loans, transactions, branches, campaigns and financial results.
+En lugar de utilizar una base de datos bancaria predefinida, BTYT genera clientes, cuentas, tarjetas, préstamos, transacciones, sucursales, campañas y resultados financieros relacionados entre sí.
 
-The **World Builder** manages configurable scenarios, reproducible random seeds, pipeline execution, cross-system validation and frozen datasets.
+**World Builder** permite configurar escenarios, gestionar semillas reproducibles, ejecutar el proceso de generación, auditar la consistencia de los datos y conservar mundos finalizados.
 
 <p align="center">
-  <img src="docs/assets/python-world-builder.png" alt="BTYT Python World Builder" width="900">
+  <img src="docs/assets/python-world-builder.png" alt="Aplicación World Builder de BTYT" width="900">
 </p>
 
-The canonical BTYT world is only one possible realization. Users can generate new synthetic banking scenarios using the same architecture.
+El mundo canónico es una realización particular: la misma arquitectura permite generar otros escenarios bancarios sintéticos.
 
-[World Builder](world_builder/) · [Python generators](scripts/generators/) · [Validation scripts](scripts/audits/)
+[World Builder](world_builder/) · [Generadores de Python](scripts/generators/) · [Scripts de auditoría](scripts/audits/)
 
 ---
 
-## 2. PostgreSQL & SQL — From Data to Analytics
+## 2. PostgreSQL y SQL — De los datos al análisis
 
-PostgreSQL stores the synthetic banking universe in relational tables organized by business domain.
-
-The analytical layer implements reusable SQL views, materialized aggregations, banking KPIs and consistency checks.
+PostgreSQL almacena el universo bancario en tablas relacionales organizadas por áreas de negocio. La capa analítica incorpora consultas SQL reutilizables, vistas, agregaciones materializadas, indicadores bancarios y controles de consistencia.
 
 <p align="center">
-  <img src="docs/assets/postgresql-annual-performance.png" alt="BTYT PostgreSQL and SQL Analytics" width="900">
+  <img src="docs/assets/postgresql-annual-performance.png" alt="Análisis bancario con PostgreSQL y SQL" width="900">
 </p>
 
-Large transaction datasets are aggregated upstream to support efficient BI reporting without importing tens of millions of raw events into Power BI.
+Los grandes volúmenes de transacciones se agregan previamente en PostgreSQL para analizar los resultados sin importar decenas de millones de operaciones individuales a Power BI.
 
-[SQL exploration](scripts/sql/exploration/) · [Analytical views](scripts/sql/views/) · [Database workflow](docs/dbprocess/)
+[Consultas de análisis](scripts/sql/exploration/) · [Vistas analíticas](scripts/sql/views/) · [Proceso de base de datos](docs/dbprocess/)
 
 ---
 
-## 3. Power BI — Business Intelligence Layer
+## 3. Power BI — Inteligencia de negocios
 
-Power BI is the main analytical interface implemented in Part I.
+Power BI es la principal herramienta de análisis y presentación de resultados implementada en la Parte I.
 
-The report contains **seven pages**: an executive summary followed by six business-focused analytical views.
+El informe contiene **siete páginas**: un resumen ejecutivo y seis secciones temáticas. Su modelo semántico incluye **107 medidas DAX documentadas**, una dimensión temporal, un grupo de cálculo para comparaciones entre períodos y reglas de conversión monetaria por año.
 
-The semantic model includes **107 documented DAX measures**, an explicit date dimension, dynamic metrics, a temporal comparison calculation group and annual foreign-exchange conversion logic.
-
-The source is versioned as a **Power BI Project (`.pbip`)**, with report definitions in PBIR JSON and semantic-model definitions in TMDL.
+El proyecto se conserva en formato **`.pbip`**, con las definiciones de las páginas en PBIR (JSON) y las del modelo semántico en TMDL, lo que permite revisar su contenido directamente en Git.
 
 ### 01 — Resumen ejecutivo
 
-Year-end performance, automatic executive narrative, year-over-year KPIs, net income decomposition, credit-loss monitoring and market-share evolution.
+Resultados de cierre anual, interpretación automática, indicadores interanuales, descomposición del resultado neto, seguimiento de pérdidas crediticias y evolución de la cuota de mercado.
 
 <p align="center">
-  <img src="docs/assets/Pag1.png" alt="Resumen ejecutivo" width="900">
+  <img src="docs/assets/Pag1.png" alt="Página 1: Resumen ejecutivo" width="900">
 </p>
 
 ### 02 — Rentabilidad y costos
 
-Revenue, net income, operating cost composition, efficiency and profitability trends.
+Evolución de ingresos y resultado neto, composición de costos operativos, eficiencia y márgenes de rentabilidad.
 
 <p align="center">
-  <img src="docs/assets/Pag2.png" alt="Rentabilidad y costos" width="900">
+  <img src="docs/assets/Pag2.png" alt="Página 2: Rentabilidad y costos" width="900">
 </p>
 
 ### 03 — Sucursales
 
-Branch profitability, financial performance, regional comparisons and network efficiency.
+Rentabilidad por sucursal, resultados financieros, comparaciones regionales y eficiencia de la red.
 
 <p align="center">
-  <img src="docs/assets/Pag3.png" alt="Sucursales" width="900">
+  <img src="docs/assets/Pag3.png" alt="Página 3: Sucursales" width="900">
 </p>
 
-### 04 — Clientes y Cuentas
+### 04 — Clientes y cuentas
 
-Customer evolution, account relationships, deposits, lending and portfolio distribution.
+Evolución de clientes, relaciones bancarias, depósitos, créditos y distribución de las carteras.
 
 <p align="center">
-  <img src="docs/assets/Pag4.png" alt="Clientes y Cuentas" width="900">
+  <img src="docs/assets/Pag4.png" alt="Página 4: Clientes y cuentas" width="900">
 </p>
 
-### 05 — Riesgo de Crédito
+### 05 — Riesgo de crédito
 
-Credit exposure, 30+ and 90+ DPD delinquency, payment shortfalls, customer segments and origination cohorts.
+Exposición crediticia, morosidad de 30 o más y 90 o más días, faltantes de pago, segmentos de clientes y cohortes de originación.
 
 <p align="center">
-  <img src="docs/assets/Pag5.png" alt="Riesgo de Crédito" width="900">
+  <img src="docs/assets/Pag5.png" alt="Página 5: Riesgo de crédito" width="900">
 </p>
 
-### 06 — Transacciones y Canales
+### 06 — Transacciones y canales
 
-Completed transactions, USD-adjusted volume, digital channel participation and operational failure rates.
+Transacciones completadas, volumen expresado en USD, participación de canales digitales y tasas de operaciones fallidas.
 
 <p align="center">
-  <img src="docs/assets/Pag6.png" alt="Transacciones y Canales" width="900">
+  <img src="docs/assets/Pag6.png" alt="Página 6: Transacciones y canales" width="900">
 </p>
 
-### 07 — Mercado y Campañas
+### 07 — Mercado y campañas
 
-Market positioning, competitive share, campaign coverage and positive customer response.
+Posicionamiento competitivo, cuota de mercado, cobertura de campañas y respuestas positivas de clientes.
 
 <p align="center">
-  <img src="docs/assets/Pag7.png" alt="Mercado y Campañas" width="900">
+  <img src="docs/assets/Pag7.png" alt="Página 7: Mercado y campañas" width="900">
 </p>
 
-### Power BI Files
+### Archivos de Power BI
 
-Two complementary formats are maintained:
+Se mantienen dos formatos complementarios:
 
-| Format | Purpose |
+| Formato | Uso |
 |---|---|
-| `.pbip` | Editable source project with PBIR report and TMDL semantic model |
-| `.pbix` | Standalone Power BI Desktop file, managed through Git LFS |
+| **`.pbip`** | Proyecto fuente editable, con páginas PBIR y modelo semántico TMDL |
+| **`.pbix`** | Archivo de Power BI Desktop, gestionado mediante Git LFS |
 
-Open `powerbi/BTYT_Banking_Analytics.pbip` to explore the editable project or `powerbi/BTYT_Banking_Analytics.pbix` for the standalone report.
+El proyecto se abre desde `powerbi/BTYT_Banking_Analytics.pbip`, junto con las carpetas `.Report` y `.SemanticModel`. También se incluye `powerbi/BTYT_Banking_Analytics.pbix` como archivo de Power BI Desktop.
 
-The PBIP requires its accompanying `.Report` and `.SemanticModel` directories. Refreshing either format requires access to the PostgreSQL data source.
+Para actualizar los datos de cualquiera de los dos formatos se requiere acceso a la fuente PostgreSQL.
 
-**[Explore the Power BI documentation](docs/powerbi/)**
-
----
-
-## Analytical Design
-
-The project applies explicit rules to maintain consistency across its analytical layers:
-
-- **Flows:** revenue, costs and transactions are accumulated over time.
-- **Stocks:** deposits, balances and credit exposure follow monthly reporting logic.
-- **Currency:** UYU amounts are converted to USD using the corresponding year's exchange rate.
-- **Transactions:** completed movements are distinguished from failed attempts.
-- **Credit risk:** delinquency, exposure and credit losses are analyzed separately.
-- **Campaigns:** positive response represents customer receptivity, not proven causal impact.
+[Documentación de Power BI](docs/powerbi/)
 
 ---
 
-## Technology Stack
+## Criterios analíticos
 
-| Layer | Technology |
+- **Flujos:** ingresos, costos y transacciones se acumulan en el período analizado.
+- **Saldos:** depósitos, balances y exposición crediticia utilizan criterios de cierre mensual.
+- **Moneda:** los importes en pesos uruguayos se convierten a USD según el tipo de cambio correspondiente a cada año.
+- **Transacciones:** se separan las operaciones completadas de las fallidas.
+- **Riesgo crediticio:** se distinguen morosidad, exposición y pérdidas crediticias.
+- **Campañas:** una respuesta positiva indica receptividad, no necesariamente un efecto causal.
+
+---
+
+## Tecnologías utilizadas
+
+| Componente | Tecnología |
 |---|---|
-| Synthetic data generation | Python |
-| World management | CustomTkinter |
-| Data storage | Parquet / CSV |
-| Database | PostgreSQL |
-| Analytical processing | SQL |
-| Semantic modeling & BI | Power BI / DAX / TMDL |
-| Validation | Python / SQL |
-| Version control | Git / GitHub |
-| Power BI distribution | PBIP / PBIX / Git LFS |
-| Planned BI extensions | Excel / Tableau |
+| Generación de datos sintéticos | Python |
+| Gestión de mundos | CustomTkinter |
+| Almacenamiento | Parquet / CSV |
+| Base de datos | PostgreSQL |
+| Procesamiento analítico | SQL |
+| Modelado e inteligencia de negocios | Power BI / DAX / TMDL |
+| Validación y auditoría | Python / SQL |
+| Control de versiones | Git / GitHub |
+| Distribución de informes | PBIP / PBIX / Git LFS |
+| Extensiones previstas | Excel / Tableau |
 
 ---
 
-## Documentation
+## Documentación
 
 [World Builder](world_builder/README.md) ·
 [Power BI](docs/powerbi/) ·
-[KPI Catalog](docs/analytics/kpi_catalog.md) ·
-[SQL Analysis](scripts/sql/exploration/) ·
-[Data Dictionary](docs/data_dictionary/) ·
-[Database Workflow](docs/dbprocess/) ·
-[Full Documentation](docs/README.md)
+[Catálogo de indicadores](docs/analytics/kpi_catalog.md) ·
+[Análisis SQL](scripts/sql/exploration/) ·
+[Diccionario de datos](docs/data_dictionary/) ·
+[Proceso de base de datos](docs/dbprocess/) ·
+[Documentación general](docs/README.md)
 
 ---
 
-## Roadmap
+## Hoja de ruta
 
-### Part I — Business Intelligence & Performance Management
+### Parte I — Inteligencia de negocios y gestión del desempeño
 
-**Core implementation complete.**
+**Implementación principal finalizada:** generación sintética con Python → PostgreSQL → análisis SQL → Power BI.
 
-Python synthetic-data generation → PostgreSQL → SQL analytical layer → Power BI.
+**Extensiones previstas:** Excel y Tableau, reutilizando el mismo universo bancario y catálogo de indicadores.
 
-**Planned extensions:** Excel and Tableau, reusing the same banking universe and KPI framework.
+### Parte II — Riesgo de crédito y analítica predictiva
 
-### Part II — Credit Risk & Predictive Analytics
+Ingeniería de variables → validación temporal → modelos estadísticos y de aprendizaje automático → evaluación → explicabilidad → interpretación para la toma de decisiones.
 
-Feature engineering → temporal validation → statistical and machine-learning models → evaluation → explainability → business interpretation.
-
-Part II will reuse the existing synthetic banking universe rather than introduce an unrelated dataset.
+La Parte II reutilizará el universo bancario existente, sin incorporar una base de datos independiente.
 
 ---
 
-## Author
+## Autor
 
 **Santiago Castillo Marsicano**
 
-Economics & Sociology · Data Analytics · Business Intelligence
+Licenciado en Economía y Sociología · Análisis de datos · Inteligencia de negocios
 
-[GitHub](https://github.com/SantiagoCMarsicano)
+[Perfil de GitHub](https://github.com/SantiagoCMarsicano)
 
 ---
 
-> **Disclaimer:** BTYT is a fictional bank. All customer, transaction, financial, credit-risk, market and campaign data are synthetic. No confidential banking information is used.
+> **Aviso:** BTYT es un banco ficticio. Todos los datos de clientes, transacciones, resultados financieros, riesgo crediticio, mercado y campañas son sintéticos. No se utiliza información bancaria confidencial.
