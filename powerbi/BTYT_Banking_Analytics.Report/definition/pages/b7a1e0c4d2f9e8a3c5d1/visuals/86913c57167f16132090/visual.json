@@ -1,5 +1,5 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.13.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "86913c57167f16132090",
   "position": {
     "x": 972,
@@ -27,7 +27,8 @@
                 }
               },
               "queryRef": "DimDate.Date",
-              "nativeQueryRef": "Date"
+              "nativeQueryRef": "Date",
+              "active": true
             }
           ]
         },
@@ -85,8 +86,7 @@
             },
             "direction": "Ascending"
           }
-        ],
-        "isDefaultSort": false
+        ]
       }
     },
     "objects": {

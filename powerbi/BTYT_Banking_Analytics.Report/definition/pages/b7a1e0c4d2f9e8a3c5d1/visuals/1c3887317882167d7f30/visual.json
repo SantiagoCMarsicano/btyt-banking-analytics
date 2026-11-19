@@ -1,5 +1,5 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.13.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "1c3887317882167d7f30",
   "position": {
     "x": 48,
@@ -28,6 +28,7 @@
               },
               "queryRef": "Bridge Steps.Step",
               "nativeQueryRef": "Partida",
+              "active": true,
               "displayName": "Partida"
             }
           ]
@@ -112,8 +113,7 @@
             },
             "direction": "Ascending"
           }
-        ],
-        "isDefaultSort": false
+        ]
       }
     },
     "objects": {
@@ -364,7 +364,7 @@
             "show": {
               "expr": {
                 "Literal": {
-                  "Value": "true"
+                  "Value": "false"
                 }
               }
             },

@@ -1,5 +1,5 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.13.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "fb995e455bed3ba10e26",
   "position": {
     "x": 1588,
@@ -28,6 +28,7 @@
               },
               "queryRef": "Market Performance.year",
               "nativeQueryRef": "Año",
+              "active": true,
               "displayName": "Año"
             }
           ]
@@ -66,8 +67,7 @@
             },
             "direction": "Ascending"
           }
-        ],
-        "isDefaultSort": false
+        ]
       }
     },
     "objects": {
