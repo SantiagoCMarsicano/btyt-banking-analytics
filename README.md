@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="Banco BTYT" width="240">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/btyt_logo_dark.png">
+    <img src="docs/assets/btyt_logo_light.png" alt="BTYT · Banco del Uruguay" width="460">
+  </picture>
 </p>
 
 <p align="center">
