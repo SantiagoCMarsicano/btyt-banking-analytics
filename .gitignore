@@ -124,3 +124,6 @@ powerbi/**/.pbi/localSettings.json
 
 # Transaction generator scratch area (rebuilt on every run)
 data/interim/transactions/transaction_staging/
+
+# Antigua carpeta global de datos, sustituida por World Builder
+/data/
