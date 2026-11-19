@@ -121,3 +121,6 @@ path_audit.txt
 # Power BI project (.pbip): local cache and per-user settings
 powerbi/**/.pbi/cache.abf
 powerbi/**/.pbi/localSettings.json
+
+# Transaction generator scratch area (rebuilt on every run)
+data/interim/transactions/transaction_staging/
