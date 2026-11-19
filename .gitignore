@@ -117,3 +117,7 @@ path_audit.txt
 # -----------------------------------------------------------------------------
 
 /operational_exports.py
+
+# Power BI project (.pbip): local cache and per-user settings
+powerbi/**/.pbi/cache.abf
+powerbi/**/.pbi/localSettings.json
