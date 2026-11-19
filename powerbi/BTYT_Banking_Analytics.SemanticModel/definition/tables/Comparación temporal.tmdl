@@ -1,0 +1,46 @@
+/// Compara cualquier medida contra el mismo período del año anterior (actual, año anterior, variación y variación %).
+table 'Comparación temporal'
+	lineageTag: e0df54ae-1408-4021-a5fd-14a29cda97d4
+
+	calculationGroup
+		precedence: 10
+
+		calculationItem Actual = SELECTEDMEASURE()
+
+		calculationItem 'Año anterior' = CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('DimDate'[Date]))
+
+		calculationItem Variación =
+				VAR Actual = SELECTEDMEASURE()
+				VAR Anterior = CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('DimDate'[Date]))
+				RETURN
+				    IF(NOT ISBLANK(Actual) && NOT ISBLANK(Anterior), Actual - Anterior)
+
+		calculationItem 'Variación %' =
+				VAR Actual = SELECTEDMEASURE()
+				VAR Anterior = CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('DimDate'[Date]))
+				RETURN
+				    DIVIDE(Actual - Anterior, Anterior)
+
+			formatStringDefinition = "+0.0 %;-0.0 %;0.0 %"
+
+	column Comparación
+		dataType: string
+		lineageTag: dcab7155-729a-4549-9925-16ea64ba9381
+		summarizeBy: none
+		sourceColumn: Name
+		sortByColumn: Ordinal
+
+		annotation SummarizationSetBy = Automatic
+
+	column Ordinal
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: e751b5f7-4297-4546-9fb6-e88ccf9e3951
+		summarizeBy: sum
+		sourceColumn: Ordinal
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Comparación temporal' = calculationGroup
+

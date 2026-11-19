@@ -1,0 +1,41 @@
+relationship AutoDetected_d18c0397-7593-47da-958a-d9188fcb2782
+	fromColumn: 'Credit Risk'.customer_id
+	toColumn: 'Customer Accounts'.customer_id
+
+relationship 22f8be02-a4ef-ecda-d491-c44286b9f020
+	fromColumn: 'Bank Performance'.year_month
+	toColumn: DimDate.Date
+
+relationship 9d1988ec-c69d-5437-53a5-c83f1b50d5ee
+	fromColumn: 'Branch Performance'.year_month
+	toColumn: DimDate.Date
+
+relationship bad6e6c8-26ba-6a95-7e18-2c1f7f7a3bb8
+	fromColumn: 'Credit Risk'.year_month
+	toColumn: DimDate.Date
+
+relationship 9c60e52a-6b17-bb65-f4db-dd1dafd969b9
+	fromColumn: 'Transactions and Channels'.year_month
+	toColumn: DimDate.Date
+
+relationship AutoDetected_aa2e0170-7d83-4b54-a4a3-26a7a6ee8f79
+	fromColumn: 'Customer Monthly'.customer_id
+	toColumn: 'Customer Accounts'.customer_id
+
+relationship df794012-0dff-e023-00ff-417e5be8d056
+	fromColumn: 'Customer Monthly'.year_month
+	toColumn: DimDate.Date
+
+relationship 144706ad-fba1-502b-8084-ff76b5cf6cfc
+	fromColumn: 'Customer Accounts'.customer_type
+	toColumn: DimCustomerType.customer_type
+
+relationship 24cfbcbf-41ed-47c5-bf63-9ae150b936a6
+	fromColumn: 'Market Performance'.'Year Date'
+	toColumn: DimDate.Date
+
+relationship f48b53c7-a129-479c-b214-4639880b753c
+	joinOnDateBehavior: datePartOnly
+	fromColumn: 'Campaign Performance'.start_date
+	toColumn: DimDate.Date
+

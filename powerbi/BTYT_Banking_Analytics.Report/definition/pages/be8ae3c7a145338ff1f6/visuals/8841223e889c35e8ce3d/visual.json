@@ -1,0 +1,253 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "8841223e889c35e8ce3d",
+  "position": {
+    "x": 972,
+    "y": 166,
+    "z": 10000,
+    "height": 433,
+    "width": 900,
+    "tabOrder": 10000
+  },
+  "visual": {
+    "visualType": "scatterChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Campaign Performance"
+                    }
+                  },
+                  "Property": "Campaign Name ES"
+                }
+              },
+              "queryRef": "Campaign Performance.Campaign Name ES",
+              "nativeQueryRef": "Nombre de campaña",
+              "active": true,
+              "displayName": "Nombre de campaña"
+            }
+          ]
+        },
+        "Series": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Campaign Performance"
+                    }
+                  },
+                  "Property": "Campaign Type ES"
+                }
+              },
+              "queryRef": "Campaign Performance.Campaign Type ES",
+              "nativeQueryRef": "Tipo de campaña",
+              "displayName": "Tipo de campaña"
+            }
+          ]
+        },
+        "Size": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Exposed Customers"
+                }
+              },
+              "queryRef": "_Measures.Exposed Customers",
+              "nativeQueryRef": "Clientes expuestos",
+              "displayName": "Clientes expuestos"
+            }
+          ]
+        },
+        "X": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Campaign Coverage Rate"
+                }
+              },
+              "queryRef": "_Measures.Campaign Coverage Rate",
+              "nativeQueryRef": "Cobertura",
+              "active": true,
+              "displayName": "Cobertura"
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Positive Response Rate"
+                }
+              },
+              "queryRef": "_Measures.Positive Response Rate",
+              "nativeQueryRef": "Respuesta positiva",
+              "displayName": "Respuesta positiva"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "legend": [
+        {
+          "properties": {
+            "position": {
+              "expr": {
+                "Literal": {
+                  "Value": "'BottomCenter'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dataPoint": [
+        {
+          "properties": {
+            "fill": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "ThemeDataColor": {
+                      "ColorId": 5,
+                      "Percent": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "selector": {
+            "data": [
+              {
+                "scopeId": {
+                  "Comparison": {
+                    "ComparisonKind": 0,
+                    "Left": {
+                      "Column": {
+                        "Expression": {
+                          "SourceRef": {
+                            "Entity": "Campaign Performance"
+                          }
+                        },
+                        "Property": "Campaign Type ES"
+                      }
+                    },
+                    "Right": {
+                      "Literal": {
+                        "Value": "'Venta cruzada'"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "fill": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "ThemeDataColor": {
+                      "ColorId": 0,
+                      "Percent": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "selector": {
+            "data": [
+              {
+                "scopeId": {
+                  "Comparison": {
+                    "ComparisonKind": 0,
+                    "Left": {
+                      "Column": {
+                        "Expression": {
+                          "SourceRef": {
+                            "Entity": "Campaign Performance"
+                          }
+                        },
+                        "Property": "Campaign Type ES"
+                      }
+                    },
+                    "Right": {
+                      "Literal": {
+                        "Value": "'Activación'"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Cobertura y respuesta de las campañas'"
+                }
+              }
+            },
+            "alignment": {
+              "expr": {
+                "Literal": {
+                  "Value": "'center'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "subTitle": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

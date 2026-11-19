@@ -1,0 +1,265 @@
+table 'Campaign Performance'
+	lineageTag: 595a4d49-676b-4826-9022-81f5f1d4a46d
+
+	column campaign_id
+		dataType: string
+		isHidden
+		lineageTag: 2fa67687-0d64-4bf6-84fa-add36bbc4865
+		summarizeBy: none
+		sourceColumn: campaign_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column campaign_name
+		dataType: string
+		lineageTag: 7d1afaf4-5a6c-4568-833e-b77c47b520ab
+		summarizeBy: none
+		sourceColumn: campaign_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column campaign_type
+		dataType: string
+		lineageTag: 5741297d-44c0-4e27-8fb0-a7f91d5b503e
+		summarizeBy: none
+		sourceColumn: campaign_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column target_product_id
+		dataType: string
+		lineageTag: 4d1eafcf-8add-48c3-8e99-b86a66f2f4dc
+		summarizeBy: none
+		sourceColumn: target_product_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column start_date
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: 35345bcf-14db-454f-a182-0ba43d7913da
+		summarizeBy: none
+		sourceColumn: start_date
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column end_date
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: f1fc4dee-eb69-4126-a698-bb83b36a6174
+		summarizeBy: none
+		sourceColumn: end_date
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column target_customer_type
+		dataType: string
+		lineageTag: 5d0ec77f-e945-4940-8a38-7e84217f2495
+		summarizeBy: none
+		sourceColumn: target_customer_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column campaign_duration_days
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: adca5443-3d83-4ac3-814e-daf33a79b575
+		summarizeBy: sum
+		sourceColumn: campaign_duration_days
+
+		annotation SummarizationSetBy = Automatic
+
+	column selected_customers
+		dataType: int64
+		formatString: 0
+		lineageTag: f644e569-289b-476b-917a-a3bf169c8be4
+		summarizeBy: sum
+		sourceColumn: selected_customers
+
+		annotation SummarizationSetBy = Automatic
+
+	column exposed_customers
+		dataType: int64
+		formatString: 0
+		lineageTag: a6d13449-e4a5-496f-a21a-d776eff95791
+		summarizeBy: sum
+		sourceColumn: exposed_customers
+
+		annotation SummarizationSetBy = Automatic
+
+	column exposure_events
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: c38ad543-055e-44d3-ada7-6e369146f289
+		summarizeBy: sum
+		sourceColumn: exposure_events
+
+		annotation SummarizationSetBy = Automatic
+
+	column exposure_channels
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: b876956d-f2e3-4b58-940b-1966a8ecfee5
+		summarizeBy: sum
+		sourceColumn: exposure_channels
+
+		annotation SummarizationSetBy = Automatic
+
+	column customers_with_response
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: a629c2ce-5e12-46f3-bcb3-6353345681e7
+		summarizeBy: sum
+		sourceColumn: customers_with_response
+
+		annotation SummarizationSetBy = Automatic
+
+	column customers_without_response
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: f293e02d-5480-449e-857b-d97469b257eb
+		summarizeBy: sum
+		sourceColumn: customers_without_response
+
+		annotation SummarizationSetBy = Automatic
+
+	column positive_responders
+		dataType: int64
+		formatString: 0
+		lineageTag: 2969776f-1f11-41c0-be7d-cc0bcb6086e1
+		summarizeBy: sum
+		sourceColumn: positive_responders
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Campaign Type ES' =
+			
+			SWITCH(
+			    UPPER('Campaign Performance'[campaign_type]),
+			    "ACTIVATION", "Activación",
+			    "ACQUISITION", "Adquisición",
+			    "RETENTION", "Retención",
+			    "UPSELL", "Venta adicional",
+			    "CROSS_SELL", "Venta cruzada",
+			    'Campaign Performance'[campaign_type]
+			)
+		lineageTag: 1302fd80-05ee-4b57-811a-dd003c61ffba
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Target Customer Type ES' =
+			
+			SWITCH(
+			    UPPER('Campaign Performance'[target_customer_type]),
+			    "INDIVIDUAL", "Personas",
+			    "BUSINESS", "Empresas",
+			    "BOTH", "Ambos",
+			    'Campaign Performance'[target_customer_type]
+			)
+		lineageTag: 29581994-b745-4c0a-b19c-ab8dd02255c7
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Target Product ES' =
+			
+			SWITCH(
+			    TRUE(),
+			
+			    ISBLANK('Campaign Performance'[target_product_id]),
+			        "Sin producto específico",
+			
+			    'Campaign Performance'[target_product_id] = "P001",
+			        "Caja de ahorro UYU",
+			
+			    'Campaign Performance'[target_product_id] = "P005",
+			        "Cuenta sueldo",
+			
+			    'Campaign Performance'[target_product_id] = "P006",
+			        "Cuenta joven / estudiante",
+			
+			    'Campaign Performance'[target_product_id] = "P008",
+			        "Plazo fijo USD",
+			
+			    'Campaign Performance'[target_product_id] = "P011",
+			        "Tarjeta de crédito premium",
+			
+			    'Campaign Performance'[target_product_id] = "P013",
+			        "Préstamo automotor",
+			
+			    'Campaign Performance'[target_product_id] = "P014",
+			        "Préstamo hipotecario",
+			
+			    'Campaign Performance'[target_product_id] = "P015",
+			        "Préstamo PyME",
+			
+			    'Campaign Performance'[target_product_id] = "P016",
+			        "Línea de crédito empresarial",
+			
+			    'Campaign Performance'[target_product_id] = "P017",
+			        "Préstamo agropecuario",
+			
+			    'Campaign Performance'[target_product_id] = "P018",
+			        "Leasing empresarial",
+			
+			    'Campaign Performance'[target_product_id]
+			)
+		lineageTag: 7ef2b9b5-5397-461d-b232-b8bcb28f4a23
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Campaign Name ES' =
+			
+			SWITCH(
+			    'Campaign Performance'[campaign_name],
+			
+			    "Back to University 2022", "Vuelta a la Universidad 2022",
+			    "BTYT Cerca 2026", "BTYT Cerca 2026",
+			    "BTYT Digital 2022", "BTYT Digital 2022",
+			    "BTYT Eastern Roots 2026", "BTYT Raíces del Este 2026",
+			    "Business Equipment 2025", "Equipamiento Empresarial 2025",
+			    "Business Liquidity 2023", "Liquidez Empresarial 2023",
+			    "Drive with BTYT 2024", "Conducí con BTYT 2024",
+			    "Payroll with BTYT 2021", "Cobrá tu Sueldo con BTYT 2021",
+			    "Payroll with BTYT 2026", "Cobrá tu Sueldo con BTYT 2026",
+			    "Premium Upgrade 2023", "Mejora Premium 2023",
+			    "Premium Upgrade 2026", "Mejora Premium 2026",
+			    "Rural Investment 2021", "Inversión Rural 2021",
+			    "Rural Investment 2025", "Inversión Rural 2025",
+			    "Save in USD 2021", "Ahorrá en Dólares 2021",
+			    "Save in USD 2025", "Ahorrá en Dólares 2025",
+			    "SME Growth 2022", "Crecimiento PyME 2022",
+			    "Stay with BTYT 2024", "Quedate con BTYT 2024",
+			    "Summer East Coast 2024", "Verano en la Costa Este 2024",
+			    "Your First BTYT Account", "Tu Primera Cuenta BTYT",
+			    "Your First Home 2023", "Tu Primera Vivienda 2023",
+			
+			    'Campaign Performance'[campaign_name]
+			)
+		lineageTag: 32274601-f196-468b-8907-57242d3e0f70
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Campaign Performance' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database("localhost:5432", "BTYT"),
+				  #"Navigation 1" = Source{[Schema = "analytics", Item = "campaign_performance"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_ResultType = Table
+

@@ -1,0 +1,34 @@
+table DimCustomerType
+	lineageTag: 5ee5cd14-0ab1-4c12-a211-9df23bf63e46
+
+	column customer_type
+		lineageTag: 06e1fc45-9342-4ab0-9dbd-fdecfdedac27
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [customer_type]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Customer Type Label'
+		lineageTag: b4da0175-2f28-431e-aceb-e490898d114e
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Customer Type Label]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition DimCustomerType = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "customer_type", STRING,
+				    "Customer Type Label", STRING,
+				    {
+				        {"INDIVIDUAL", "Personas"},
+				        {"BUSINESS", "Empresas"}
+				    }
+				)
+
+	annotation PBI_Id = 63484a194a8b4520aa41631a892628d1
+

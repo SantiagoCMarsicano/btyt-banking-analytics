@@ -1,0 +1,194 @@
+table 'Transactions and Channels'
+	lineageTag: d39b5e35-1d91-4c92-acf8-e9327a6892ad
+
+	column year_month
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: b33f688b-31a2-489e-8908-d9e12bf13705
+		summarizeBy: none
+		sourceColumn: year_month
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column channel
+		dataType: string
+		lineageTag: f1621764-5bff-454c-85db-d155fb957ff3
+		summarizeBy: none
+		sourceColumn: channel
+
+		annotation SummarizationSetBy = Automatic
+
+	column transaction_type
+		dataType: string
+		lineageTag: 68160859-924d-4466-b244-8f42b83a6ea1
+		summarizeBy: none
+		sourceColumn: transaction_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column direction
+		dataType: string
+		isHidden
+		lineageTag: 11efe56a-fd6d-4f1f-ba29-06f70791da6e
+		summarizeBy: none
+		sourceColumn: direction
+
+		annotation SummarizationSetBy = Automatic
+
+	column transfer_scope
+		dataType: string
+		isHidden
+		lineageTag: 3d540cf5-0352-4e1e-8c3c-126b3d39be71
+		summarizeBy: none
+		sourceColumn: transfer_scope
+
+		annotation SummarizationSetBy = Automatic
+
+	column currency
+		dataType: string
+		lineageTag: 4574415e-e160-4d33-a2c0-a0dd7712861b
+		summarizeBy: none
+		sourceColumn: currency
+
+		annotation SummarizationSetBy = Automatic
+
+	column distinct_accounts
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: e07f2c38-dd36-43b5-8ac3-5cf8c0e372d9
+		summarizeBy: sum
+		sourceColumn: distinct_accounts
+
+		annotation SummarizationSetBy = Automatic
+
+	column distinct_customers
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 1d773744-7a8c-4556-b1fe-59da743a985c
+		summarizeBy: sum
+		sourceColumn: distinct_customers
+
+		annotation SummarizationSetBy = Automatic
+
+	column attempted_transaction_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 9e9ef4c5-6ce8-4e1e-b8d0-7b99f3b97f6b
+		summarizeBy: sum
+		sourceColumn: attempted_transaction_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column completed_transaction_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 59be0872-98e6-4f4b-867e-5eac4728f61f
+		summarizeBy: sum
+		sourceColumn: completed_transaction_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column failed_transaction_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 4746a5e9-a0b2-4d80-8bd5-5da83c10dd60
+		summarizeBy: sum
+		sourceColumn: failed_transaction_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column completed_transaction_volume
+		dataType: double
+		lineageTag: 5a9d3289-c1d3-4c1c-af75-a9bc99793816
+		summarizeBy: sum
+		sourceColumn: completed_transaction_volume
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column completed_external_transfer_count
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 7b07ecb3-5911-428c-b500-387855b4e1bb
+		summarizeBy: sum
+		sourceColumn: completed_external_transfer_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column completed_transfer_count
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: e1b228ce-0710-438b-aced-3e57ba637a2f
+		summarizeBy: sum
+		sourceColumn: completed_transfer_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Channel Label' =
+			
+			SWITCH(
+			    'Transactions and Channels'[channel],
+			    "MOBILE", "Móvil",
+			    "WEB", "Web",
+			    "BRANCH", "Sucursal",
+			    "ATM", "Cajero automático",
+			    "AUTOMATIC", "Automático",
+			    "POS", "POS",
+			    "Otro"
+			)
+		lineageTag: d1e76c04-90f4-4a09-bf19-da4c69eb9648
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Transaction Type Label' =
+			
+			SWITCH(
+			    'Transactions and Channels'[transaction_type],
+			    "TRANSFER_IN", "Transferencia recibida",
+			    "TRANSFER_OUT", "Transferencia enviada",
+			    "DEBIT_PURCHASE", "Compra con débito",
+			    "SERVICE_PAYMENT", "Pago de servicios",
+			    "CASH_WITHDRAWAL", "Retiro de efectivo",
+			    "CASH_DEPOSIT", "Depósito de efectivo",
+			    "LOAN_PAYMENT", "Pago de préstamo",
+			    "INTEREST_CREDIT", "Crédito de intereses",
+			    "LOAN_DISBURSEMENT", "Desembolso de préstamo",
+			    "Otro"
+			)
+		lineageTag: f348e7ce-6f06-4611-8dfa-759593e80b79
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_type
+		dataType: string
+		lineageTag: b8bb3a03-a86a-4a2c-aa1b-9c77a12aeb7d
+		summarizeBy: none
+		sourceColumn: customer_type
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Transactions and Channels' = m
+		mode: import
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5432", "BTYT"),
+				    Navigation = Source{[
+				        Schema="analytics",
+				        Item="transaction_channel_monthly_bi"
+				    ]}[Data]
+				in
+				    Navigation
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

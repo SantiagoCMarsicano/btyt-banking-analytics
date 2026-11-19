@@ -1,0 +1,48 @@
+table DimRelationshipDepth
+	lineageTag: 62f46126-d6f8-430e-ae66-5cd47dd06e4b
+
+	column Depth
+		lineageTag: 0d271f24-694f-4a8c-a13d-e5837151de60
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Depth]
+		sortByColumn: SortOrder
+
+		annotation SummarizationSetBy = Automatic
+
+	column Score
+		formatString: 0
+		lineageTag: 31bab26a-f04a-4dcf-a7b5-e8b814d5b121
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Score]
+
+		annotation SummarizationSetBy = Automatic
+
+	column SortOrder
+		formatString: 0
+		lineageTag: 92cd12a4-f852-4234-8814-511e0b627fed
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [SortOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition DimRelationshipDepth = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "Depth", STRING,
+				    "Score", INTEGER,
+				    "SortOrder", INTEGER,
+				    {
+				        {"Básica", 1, 1},
+				        {"Vinculada", 2, 2},
+				        {"Profunda", 3, 3},
+				        {"Integral", 4, 4}
+				    }
+				)
+
+	annotation PBI_Id = 134104b2043b4ecba0da3fb91a4eb292
+

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "06701fe526560fea40b8",
+  "position": {
+    "x": 1008,
+    "y": 32,
+    "z": 11000,
+    "height": 66.2580215683664,
+    "width": 258,
+    "tabOrder": 11000
+  },
+  "visual": {
+    "visualType": "slicer",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Branch Performance"
+                    }
+                  },
+                  "Property": "Branch Size ES"
+                }
+              },
+              "queryRef": "Branch Performance.Branch Size ES",
+              "nativeQueryRef": "Tamaño de sucursal",
+              "active": true,
+              "displayName": "Tamaño de sucursal"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "data": [
+        {
+          "properties": {
+            "mode": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Dropdown'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "general": [
+        {
+          "properties": {}
+        }
+      ]
+    },
+    "syncGroup": {
+      "groupName": "Branch Size ES",
+      "fieldChanges": true,
+      "filterChanges": true
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

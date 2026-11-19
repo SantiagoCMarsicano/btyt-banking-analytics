@@ -1,0 +1,90 @@
+table 'Customer Monthly'
+	lineageTag: 33e53b97-0fc2-490f-b270-8e74d2990745
+
+	column year_month
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: cda6a68d-a8a6-4222-95f0-8451fe4041d3
+		summarizeBy: none
+		sourceColumn: year_month
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column customer_id
+		dataType: string
+		lineageTag: a2e771f9-1795-4d14-80b8-2bd0f87b896a
+		summarizeBy: none
+		sourceColumn: customer_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_accounts
+		dataType: int64
+		formatString: 0
+		lineageTag: 6a050e3f-8da2-4595-8eb6-60094eec4e68
+		summarizeBy: sum
+		sourceColumn: active_accounts
+
+		annotation SummarizationSetBy = Automatic
+
+	column average_deposits_uyu
+		dataType: double
+		lineageTag: 4ecf48de-a8f2-43c2-8268-6da8ba94d89f
+		summarizeBy: sum
+		sourceColumn: average_deposits_uyu
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column active_loans
+		dataType: int64
+		formatString: 0
+		lineageTag: e9f6f824-91d9-4676-aab7-685920f1dfa7
+		summarizeBy: sum
+		sourceColumn: active_loans
+
+		annotation SummarizationSetBy = Automatic
+
+	column outstanding_balance_uyu
+		dataType: double
+		lineageTag: 560ba698-95ad-458d-8359-d52439b00081
+		summarizeBy: sum
+		sourceColumn: outstanding_balance_uyu
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column transaction_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 24feaccf-0cf7-45d0-b584-1e8f5db02967
+		summarizeBy: sum
+		sourceColumn: transaction_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column transaction_volume_uyu
+		dataType: double
+		lineageTag: eb3c73d1-edb0-498b-87cc-a293cfd5ee9c
+		summarizeBy: sum
+		sourceColumn: transaction_volume_uyu
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition 'Customer Monthly' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database("localhost:5432", "BTYT"),
+				  #"Navigation 1" = Source{[Schema = "analytics", Item = "customer_monthly"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_ResultType = Table
+

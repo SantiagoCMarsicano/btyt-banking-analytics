@@ -1,0 +1,481 @@
+table 'Customer Accounts'
+	lineageTag: 1c4da49c-f92c-43b0-a09c-5cd1d3d37f14
+
+	column customer_id
+		dataType: string
+		lineageTag: 587b4217-8654-4259-a4bd-da44a630ad1c
+		summarizeBy: none
+		sourceColumn: customer_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_type
+		dataType: string
+		lineageTag: ba38727e-c3f2-4152-a03f-3540a68d08f8
+		summarizeBy: none
+		sourceColumn: customer_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column nationality
+		dataType: string
+		isHidden
+		lineageTag: 79d924ec-d72a-4445-9bdf-68f5d4a6444b
+		summarizeBy: none
+		sourceColumn: nationality
+
+		annotation SummarizationSetBy = Automatic
+
+	column birth_year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 091027a0-957f-4682-ae99-d1167ee0f6e7
+		summarizeBy: sum
+		sourceColumn: birth_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column gender
+		dataType: string
+		isHidden
+		lineageTag: bf2c542a-674a-41da-b5ad-4a71961400c7
+		summarizeBy: none
+		sourceColumn: gender
+
+		annotation SummarizationSetBy = Automatic
+
+	column residence_country
+		dataType: string
+		isHidden
+		lineageTag: 53a4b863-7f98-4921-876d-271e717acfed
+		summarizeBy: none
+		sourceColumn: residence_country
+
+		annotation SummarizationSetBy = Automatic
+
+	column residence_department
+		dataType: string
+		lineageTag: c86a865b-2871-4654-a5fe-7501d200c196
+		summarizeBy: none
+		sourceColumn: residence_department
+
+		annotation SummarizationSetBy = Automatic
+
+	column residence_locality
+		dataType: string
+		isHidden
+		lineageTag: 93a3c80d-ab42-4edf-a65a-3a0b54a8b67d
+		summarizeBy: none
+		sourceColumn: residence_locality
+
+		annotation SummarizationSetBy = Automatic
+
+	column primary_branch_id
+		dataType: string
+		isHidden
+		lineageTag: 32edccb8-fefe-4d38-af94-579f2430a1dc
+		summarizeBy: none
+		sourceColumn: primary_branch_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column registration_year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 6bca988b-ff04-4f75-9ee6-0d03d87bf3a8
+		summarizeBy: sum
+		sourceColumn: registration_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_status
+		dataType: string
+		isHidden
+		lineageTag: ceb472ea-a3ba-4922-af7f-b98fbf837698
+		summarizeBy: none
+		sourceColumn: customer_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column closing_year
+		dataType: int64
+		formatString: 0
+		lineageTag: 58baadde-475f-4e5c-9940-7f86ad8b9858
+		summarizeBy: sum
+		sourceColumn: closing_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column employment_status
+		dataType: string
+		lineageTag: 551cf767-2f09-437e-b721-e6a2e3bafba4
+		summarizeBy: none
+		sourceColumn: employment_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column monthly_income
+		dataType: double
+		isHidden
+		lineageTag: 61b21369-cc36-42ce-a16e-7bb56ac0c59c
+		summarizeBy: sum
+		sourceColumn: monthly_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column business_sector
+		dataType: string
+		isHidden
+		lineageTag: 98683032-a336-4c71-9258-b8a4cddb92e6
+		summarizeBy: none
+		sourceColumn: business_sector
+
+		annotation SummarizationSetBy = Automatic
+
+	column company_size
+		dataType: string
+		lineageTag: a43d909a-a340-4559-80d7-6d4cf2e5ce46
+		summarizeBy: none
+		sourceColumn: company_size
+
+		annotation SummarizationSetBy = Automatic
+
+	column foundation_year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: ab8d46bd-5ee2-471d-9b38-2f172f5798cd
+		summarizeBy: sum
+		sourceColumn: foundation_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column annual_revenue
+		dataType: double
+		isHidden
+		lineageTag: 3f400f84-158c-4a8b-8260-d8165444ef61
+		summarizeBy: sum
+		sourceColumn: annual_revenue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_accounts
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 38aed965-aa95-4e7e-aa1b-02a242c6f185
+		summarizeBy: sum
+		sourceColumn: total_accounts
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_accounts
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 8736a23b-4eb0-4c6b-8afe-47adf10a82ce
+		summarizeBy: sum
+		sourceColumn: active_accounts
+
+		annotation SummarizationSetBy = Automatic
+
+	column non_active_accounts
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 594aab4c-d7d8-450f-8544-786ad45a69e5
+		summarizeBy: sum
+		sourceColumn: non_active_accounts
+
+		annotation SummarizationSetBy = Automatic
+
+	column distinct_account_products
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 25d68ee6-5882-4c96-bfa3-90d084b3a5f3
+		summarizeBy: sum
+		sourceColumn: distinct_account_products
+
+		annotation SummarizationSetBy = Automatic
+
+	column distinct_product_families
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: baf30eb2-4ede-44e1-a9e6-f657f6deb75b
+		summarizeBy: sum
+		sourceColumn: distinct_product_families
+
+		annotation SummarizationSetBy = Automatic
+
+	column account_currencies
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 4d5bcf0a-f1e3-4d76-9879-b7a02545420d
+		summarizeBy: sum
+		sourceColumn: account_currencies
+
+		annotation SummarizationSetBy = Automatic
+
+	column first_account_opening_year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: c1fb0eb8-dd6f-4378-89b5-b9750efc2bd4
+		summarizeBy: sum
+		sourceColumn: first_account_opening_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column latest_account_opening_year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: cdf6dce2-9ee5-41b7-84ab-fe8edce2fce7
+		summarizeBy: sum
+		sourceColumn: latest_account_opening_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column target_aligned_accounts
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: fbaf2586-f75d-46ad-a0ac-fd85305668d4
+		summarizeBy: sum
+		sourceColumn: target_aligned_accounts
+
+		annotation SummarizationSetBy = Automatic
+
+	column target_eligible_accounts
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 622735f3-3c89-4d59-99fe-ecac4a8a19a5
+		summarizeBy: sum
+		sourceColumn: target_eligible_accounts
+
+		annotation SummarizationSetBy = Automatic
+
+	column total_cards
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 2af0631c-55d8-4490-a40b-d0ed1d918dc2
+		summarizeBy: sum
+		sourceColumn: total_cards
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_cards
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 2a0fc4f3-0551-4c99-9f66-0116953ee4a8
+		summarizeBy: sum
+		sourceColumn: active_cards
+
+		annotation SummarizationSetBy = Automatic
+
+	column non_active_cards
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: a6302650-9c13-44c1-bc93-d7a33ea69dd2
+		summarizeBy: sum
+		sourceColumn: non_active_cards
+
+		annotation SummarizationSetBy = Automatic
+
+	column first_card_issue_year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 59c48072-af19-4c68-878e-7232f887e8e6
+		summarizeBy: sum
+		sourceColumn: first_card_issue_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column latest_card_issue_year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 7663ca7a-62cf-4e5c-a7f3-8e1c75a6dffb
+		summarizeBy: sum
+		sourceColumn: latest_card_issue_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column has_active_account
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 39ed4d57-1a05-43dc-8c1c-b530b197290c
+		summarizeBy: sum
+		sourceColumn: has_active_account
+
+		annotation SummarizationSetBy = Automatic
+
+	column has_active_card
+		dataType: int64
+		formatString: 0
+		lineageTag: 8297338f-5270-4a20-bcf2-39bcbc249731
+		summarizeBy: sum
+		sourceColumn: has_active_card
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_name
+		dataType: string
+		lineageTag: f49c7f83-7763-4fad-a717-1d3af8a76d60
+		summarizeBy: none
+		sourceColumn: customer_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_label
+		dataType: string
+		isHidden
+		lineageTag: 61103e1a-1f65-4f51-81eb-7487ec79f051
+		summarizeBy: none
+		sourceColumn: customer_label
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Residence Department' =
+			
+			IF(
+			    ISBLANK('Customer Accounts'[residence_department])
+			        || TRIM('Customer Accounts'[residence_department]) = "",
+			    "Extranjeros",
+			    'Customer Accounts'[residence_department]
+			)
+		lineageTag: 08e3df66-2773-4193-bec2-a66f72212f96
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_accounts_1m
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 323d4314-bc2c-4016-8378-59ecf889b815
+		summarizeBy: sum
+		sourceColumn: active_accounts_1m
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_accounts_3m
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: d4ff9741-ff69-433c-b533-1542c4e3123a
+		summarizeBy: sum
+		sourceColumn: active_accounts_3m
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_accounts_6m
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 0a17f950-1eb6-4a90-a53a-504c91bd4069
+		summarizeBy: sum
+		sourceColumn: active_accounts_6m
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_accounts_12m
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 768fac30-12b1-4172-9c44-d228443d0cbe
+		summarizeBy: sum
+		sourceColumn: active_accounts_12m
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_accounts_all
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 3ce2f6ea-2897-4249-b215-385c579bd0b5
+		summarizeBy: sum
+		sourceColumn: active_accounts_all
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Customer Segment' =
+			
+			SWITCH(
+			    TRUE(),
+			
+			    'Customer Accounts'[customer_type] = "INDIVIDUAL"
+			        && 'Customer Accounts'[employment_status] = "EMPLOYED", "Empleado",
+			
+			    'Customer Accounts'[customer_type] = "INDIVIDUAL"
+			        && 'Customer Accounts'[employment_status] = "SELF_EMPLOYED", "Independiente",
+			
+			    'Customer Accounts'[customer_type] = "INDIVIDUAL"
+			        && 'Customer Accounts'[employment_status] = "STUDENT", "Estudiante",
+			
+			    'Customer Accounts'[customer_type] = "INDIVIDUAL"
+			        && 'Customer Accounts'[employment_status] = "RETIRED", "Jubilado",
+			
+			    'Customer Accounts'[customer_type] = "INDIVIDUAL"
+			        && 'Customer Accounts'[employment_status] = "UNEMPLOYED", "Desempleado",
+			
+			    'Customer Accounts'[customer_type] = "INDIVIDUAL", "Otros individuos",
+			
+			    'Customer Accounts'[customer_type] = "BUSINESS"
+			        && 'Customer Accounts'[company_size] = "MICRO", "Microempresa",
+			
+			    'Customer Accounts'[customer_type] = "BUSINESS"
+			        && 'Customer Accounts'[company_size] = "SMALL", "Empresa pequeña",
+			
+			    'Customer Accounts'[customer_type] = "BUSINESS"
+			        && 'Customer Accounts'[company_size] = "MEDIUM", "Empresa mediana",
+			
+			    'Customer Accounts'[customer_type] = "BUSINESS"
+			        && 'Customer Accounts'[company_size] = "LARGE", "Empresa grande",
+			
+			    "Otro"
+			)
+		lineageTag: c9c2b0e6-643d-4c60-887e-b68a2be7b1be
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Etiqueta para rankings: razón social para empresas, 'Cliente' + ID para personas.
+	column 'Customer Display' =
+			
+			IF(
+			    'Customer Accounts'[customer_type] = "BUSINESS",
+			    'Customer Accounts'[customer_name],
+			    "Cliente " & 'Customer Accounts'[customer_id]
+			)
+		lineageTag: 3d0ecc8c-091c-481d-9630-cb947794c7bd
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Customer Accounts' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database("localhost:5432", "BTYT"),
+				  #"Navigation 1" = Source{[Schema = "analytics", Item = "customer_account_summary"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_ResultType = Table
+

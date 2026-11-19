@@ -1,0 +1,112 @@
+table DimDate
+	lineageTag: ef572a2b-7542-4404-81e1-9ddd05e011eb
+	dataCategory: Time
+
+	column Date
+		isKey
+		formatString: General Date
+		lineageTag: 116f237e-837b-4149-9205-a5e3197b1638
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Date]
+		sortByColumn: YearMonth
+
+		annotation SummarizationSetBy = Automatic
+
+	column Year
+		formatString: 0
+		lineageTag: 27a3f2e2-8c1f-4fdd-a2d1-eb0265462f3e
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Year]
+
+		annotation SummarizationSetBy = Automatic
+
+	column MonthNumber
+		formatString: 0
+		lineageTag: 058d3c8b-3eb5-4c18-8065-9796c1617f3d
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [MonthNumber]
+
+		annotation SummarizationSetBy = Automatic
+
+	column Month
+		lineageTag: b79d7760-c404-4b89-8c38-7e87491731b6
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Month]
+		sortByColumn: MonthNumber
+
+		annotation SummarizationSetBy = Automatic
+
+	column MonthName
+		lineageTag: de82d953-6c58-4577-bfcd-709384127ee3
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [MonthName]
+		sortByColumn: MonthNumber
+
+		annotation SummarizationSetBy = Automatic
+
+	column Quarter
+		lineageTag: fc6bb5db-5230-4339-bde6-d4fd326c6540
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Quarter]
+
+		annotation SummarizationSetBy = Automatic
+
+	column YearMonth
+		lineageTag: 27708816-f8bd-48c7-b60b-595efb1199c2
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [YearMonth]
+
+		annotation SummarizationSetBy = Automatic
+
+	column YearMonthSort
+		formatString: 0
+		lineageTag: c2e613ff-f982-4b8c-b5b5-01b349b4c3e8
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [YearMonthSort]
+		sortByColumn: YearMonth
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'UYU per USD' =
+			
+			SWITCH(
+			    'DimDate'[Year],
+			    2021, 43.6,
+			    2022, 41.2,
+			    2023, 38.8,
+			    2024, 40.3,
+			    2025, 42.0,
+			    2026, 43.5
+			)
+		lineageTag: 402f4bb9-b696-420c-92ff-467989f3f7d4
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition DimDate = calculated
+		mode: import
+		source =
+				
+				ADDCOLUMNS(
+				    CALENDARAUTO(12),
+				    "Year", YEAR([Date]),
+				    "MonthNumber", MONTH([Date]),
+				    "Month", FORMAT([Date], "MMM", "en-US"),
+				    "MonthName", FORMAT([Date], "MMMM", "en-US"),
+				    "Quarter", "Q" & FORMAT([Date], "Q"),
+				    "YearMonth", FORMAT([Date], "yyyy-MM"),
+				    "YearMonthSort", YEAR([Date]) * 100 + MONTH([Date])
+				)
+
+	annotation PBI_Id = 6732768168a04c008d7234c5dc9b4098
+

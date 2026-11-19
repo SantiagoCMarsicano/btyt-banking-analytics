@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "c9442398e2f817a8ae7f",
+  "displayName": "Transacciones y Canales",
+  "displayOption": "FitToPage",
+  "height": 1080,
+  "width": 1920,
+  "visualInteractions": [
+    {
+      "source": "c6fe0c9c9bc907ea958c",
+      "target": "bcd527d293ad2d5c6702",
+      "type": "DataFilter"
+    },
+    {
+      "source": "c6fe0c9c9bc907ea958c",
+      "target": "b15646dbe154f5397984",
+      "type": "DataFilter"
+    },
+    {
+      "source": "c6fe0c9c9bc907ea958c",
+      "target": "f0dceb4542b9f56b9f6a",
+      "type": "DataFilter"
+    },
+    {
+      "source": "c6fe0c9c9bc907ea958c",
+      "target": "67e2712a5aef24759a95",
+      "type": "DataFilter"
+    },
+    {
+      "source": "c6fe0c9c9bc907ea958c",
+      "target": "249b5ed7485abf41e65f",
+      "type": "DataFilter"
+    },
+    {
+      "source": "c6fe0c9c9bc907ea958c",
+      "target": "46f07f68063820ab6064",
+      "type": "DataFilter"
+    }
+  ]
+}

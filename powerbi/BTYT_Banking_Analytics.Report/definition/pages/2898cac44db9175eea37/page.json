@@ -1,0 +1,90 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "2898cac44db9175eea37",
+  "displayName": "Clientes y Cuentas",
+  "displayOption": "FitToPage",
+  "height": 1080,
+  "width": 1920,
+  "visualInteractions": [
+    {
+      "source": "f8ed4f5bb2f71f5a784e",
+      "target": "410af39b71659c3405cb",
+      "type": "DataFilter"
+    },
+    {
+      "source": "f8ed4f5bb2f71f5a784e",
+      "target": "9a7768bc4f334b4f8372",
+      "type": "DataFilter"
+    },
+    {
+      "source": "7e7b4bc046f8fbb9d785",
+      "target": "9a7768bc4f334b4f8372",
+      "type": "DataFilter"
+    },
+    {
+      "source": "855a47a4b8c24f4769fa",
+      "target": "4f248905288be5d74ac1",
+      "type": "DataFilter"
+    },
+    {
+      "source": "855a47a4b8c24f4769fa",
+      "target": "97bcce0cab1407a171a1",
+      "type": "DataFilter"
+    },
+    {
+      "source": "855a47a4b8c24f4769fa",
+      "target": "dc7b8473a8bf22a761f3",
+      "type": "DataFilter"
+    },
+    {
+      "source": "855a47a4b8c24f4769fa",
+      "target": "410af39b71659c3405cb",
+      "type": "DataFilter"
+    },
+    {
+      "source": "b30a9d2e33f3a562d1df",
+      "target": "0b5862b6a12aa4e02c66",
+      "type": "DataFilter"
+    },
+    {
+      "source": "b30a9d2e33f3a562d1df",
+      "target": "55156f95a7ba655c1452",
+      "type": "DataFilter"
+    },
+    {
+      "source": "b30a9d2e33f3a562d1df",
+      "target": "7e7b4bc046f8fbb9d785",
+      "type": "DataFilter"
+    },
+    {
+      "source": "7e7b4bc046f8fbb9d785",
+      "target": "55156f95a7ba655c1452",
+      "type": "DataFilter"
+    },
+    {
+      "source": "b30a9d2e33f3a562d1df",
+      "target": "9a7768bc4f334b4f8372",
+      "type": "DataFilter"
+    },
+    {
+      "source": "b30a9d2e33f3a562d1df",
+      "target": "97bcce0cab1407a171a1",
+      "type": "DataFilter"
+    },
+    {
+      "source": "b30a9d2e33f3a562d1df",
+      "target": "dc7b8473a8bf22a761f3",
+      "type": "DataFilter"
+    },
+    {
+      "source": "b30a9d2e33f3a562d1df",
+      "target": "410af39b71659c3405cb",
+      "type": "DataFilter"
+    },
+    {
+      "source": "b30a9d2e33f3a562d1df",
+      "target": "4f248905288be5d74ac1",
+      "type": "DataFilter"
+    }
+  ]
+}

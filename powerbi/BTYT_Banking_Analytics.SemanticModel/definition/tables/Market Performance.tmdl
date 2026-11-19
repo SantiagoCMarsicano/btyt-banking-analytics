@@ -1,0 +1,233 @@
+table 'Market Performance'
+	lineageTag: f67a5e28-24bd-4b71-b51e-3fe168e41cb0
+
+	column year
+		dataType: int64
+		formatString: 0
+		lineageTag: 59201070-c211-4015-8b13-93d874ee633c
+		summarizeBy: sum
+		sourceColumn: year
+
+		annotation SummarizationSetBy = Automatic
+
+	column bank_id
+		dataType: string
+		isHidden
+		lineageTag: 69058bc4-6811-480e-bce6-dcbeb876a072
+		summarizeBy: none
+		sourceColumn: bank_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column bank_name
+		dataType: string
+		lineageTag: 13ee082d-6fd5-417c-b200-230504eec3f4
+		summarizeBy: none
+		sourceColumn: bank_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column bank_scope
+		dataType: string
+		isHidden
+		lineageTag: b0c55994-9f05-40c2-865e-beff89711805
+		summarizeBy: none
+		sourceColumn: bank_scope
+
+		annotation SummarizationSetBy = Automatic
+
+	column bank_type
+		dataType: string
+		lineageTag: e132235a-54a1-4bb6-b4a4-749f77c6de83
+		summarizeBy: none
+		sourceColumn: bank_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column operating_country
+		dataType: string
+		isHidden
+		lineageTag: 89f92152-cfb6-430a-9aff-842ed051a867
+		summarizeBy: none
+		sourceColumn: operating_country
+
+		annotation SummarizationSetBy = Automatic
+
+	column bank_profile
+		dataType: string
+		isHidden
+		lineageTag: a29ed661-efdb-4b43-8d75-b89d7e5e04cd
+		summarizeBy: none
+		sourceColumn: bank_profile
+
+		annotation SummarizationSetBy = Automatic
+
+	column bank_status
+		dataType: string
+		isHidden
+		lineageTag: a1588752-489b-42bd-9723-5d1635be0407
+		summarizeBy: none
+		sourceColumn: bank_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column market_weight
+		dataType: double
+		lineageTag: f8ce17e2-72ad-4a87-82d4-8fe0376b6e13
+		summarizeBy: sum
+		sourceColumn: market_weight
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column revenue
+		dataType: double
+		isHidden
+		lineageTag: 94aa7a1a-9d7c-4b4c-a06c-85b9072ee067
+		summarizeBy: sum
+		sourceColumn: revenue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column operating_costs
+		dataType: double
+		isHidden
+		lineageTag: bfb91c22-872a-4a44-9848-7e898d88af7b
+		summarizeBy: sum
+		sourceColumn: operating_costs
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column net_income
+		dataType: double
+		isHidden
+		lineageTag: 707b21cd-4493-4222-8d19-711398e00169
+		summarizeBy: sum
+		sourceColumn: net_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_assets
+		dataType: double
+		isHidden
+		lineageTag: 02babeb6-8bcf-46b0-94b1-edb224bfd006
+		summarizeBy: sum
+		sourceColumn: total_assets
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_deposits
+		dataType: double
+		isHidden
+		lineageTag: 90b1113c-11c1-495e-8c24-bafc10dfb83f
+		summarizeBy: sum
+		sourceColumn: total_deposits
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_loans
+		dataType: double
+		isHidden
+		lineageTag: 38df62d0-6339-46fa-96d9-153394ac54b7
+		summarizeBy: sum
+		sourceColumn: total_loans
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column equity
+		dataType: double
+		isHidden
+		lineageTag: d75753db-decf-41e3-9290-7c817f685817
+		summarizeBy: sum
+		sourceColumn: equity
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column reporting_currency
+		dataType: string
+		isHidden
+		lineageTag: 554c6f70-3eeb-4aad-8747-ad590edf733c
+		summarizeBy: none
+		sourceColumn: reporting_currency
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_btyt
+		dataType: int64
+		formatString: 0
+		lineageTag: 261bd4e3-49d1-494c-9453-d605e345b367
+		summarizeBy: sum
+		sourceColumn: is_btyt
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Bank Type ES' =
+			
+			SWITCH(
+			    UPPER('Market Performance'[bank_type]),
+			    "COMMERCIAL_BANK", "Banco comercial",
+			    "CORPORATE_BANK", "Banco corporativo",
+			    "MORTGAGE_BANK", "Banco hipotecario",
+			    "PRIVATE_BANK", "Banco privado",
+			    "PUBLIC_BANK", "Banco público",
+			    "INTERNAL", "BTYT",
+			    'Market Performance'[bank_type]
+			)
+		lineageTag: bb1f421a-0145-41ee-930f-756e6db483a5
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Bank Name Group' =
+			
+			SWITCH(
+			    TRUE(),
+			    'Market Performance'[bank_name] IN {
+			        "BHU",
+			        "BTG Pactual Uruguay",
+			        "Bandes",
+			        "Banque Heritage Uruguay"
+			    }, "Otros",
+			    'Market Performance'[bank_name]
+			)
+		lineageTag: d1dc6f49-de4f-49cf-9d7e-89f96c3e6d4f
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Fecha de cierre del año (31/12) para relacionar la cuota anual con DimDate.
+	column 'Year Date' = DATE('Market Performance'[year], 12, 31)
+		dataType: dateTime
+		isHidden
+		formatString: Short Date
+		lineageTag: 7aeec21e-99b3-404f-a37c-ebcb5613d88a
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Market Performance' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database("localhost:5432", "BTYT"),
+				  #"Navigation 1" = Source{[Schema = "analytics", Item = "market_performance_yearly"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_ResultType = Table
+

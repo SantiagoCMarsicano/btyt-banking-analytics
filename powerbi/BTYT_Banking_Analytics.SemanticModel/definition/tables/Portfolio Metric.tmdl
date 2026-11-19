@@ -1,0 +1,41 @@
+table 'Portfolio Metric'
+	lineageTag: f9795304-d16c-4dbe-9dad-cf3801f7a31f
+
+	column Metric
+		lineageTag: 4992630d-94ad-4943-bc37-88576b4fa05e
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Metric]
+		sortByColumn: SortOrder
+
+		annotation SummarizationSetBy = Automatic
+
+	column SortOrder
+		formatString: 0
+		lineageTag: dd4cbd26-0a91-49f3-be3b-7b98805a67d3
+		isDefaultLabel
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [SortOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Portfolio Metric' = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "Metric", STRING,
+				    "SortOrder", INTEGER,
+				    {
+				        {"Depósitos", 1},
+				        {"Deuda vigente", 2},
+				        {"Volumen transaccionado", 3},
+				        {"Transacciones", 4},
+				        {"Cuentas activas", 5},
+				        {"Préstamos activos", 6}
+				    }
+				)
+
+	annotation PBI_Id = 405bdc530f104552bf9299a76e84b47a
+

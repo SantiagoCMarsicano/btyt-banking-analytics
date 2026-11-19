@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "SemanticModel",
+    "displayName": "BTYT_Banking_Analytics"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "f8bac0a6-05d4-4932-9159-e2484473f5cf"
+  }
+}

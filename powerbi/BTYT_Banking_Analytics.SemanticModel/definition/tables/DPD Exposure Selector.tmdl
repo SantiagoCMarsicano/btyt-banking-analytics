@@ -1,0 +1,48 @@
+table 'DPD Exposure Selector'
+	lineageTag: 41cac74d-2a77-4ef2-8f59-3f3503f1c007
+
+	column 'DPD Exposure Selector'
+		lineageTag: 9f5d3ffb-21f6-488d-862c-59f5e0b407a5
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'DPD Exposure Selector Order'
+
+		relatedColumnDetails
+			groupByColumn: 'DPD Exposure Selector Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'DPD Exposure Selector Fields'
+		isHidden
+		lineageTag: f5e1a023-20d4-4ed4-a3ee-d3a9f2e28330
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'DPD Exposure Selector Order'
+
+		extendedProperty ParameterMetadata =
+				{
+				  "version": 3,
+				  "kind": 2
+				}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'DPD Exposure Selector Order'
+		isHidden
+		formatString: 0
+		lineageTag: ddc9a440-d2c7-4728-b01c-d0b4f91e47fe
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'DPD Exposure Selector' = calculated
+		mode: import
+		source =
+				{
+				    ("30+ DPD", NAMEOF('_Measures'[30+ DPD Exposure]), 0),
+				    ("90+ DPD", NAMEOF('_Measures'[90+ DPD Exposure]), 1)
+				}
+
+	annotation PBI_Id = d65216e6be8b4c9295e11283dfa3ebe6
+

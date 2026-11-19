@@ -1,0 +1,50 @@
+table 'Customer Ranking Metric'
+	lineageTag: 548a3b1a-58e7-45a9-9c19-d7dfd0a5dafd
+
+	column Parameter
+		lineageTag: 2f5ef4ad-5ed5-4b08-a924-a6856894ead4
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Parameter Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Parameter Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Parameter Fields'
+		lineageTag: fba50846-a990-4a63-a9d0-152e2cb78aa9
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Parameter Order'
+
+		extendedProperty ParameterMetadata =
+				{
+				  "version": 3,
+				  "kind": 2
+				}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Parameter Order'
+		formatString: 0
+		lineageTag: 444dcab7-aacd-485c-bb0e-ce308b658c89
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Customer Ranking Metric' = calculated
+		mode: import
+		source = ```
+				{
+				    ("Volumen transaccionado", NAMEOF('_Measures'[Transaction Volume]), 0),
+				    ("Deuda vigente", NAMEOF('_Measures'[Outstanding Debt]), 1),
+				    ("Depósitos", NAMEOF('_Measures'[Customer Deposits]), 2)
+				   
+				    
+				}
+				```
+
+	annotation PBI_Id = b6a431e1550f4c26b510d5293d6300cd
+

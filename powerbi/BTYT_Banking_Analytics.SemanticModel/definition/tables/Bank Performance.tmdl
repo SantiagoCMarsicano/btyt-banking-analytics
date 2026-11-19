@@ -1,0 +1,252 @@
+table 'Bank Performance'
+	lineageTag: 4baec10c-3c7a-4809-916f-87efaee45fbf
+
+	column year_month
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: 8cdc24ea-598a-4873-aff9-1977174e0b7e
+		summarizeBy: none
+		sourceColumn: year_month
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column active_customers
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 2b9b941f-7414-4156-b13e-4abcb8732934
+		summarizeBy: sum
+		sourceColumn: active_customers
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_accounts
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: e62c89cb-46b8-4cd7-bd6f-a705e59a05d2
+		summarizeBy: sum
+		sourceColumn: active_accounts
+
+		annotation SummarizationSetBy = Automatic
+
+	column average_deposits
+		dataType: double
+		isHidden
+		lineageTag: ee1d9f85-90c3-4f8b-bff8-2c0aa0bee9a5
+		summarizeBy: sum
+		sourceColumn: average_deposits
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column average_loan_balance
+		dataType: double
+		isHidden
+		lineageTag: efc50650-5ae7-48d1-abfd-725d208de9a8
+		summarizeBy: sum
+		sourceColumn: average_loan_balance
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column transaction_count
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: d245ffac-8968-430e-9958-6304d4056e31
+		summarizeBy: sum
+		sourceColumn: transaction_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column transaction_volume
+		dataType: double
+		isHidden
+		lineageTag: 7630ad94-4116-40d5-9291-f3c1ee99cf1f
+		summarizeBy: sum
+		sourceColumn: transaction_volume
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column branch_transaction_count
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 5e0c5879-9140-4130-8321-dd0f345534a9
+		summarizeBy: sum
+		sourceColumn: branch_transaction_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column interest_income
+		dataType: double
+		isHidden
+		lineageTag: 314eebbd-6d61-4b7c-af65-3fc0d2fd7050
+		summarizeBy: sum
+		sourceColumn: interest_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column interest_expense
+		dataType: double
+		isHidden
+		lineageTag: 17e19b50-4bf9-4253-81c0-7fb5ee8afab8
+		summarizeBy: sum
+		sourceColumn: interest_expense
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column net_interest_income
+		dataType: double
+		lineageTag: 930f3fed-513c-41ec-966a-cbd2215d81c2
+		summarizeBy: sum
+		sourceColumn: net_interest_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column fee_income
+		dataType: double
+		lineageTag: 8ac053c5-6f0d-4bbd-9a2e-4656c72db930
+		summarizeBy: sum
+		sourceColumn: fee_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_revenue
+		dataType: double
+		lineageTag: fce6893f-0eed-4791-9d67-68f8b4cae176
+		summarizeBy: sum
+		sourceColumn: total_revenue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column personnel_cost
+		dataType: double
+		lineageTag: 25b7647b-ba76-435c-87f2-08c1fae19a53
+		summarizeBy: sum
+		sourceColumn: personnel_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column fixed_cost
+		dataType: double
+		lineageTag: 95aa3f06-dcef-4b79-bd6c-472a0af72035
+		summarizeBy: sum
+		sourceColumn: fixed_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column variable_cost
+		dataType: double
+		lineageTag: 58473a64-1e54-4275-8a0e-667346af650f
+		summarizeBy: sum
+		sourceColumn: variable_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column operational_cost
+		dataType: double
+		lineageTag: 968b9854-35a2-443c-bf6e-c9b17d1510bc
+		summarizeBy: sum
+		sourceColumn: operational_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_operating_cost
+		dataType: double
+		lineageTag: 631781e7-bda8-425b-8925-16f5791333c5
+		summarizeBy: sum
+		sourceColumn: total_operating_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column credit_loss
+		dataType: double
+		lineageTag: f78ee517-df2d-4c00-8756-705726cc96e1
+		summarizeBy: sum
+		sourceColumn: credit_loss
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column pre_provision_profit
+		dataType: double
+		isHidden
+		lineageTag: 9273f729-f4a8-4157-8683-62f34f4a9135
+		summarizeBy: sum
+		sourceColumn: pre_provision_profit
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column net_income
+		dataType: double
+		lineageTag: 9c5ea3eb-806c-4b3d-8de8-b5c17a8f791f
+		summarizeBy: sum
+		sourceColumn: net_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column pre_tax_income
+		dataType: double
+		isHidden
+		lineageTag: 46c5737f-112b-4ce5-ae20-f19a3613f158
+		summarizeBy: sum
+		sourceColumn: pre_tax_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column income_tax_expense
+		dataType: double
+		lineageTag: dabbb2bd-af6f-41f8-963f-b56f2e7fe2d7
+		summarizeBy: sum
+		sourceColumn: income_tax_expense
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition 'Bank Performance' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database("localhost:5432", "BTYT"),
+				  #"Navigation 1" = Source{[Schema = "analytics", Item = "bank_performance_monthly"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_ResultType = Table
+

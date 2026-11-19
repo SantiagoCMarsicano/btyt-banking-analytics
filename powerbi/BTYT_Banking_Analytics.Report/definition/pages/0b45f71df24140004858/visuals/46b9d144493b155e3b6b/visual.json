@@ -1,0 +1,60 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "46b9d144493b155e3b6b",
+  "position": {
+    "x": 1662,
+    "y": 32,
+    "z": 6000,
+    "height": 63.291770573566083,
+    "width": 210,
+    "tabOrder": 6000
+  },
+  "visual": {
+    "visualType": "slicer",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Credit Risk"
+                    }
+                  },
+                  "Property": "currency"
+                }
+              },
+              "queryRef": "Credit Risk.currency",
+              "nativeQueryRef": "Moneda",
+              "active": true,
+              "displayName": "Moneda"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "data": [
+        {
+          "properties": {
+            "mode": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Dropdown'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "general": [
+        {
+          "properties": {}
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

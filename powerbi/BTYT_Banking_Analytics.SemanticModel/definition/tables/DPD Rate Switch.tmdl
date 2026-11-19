@@ -1,0 +1,26 @@
+table 'DPD Rate Switch'
+	lineageTag: cb134e22-e557-498e-8483-87c269abd8e0
+
+	column DPD
+		lineageTag: 716898d9-2022-4e23-ae17-26d0e734c797
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [DPD]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'DPD Rate Switch' = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "DPD",
+				    STRING,
+				    {
+				        {"30+"},
+				        {"90+"}
+				    }
+				)
+
+	annotation PBI_Id = 4a64642fda7d4155b1340dd1cab58e81
+

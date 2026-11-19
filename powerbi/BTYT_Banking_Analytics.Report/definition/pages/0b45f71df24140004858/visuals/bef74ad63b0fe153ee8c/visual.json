@@ -1,0 +1,60 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "bef74ad63b0fe153ee8c",
+  "position": {
+    "x": 1226,
+    "y": 32,
+    "z": 4000,
+    "height": 63.291770573566083,
+    "width": 210,
+    "tabOrder": 4000
+  },
+  "visual": {
+    "visualType": "slicer",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Credit Risk"
+                    }
+                  },
+                  "Property": "Loan Type"
+                }
+              },
+              "queryRef": "Credit Risk.Loan Type",
+              "nativeQueryRef": "Tipo de préstamo",
+              "active": true,
+              "displayName": "Tipo de préstamo"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "data": [
+        {
+          "properties": {
+            "mode": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Dropdown'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "general": [
+        {
+          "properties": {}
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

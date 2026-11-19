@@ -1,0 +1,427 @@
+table 'Branch Performance'
+	lineageTag: 8ea9bf80-42e4-4d56-8f19-be8b212ae9a2
+
+	column year_month
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: a24d75a2-9451-42ba-812f-185634154cc5
+		summarizeBy: none
+		sourceColumn: year_month
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column active_customers
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: cdcdc26c-1254-4a12-b6e0-95648eddb83f
+		summarizeBy: sum
+		sourceColumn: active_customers
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_accounts
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 2b6941b1-9ba4-4b67-9863-93368918b70e
+		summarizeBy: sum
+		sourceColumn: active_accounts
+
+		annotation SummarizationSetBy = Automatic
+
+	column average_deposits
+		dataType: double
+		isHidden
+		lineageTag: fe02d8cf-de35-4c4c-a154-fed5e8e9a121
+		summarizeBy: sum
+		sourceColumn: average_deposits
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column average_loan_balance
+		dataType: double
+		isHidden
+		lineageTag: a3d214b0-e96b-4ccb-8b2a-3c1801593d57
+		summarizeBy: sum
+		sourceColumn: average_loan_balance
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column transaction_count
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: fd67ac43-ecda-4343-a2f2-a31aca04fec8
+		summarizeBy: sum
+		sourceColumn: transaction_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column transaction_volume
+		dataType: double
+		isHidden
+		lineageTag: 8321a4f2-e108-4937-b66f-52d07391f8d2
+		summarizeBy: sum
+		sourceColumn: transaction_volume
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column branch_transaction_count
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 21b7503c-8eda-41de-9416-a0c9e65dd61a
+		summarizeBy: sum
+		sourceColumn: branch_transaction_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column interest_income
+		dataType: double
+		isHidden
+		lineageTag: e8e9ec2e-ca2e-4d61-ae60-263edc1063f1
+		summarizeBy: sum
+		sourceColumn: interest_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column interest_expense
+		dataType: double
+		isHidden
+		lineageTag: 35cdefaf-1981-4906-91bb-00372d4f22e1
+		summarizeBy: sum
+		sourceColumn: interest_expense
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column net_interest_income
+		dataType: double
+		isHidden
+		lineageTag: c02d6c47-8313-472e-b66a-17d49ead14bd
+		summarizeBy: sum
+		sourceColumn: net_interest_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column fee_income
+		dataType: double
+		isHidden
+		lineageTag: 1d8aad06-e38e-4ace-9555-4217962b32a4
+		summarizeBy: sum
+		sourceColumn: fee_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_revenue
+		dataType: double
+		lineageTag: 469f38ae-0cee-4cc9-9f6f-14f61242d3d6
+		summarizeBy: sum
+		sourceColumn: total_revenue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column personnel_cost
+		dataType: double
+		lineageTag: 7161b0e2-6b05-43e2-9c55-2fdca2be4426
+		summarizeBy: sum
+		sourceColumn: personnel_cost
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column fixed_cost
+		dataType: double
+		lineageTag: 60323a95-554b-4166-94af-5fa70f2d3a2a
+		summarizeBy: sum
+		sourceColumn: fixed_cost
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column variable_cost
+		dataType: double
+		lineageTag: 7dffb98b-14f7-4894-8cb3-dea3096408b2
+		summarizeBy: sum
+		sourceColumn: variable_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column operational_cost
+		dataType: double
+		lineageTag: 8e292f8d-604f-43a9-8a90-78f8893369f8
+		summarizeBy: sum
+		sourceColumn: operational_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_operating_cost
+		dataType: double
+		lineageTag: 20dc7279-463b-4e01-885e-c17978001117
+		summarizeBy: sum
+		sourceColumn: total_operating_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column credit_loss
+		dataType: double
+		isHidden
+		lineageTag: 0fb6e79e-59b9-4c10-b90b-5295a96f9d34
+		summarizeBy: sum
+		sourceColumn: credit_loss
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column pre_provision_profit
+		dataType: double
+		isHidden
+		lineageTag: fa6e9774-b2aa-4e2d-abb5-c37c6779a7e6
+		summarizeBy: sum
+		sourceColumn: pre_provision_profit
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column net_income
+		dataType: double
+		lineageTag: 8bcec336-af82-4faa-9ee3-d14d1096af93
+		summarizeBy: sum
+		sourceColumn: net_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column pre_tax_income
+		dataType: double
+		isHidden
+		lineageTag: 826cf534-f44a-4564-9ffa-5ce8bd5310ff
+		summarizeBy: sum
+		sourceColumn: pre_tax_income
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column income_tax_expense
+		dataType: double
+		isHidden
+		lineageTag: 336fff87-7434-4f26-b306-0f78a85d3e71
+		summarizeBy: sum
+		sourceColumn: income_tax_expense
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Branch Size ES' =
+			
+			SWITCH(
+			    'Branch Performance'[branch_size],
+			    "LARGE", "Grande",
+			    "MEDIUM", "Mediana",
+			    "SMALL", "Pequeña",
+			    'Branch Performance'[branch_size]
+			)
+		lineageTag: 4835ad28-93f2-4d5e-b267-4cd12ddc5eb1
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Region ES' =
+			
+			SWITCH(
+			    'Branch Performance'[region],
+			    "CENTRAL", "Centro",
+			    "EAST", "Este",
+			    "LITTORAL", "Litoral",
+			    "METROPOLITAN", "Metropolitana",
+			    "NORTH", "Norte",
+			    'Branch Performance'[region]
+			)
+		lineageTag: 86504860-392e-4ffd-ab1f-08d2889e6280
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column branch_id
+		dataType: string
+		lineageTag: a4c36b6d-7b20-441f-8938-5c5e7a474ede
+		summarizeBy: none
+		sourceColumn: branch_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column branch_name
+		dataType: string
+		lineageTag: b3c4ca30-3566-4db3-8250-5523c0f0dc08
+		summarizeBy: none
+		sourceColumn: branch_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column branch_type
+		dataType: string
+		isHidden
+		lineageTag: 0d6f98b6-92fc-4013-bb9a-8aa46d971505
+		summarizeBy: none
+		sourceColumn: branch_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column branch_size
+		dataType: string
+		lineageTag: 67ed265f-f844-4f04-95aa-5646583fcbf7
+		summarizeBy: none
+		sourceColumn: branch_size
+
+		annotation SummarizationSetBy = Automatic
+
+	column status
+		dataType: string
+		isHidden
+		lineageTag: 1f440a2f-5bc4-4113-8c98-476a4fda1d45
+		summarizeBy: none
+		sourceColumn: status
+
+		annotation SummarizationSetBy = Automatic
+
+	column opening_year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: e418f110-1b87-4448-bb8f-c2592b946e43
+		summarizeBy: sum
+		sourceColumn: opening_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column opening_reason
+		dataType: string
+		isHidden
+		lineageTag: 7935e1a9-23d1-42d9-afc8-e867e8d045ce
+		summarizeBy: none
+		sourceColumn: opening_reason
+
+		annotation SummarizationSetBy = Automatic
+
+	column closing_year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 5b7ea925-53ea-4620-a19a-fe2cdd12676a
+		summarizeBy: sum
+		sourceColumn: closing_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column closure_reason
+		dataType: string
+		isHidden
+		lineageTag: d53bb539-dce2-4234-a572-466dac3ea6bc
+		summarizeBy: none
+		sourceColumn: closure_reason
+
+		annotation SummarizationSetBy = Automatic
+
+	column parent_branch_id
+		dataType: string
+		isHidden
+		lineageTag: 77478dd1-7e93-4550-be09-5140c545dd58
+		summarizeBy: none
+		sourceColumn: parent_branch_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column department
+		dataType: string
+		isHidden
+		lineageTag: 04bca374-5ecd-49ff-ae3f-2ed8f61e7f83
+		summarizeBy: none
+		sourceColumn: department
+
+		annotation SummarizationSetBy = Automatic
+
+	column locality
+		dataType: string
+		isHidden
+		lineageTag: 98dd370a-cbd5-4e89-85a6-66b5c72decd2
+		summarizeBy: none
+		sourceColumn: locality
+
+		annotation SummarizationSetBy = Automatic
+
+	column region
+		dataType: string
+		lineageTag: e3f19acc-f4fc-403a-abe4-c8fc0827c864
+		summarizeBy: none
+		sourceColumn: region
+
+		annotation SummarizationSetBy = Automatic
+
+	column latitude
+		dataType: double
+		isHidden
+		lineageTag: 250a79dc-5118-4455-87f2-0ee9f4bd2f3d
+		summarizeBy: sum
+		sourceColumn: latitude
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column longitude
+		dataType: double
+		isHidden
+		lineageTag: 86f35939-d178-4c1c-90de-8028ded6c5e1
+		summarizeBy: sum
+		sourceColumn: longitude
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition 'Branch Performance' = m
+		mode: import
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5432", "BTYT"),
+				    Navigation = Source{[Schema = "analytics", Item = "branch_performance_monthly"]}[Data]
+				in
+				    Navigation
+
+	annotation PBI_ResultType = Table
+

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "563d1b717083555aa4c6",
+  "displayName": "Rentabilidad y costos",
+  "displayOption": "FitToPage",
+  "height": 1080,
+  "width": 1920,
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "dd514d6a9b31aaacc085",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "DimDate"
+              }
+            },
+            "Property": "Year"
+          }
+        },
+        "type": "Advanced",
+        "howCreated": "User"
+      }
+    ]
+  },
+  "visualInteractions": [
+    {
+      "source": "68561aef11698bb551c7",
+      "target": "abc6ea6c6530c87072ed",
+      "type": "DataFilter"
+    },
+    {
+      "source": "68561aef11698bb551c7",
+      "target": "b6d5300ac7ad606d5600",
+      "type": "DataFilter"
+    },
+    {
+      "source": "68561aef11698bb551c7",
+      "target": "dfe329442378909b3054",
+      "type": "DataFilter"
+    },
+    {
+      "source": "68561aef11698bb551c7",
+      "target": "1f68aa5abbdca0602287",
+      "type": "DataFilter"
+    },
+    {
+      "source": "68561aef11698bb551c7",
+      "target": "ef6dcbf4861230074bd1",
+      "type": "DataFilter"
+    },
+    {
+      "source": "68561aef11698bb551c7",
+      "target": "8b41836c8809771540e8",
+      "type": "DataFilter"
+    },
+    {
+      "source": "68561aef11698bb551c7",
+      "target": "e2843032000a0a35bbc8",
+      "type": "DataFilter"
+    }
+  ]
+}

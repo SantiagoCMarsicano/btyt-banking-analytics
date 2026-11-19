@@ -1,0 +1,50 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "b7a1e0c4d2f9e8a3c5d1",
+  "displayName": "Resumen ejecutivo",
+  "displayOption": "FitToPage",
+  "height": 1080,
+  "width": 1920,
+  "visualInteractions": [
+    {
+      "source": "42c4b6be63c9bfce46c2",
+      "target": "55a4a12c14c51219146f",
+      "type": "NoFilter"
+    },
+    {
+      "source": "42c4b6be63c9bfce46c2",
+      "target": "f1b4e2ab6a65831e6efe",
+      "type": "NoFilter"
+    },
+    {
+      "source": "42c4b6be63c9bfce46c2",
+      "target": "1fdaa8b9afbdf0403a83",
+      "type": "NoFilter"
+    },
+    {
+      "source": "42c4b6be63c9bfce46c2",
+      "target": "9df0d01345a2da54d921",
+      "type": "NoFilter"
+    },
+    {
+      "source": "42c4b6be63c9bfce46c2",
+      "target": "acf407845a8abe045edd",
+      "type": "NoFilter"
+    },
+    {
+      "source": "42c4b6be63c9bfce46c2",
+      "target": "fb995e455bed3ba10e26",
+      "type": "NoFilter"
+    },
+    {
+      "source": "42c4b6be63c9bfce46c2",
+      "target": "86913c57167f16132090",
+      "type": "NoFilter"
+    },
+    {
+      "source": "42c4b6be63c9bfce46c2",
+      "target": "975b6aa32bb24c3c8d30",
+      "type": "NoFilter"
+    }
+  ]
+}

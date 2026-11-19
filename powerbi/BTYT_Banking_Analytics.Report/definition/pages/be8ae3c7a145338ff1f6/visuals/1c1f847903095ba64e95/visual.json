@@ -1,0 +1,60 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "1c1f847903095ba64e95",
+  "position": {
+    "x": 1008,
+    "y": 32,
+    "z": 0,
+    "height": 62,
+    "width": 210,
+    "tabOrder": 0
+  },
+  "visual": {
+    "visualType": "slicer",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Campaign Performance"
+                    }
+                  },
+                  "Property": "Campaign Type ES"
+                }
+              },
+              "queryRef": "Campaign Performance.Campaign Type ES",
+              "nativeQueryRef": "Tipo de campaña",
+              "active": true,
+              "displayName": "Tipo de campaña"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "data": [
+        {
+          "properties": {
+            "mode": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Dropdown'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "general": [
+        {
+          "properties": {}
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

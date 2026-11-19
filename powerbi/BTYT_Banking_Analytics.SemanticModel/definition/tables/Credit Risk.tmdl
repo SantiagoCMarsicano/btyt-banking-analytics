@@ -1,0 +1,285 @@
+table 'Credit Risk'
+	lineageTag: d50a575b-2a52-4565-9e25-e2a50501315c
+
+	column year_month
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: 8b5d0593-b0b4-4902-a2fb-b8fc89a15fd5
+		summarizeBy: none
+		sourceColumn: year_month
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column loan_id
+		dataType: string
+		isHidden
+		lineageTag: 8abb7205-cb66-41bf-905f-a2e68f3c9e4a
+		summarizeBy: none
+		sourceColumn: loan_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_id
+		dataType: string
+		lineageTag: 23dd8189-59d8-4097-8297-23d99f4960a1
+		summarizeBy: none
+		sourceColumn: customer_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column product_id
+		dataType: string
+		lineageTag: b49d7095-7fbf-446f-9ac6-32872580934f
+		summarizeBy: none
+		sourceColumn: product_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column branch_id
+		dataType: string
+		isHidden
+		lineageTag: 9b04a21c-f46e-44a3-be61-89b113c9fe33
+		summarizeBy: none
+		sourceColumn: branch_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column origination_year
+		dataType: int64
+		formatString: 0
+		lineageTag: aebdd106-085f-40ae-a721-e0ea6e93433b
+		summarizeBy: sum
+		sourceColumn: origination_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column currency
+		dataType: string
+		lineageTag: cc407e17-714c-4414-b899-6c240fc60e32
+		summarizeBy: none
+		sourceColumn: currency
+
+		annotation SummarizationSetBy = Automatic
+
+	column original_amount
+		dataType: double
+		isHidden
+		lineageTag: cb710fce-8a59-4adf-8c82-981a25e161dc
+		summarizeBy: sum
+		sourceColumn: original_amount
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column term_months
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 642d538f-f238-41bb-9528-8f59d5efad70
+		summarizeBy: sum
+		sourceColumn: term_months
+
+		annotation SummarizationSetBy = Automatic
+
+	column rate_type
+		dataType: string
+		isHidden
+		lineageTag: 17c5513a-3fc1-4e3d-b94d-7b96e28ec259
+		summarizeBy: none
+		sourceColumn: rate_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column initial_interest_rate
+		dataType: double
+		isHidden
+		lineageTag: 0a943a65-af03-4f58-974b-2f4c29ef3464
+		summarizeBy: sum
+		sourceColumn: initial_interest_rate
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column loan_status
+		dataType: string
+		lineageTag: 02736e9d-e6ff-467c-8b88-c5fb0114188a
+		summarizeBy: none
+		sourceColumn: loan_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column closing_year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: b4236852-f424-4c41-9992-15307f6e7f23
+		summarizeBy: sum
+		sourceColumn: closing_year
+
+		annotation SummarizationSetBy = Automatic
+
+	column outstanding_balance
+		dataType: double
+		lineageTag: 0d4d796a-2d3a-44fe-a611-e821d5f6e309
+		summarizeBy: sum
+		sourceColumn: outstanding_balance
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column current_interest_rate
+		dataType: double
+		isHidden
+		lineageTag: 885e50d2-56c5-404b-96fe-21836753d1de
+		summarizeBy: sum
+		sourceColumn: current_interest_rate
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column scheduled_payment
+		dataType: double
+		lineageTag: 903b901e-9a04-4e71-97f8-3bea85acf51d
+		summarizeBy: sum
+		sourceColumn: scheduled_payment
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column actual_payment
+		dataType: double
+		isHidden
+		lineageTag: 450f1594-847f-4ae6-bafd-589f19ea8538
+		summarizeBy: sum
+		sourceColumn: actual_payment
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column days_past_due
+		dataType: int64
+		formatString: 0
+		lineageTag: dd5624c7-f403-4a6f-88b0-178da9d4e1c9
+		summarizeBy: sum
+		sourceColumn: days_past_due
+
+		annotation SummarizationSetBy = Automatic
+
+	column delinquency_status
+		dataType: string
+		lineageTag: ed7c136e-91b6-4b56-8c74-c8e063f5fc17
+		summarizeBy: none
+		sourceColumn: delinquency_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column arrears_amount
+		dataType: double
+		isHidden
+		lineageTag: b95b9391-ef64-455f-9048-a6f273fb08cd
+		summarizeBy: sum
+		sourceColumn: arrears_amount
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column is_30_plus_dpd
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 3af36c12-e364-4ad5-a2e7-80e83d2814b9
+		summarizeBy: sum
+		sourceColumn: is_30_plus_dpd
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_90_plus_dpd
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: be11a06c-134f-4da0-ac1f-978cc477b8f5
+		summarizeBy: sum
+		sourceColumn: is_90_plus_dpd
+
+		annotation SummarizationSetBy = Automatic
+
+	column payment_shortfall
+		dataType: double
+		lineageTag: 904909ec-c49e-462d-97e4-f363cf756805
+		summarizeBy: sum
+		sourceColumn: payment_shortfall
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Loan Type' =
+			
+			SWITCH (
+			    'Credit Risk'[product_id],
+			    "P012", "Préstamo personal",
+			    "P013", "Préstamo automotor",
+			    "P014", "Préstamo hipotecario",
+			    "P015", "Préstamo PyME",
+			    "P016", "Línea de crédito empresarial",
+			    "P017", "Préstamo agropecuario",
+			    "P018", "Leasing empresarial",
+			    "Otro"
+			)
+		lineageTag: 1d27fb9c-7add-4c10-b70e-8f87ef640535
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column loan_statuses =
+			
+			SWITCH (
+			    'Credit Risk'[loan_status],
+			    "ACTIVE", "Activo",
+			    "DEFAULTED", "En incumplimiento",
+			    "PAID_OFF", "Cancelado",
+			    "RESTRUCTURED", "Reestructurado",
+			    "WRITTEN_OFF", "Dado de baja",
+			    "Otro"
+			)
+		lineageTag: c4bcd86d-c180-4bed-9d0f-f7ca51e3677c
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Delinquency Status Label' =
+			
+			SWITCH(
+			    'Credit Risk'[delinquency_status],
+			    "CURRENT", "Al día",
+			    "DPD_1_30", "1–30 días",
+			    "DPD_31_60", "31–60 días",
+			    "DPD_61_90", "61–90 días",
+			    "DPD_90_PLUS", "Más de 90 días",
+			    "Otro"
+			)
+		lineageTag: 57fd6e3f-f13f-47d5-9dbb-c3e3645c44de
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Credit Risk' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database("localhost:5432", "BTYT"),
+				  #"Navigation 1" = Source{[Schema = "analytics", Item = "credit_risk_monthly"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_ResultType = Table
+

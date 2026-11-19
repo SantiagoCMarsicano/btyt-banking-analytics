@@ -1,0 +1,95 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "0b45f71df24140004858",
+  "displayName": "Riesgo de Crédito",
+  "displayOption": "FitToPage",
+  "height": 1080,
+  "width": 1920,
+  "visualInteractions": [
+    {
+      "source": "bef74ad63b0fe153ee8c",
+      "target": "0c6c3a080ec0dfcc734b",
+      "type": "DataFilter"
+    },
+    {
+      "source": "bef74ad63b0fe153ee8c",
+      "target": "fd37d5938cf2a9022381",
+      "type": "DataFilter"
+    },
+    {
+      "source": "bef74ad63b0fe153ee8c",
+      "target": "4aeb7d16254669dc7bb5",
+      "type": "DataFilter"
+    },
+    {
+      "source": "bef74ad63b0fe153ee8c",
+      "target": "46b9d144493b155e3b6b",
+      "type": "DataFilter"
+    },
+    {
+      "source": "02e9fb8eab5196be8ea6",
+      "target": "c2e538bb631b4655c954",
+      "type": "DataFilter"
+    },
+    {
+      "source": "02e9fb8eab5196be8ea6",
+      "target": "fd37d5938cf2a9022381",
+      "type": "DataFilter"
+    },
+    {
+      "source": "02e9fb8eab5196be8ea6",
+      "target": "4aeb7d16254669dc7bb5",
+      "type": "DataFilter"
+    },
+    {
+      "source": "02e9fb8eab5196be8ea6",
+      "target": "0c6c3a080ec0dfcc734b",
+      "type": "DataFilter"
+    },
+    {
+      "source": "02e9fb8eab5196be8ea6",
+      "target": "1345f38e930f1fb4bbc1",
+      "type": "DataFilter"
+    },
+    {
+      "source": "02e9fb8eab5196be8ea6",
+      "target": "bef74ad63b0fe153ee8c",
+      "type": "NoFilter"
+    },
+    {
+      "source": "02e9fb8eab5196be8ea6",
+      "target": "46b9d144493b155e3b6b",
+      "type": "NoFilter"
+    },
+    {
+      "source": "02e9fb8eab5196be8ea6",
+      "target": "491d2ad6543a024bcbe7",
+      "type": "DataFilter"
+    },
+    {
+      "source": "02e9fb8eab5196be8ea6",
+      "target": "2d72f36fba859400ae10",
+      "type": "DataFilter"
+    },
+    {
+      "source": "8724d1cb767895ee5e6f",
+      "target": "2d72f36fba859400ae10",
+      "type": "DataFilter"
+    },
+    {
+      "source": "8724d1cb767895ee5e6f",
+      "target": "02e9fb8eab5196be8ea6",
+      "type": "DataFilter"
+    },
+    {
+      "source": "8724d1cb767895ee5e6f",
+      "target": "491d2ad6543a024bcbe7",
+      "type": "DataFilter"
+    },
+    {
+      "source": "02e9fb8eab5196be8ea6",
+      "target": "540411f7d6ee7044807e",
+      "type": "DataFilter"
+    }
+  ]
+}

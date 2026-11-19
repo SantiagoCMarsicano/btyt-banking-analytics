@@ -1,0 +1,30 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "be8ae3c7a145338ff1f6",
+  "displayName": "Mercado y Campañas",
+  "displayOption": "FitToPage",
+  "height": 1080,
+  "width": 1920,
+  "visualInteractions": [
+    {
+      "source": "24752a02ae89b0b9cd39",
+      "target": "28ab8a8fdb240d77de50",
+      "type": "NoFilter"
+    },
+    {
+      "source": "464229fb57d010350e81",
+      "target": "28ab8a8fdb240d77de50",
+      "type": "NoFilter"
+    },
+    {
+      "source": "28ab8a8fdb240d77de50",
+      "target": "24752a02ae89b0b9cd39",
+      "type": "NoFilter"
+    },
+    {
+      "source": "28ab8a8fdb240d77de50",
+      "target": "464229fb57d010350e81",
+      "type": "NoFilter"
+    }
+  ]
+}

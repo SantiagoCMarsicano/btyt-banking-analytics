@@ -1,0 +1,230 @@
+{
+  "version": "1.1.0",
+  "diagrams": [
+    {
+      "ordinal": 0,
+      "scrollPosition": {
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "location": {
+            "x": 808.70344538239465,
+            "y": 0
+          },
+          "nodeIndex": "DimDate",
+          "nodeLineageTag": "ef572a2b-7542-4404-81e1-9ddd05e011eb",
+          "size": {
+            "height": 290.32216366126931,
+            "width": 234
+          },
+          "zIndex": 4
+        },
+        {
+          "location": {
+            "x": 15.450347149555569,
+            "y": 359.67527132109757
+          },
+          "nodeIndex": "Bank Performance",
+          "nodeLineageTag": "4baec10c-3c7a-4809-916f-87efaee45fbf",
+          "size": {
+            "height": 672.251891450489,
+            "width": 234
+          },
+          "zIndex": 3
+        },
+        {
+          "location": {
+            "x": 381.31678296781422,
+            "y": 357.66733968530332
+          },
+          "nodeIndex": "Branch Performance",
+          "nodeLineageTag": "8ea9bf80-42e4-4d56-8f19-be8b212ae9a2",
+          "size": {
+            "height": 1000,
+            "width": 234
+          },
+          "zIndex": 9
+        },
+        {
+          "location": {
+            "x": 673.31488894282336,
+            "y": 358.10515441486029
+          },
+          "nodeIndex": "Customer Accounts",
+          "nodeLineageTag": "1c4da49c-f92c-43b0-a09c-5cd1d3d37f14",
+          "size": {
+            "height": 986.04978008403691,
+            "width": 234
+          },
+          "zIndex": 16
+        },
+        {
+          "location": {
+            "x": 1315.3841255872028,
+            "y": 358.2244834381504
+          },
+          "nodeIndex": "Credit Risk",
+          "nodeLineageTag": "d50a575b-2a52-4565-9e25-e2a50501315c",
+          "size": {
+            "height": 700.55916058475975,
+            "width": 234
+          },
+          "zIndex": 5
+        },
+        {
+          "location": {
+            "x": 1602.1904458434012,
+            "y": 353.28737072976105
+          },
+          "nodeIndex": "Transactions and Channels",
+          "nodeLineageTag": "d39b5e35-1d91-4c92-acf8-e9327a6892ad",
+          "size": {
+            "height": 599.76486200624186,
+            "width": 234
+          },
+          "zIndex": 7
+        },
+        {
+          "location": {
+            "x": 2468.5641467945993,
+            "y": 410.7232623139958
+          },
+          "nodeIndex": "Market Performance",
+          "nodeLineageTag": "f67a5e28-24bd-4b71-b51e-3fe168e41cb0",
+          "size": {
+            "height": 637.726351081268,
+            "width": 234
+          },
+          "zIndex": 12
+        },
+        {
+          "location": {
+            "x": 2767.6774602414348,
+            "y": 404.22746613951239
+          },
+          "nodeIndex": "Campaign Performance",
+          "nodeLineageTag": "595a4d49-676b-4826-9022-81f5f1d4a46d",
+          "size": {
+            "height": 600.380192312402,
+            "width": 234
+          },
+          "zIndex": 13
+        },
+        {
+          "location": {
+            "x": 1892.9197208311614,
+            "y": 404.66777947516323
+          },
+          "nodeIndex": "_Measures",
+          "nodeLineageTag": "24914dcb-a6b0-40de-aef1-f314359406c4",
+          "size": {
+            "height": 998.53689567430035,
+            "width": 234
+          },
+          "zIndex": 17
+        },
+        {
+          "location": {
+            "x": 1026.1020472260536,
+            "y": 357.18498438425814
+          },
+          "nodeIndex": "Customer Monthly",
+          "nodeLineageTag": "33e53b97-0fc2-490f-b270-8e74d2990745",
+          "size": {
+            "height": 272,
+            "width": 234
+          },
+          "zIndex": 8
+        },
+        {
+          "location": {
+            "x": 2202.9136206191824,
+            "y": 416.346445381652
+          },
+          "nodeIndex": "Customer Ranking Metric",
+          "nodeLineageTag": "548a3b1a-58e7-45a9-9c19-d7dfd0a5dafd",
+          "size": {
+            "height": 152,
+            "width": 234
+          },
+          "zIndex": 10
+        },
+        {
+          "location": {
+            "x": 2201.1406532486412,
+            "y": 982.28633206643394
+          },
+          "nodeIndex": "DimRelationshipDepth",
+          "nodeLineageTag": "62f46126-d6f8-430e-ae66-5cd47dd06e4b",
+          "size": {
+            "height": 159.14922305857226,
+            "width": 234
+          },
+          "zIndex": 14
+        },
+        {
+          "location": {
+            "x": 21.2680592710189,
+            "y": 945.9473543542
+          },
+          "nodeIndex": "Portfolio Metric",
+          "nodeLineageTag": "f9795304-d16c-4dbe-9dad-cf3801f7a31f",
+          "size": {
+            "height": 200,
+            "width": 234
+          },
+          "zIndex": 11
+        },
+        {
+          "location": {
+            "x": 2198.3705270633154,
+            "y": 593.93392799130845
+          },
+          "nodeIndex": "DPD Exposure Selector",
+          "nodeLineageTag": "41cac74d-2a77-4ef2-8f59-3f3503f1c007",
+          "size": {
+            "height": 153.89485291194205,
+            "width": 257.37988591703379
+          },
+          "zIndex": 6
+        },
+        {
+          "location": {
+            "x": 2478.210564552327,
+            "y": 586.305941330559
+          },
+          "nodeIndex": "DPD Rate Switch",
+          "nodeLineageTag": "cb134e22-e557-498e-8483-87c269abd8e0",
+          "size": {
+            "height": 145,
+            "width": 234
+          },
+          "zIndex": 1
+        },
+        {
+          "location": {
+            "x": 520.28877344170678,
+            "y": 116.46872754608367
+          },
+          "nodeIndex": "DimCustomerType",
+          "nodeLineageTag": "5ee5cd14-0ab1-4c12-a211-9df23bf63e46",
+          "size": {
+            "height": 145,
+            "width": 234
+          },
+          "zIndex": 15
+        }
+      ],
+      "name": "All tables",
+      "zoomValue": 49.802492384381047,
+      "pinKeyFieldsToTop": false,
+      "showExtraHeaderInfo": false,
+      "hideKeyFieldsWhenCollapsed": false,
+      "tablesLocked": false
+    }
+  ],
+  "selectedDiagram": "All tables",
+  "defaultDiagram": "All tables"
+}

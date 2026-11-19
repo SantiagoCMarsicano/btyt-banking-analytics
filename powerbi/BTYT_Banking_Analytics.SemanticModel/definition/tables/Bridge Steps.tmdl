@@ -1,0 +1,50 @@
+table 'Bridge Steps'
+	lineageTag: 3b59fd4e-d819-46e5-beb5-2a622e5acca3
+
+	column 'Step Order'
+		formatString: 0
+		lineageTag: d7315024-1a34-4674-916e-fcbaed46b3f4
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Step Order]
+
+		annotation SummarizationSetBy = Automatic
+
+	column Step
+		lineageTag: 07413089-2fab-4d95-b21d-ce62538790ee
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Step]
+		sortByColumn: 'Step Order'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Step Key'
+		isHidden
+		lineageTag: 633f85dc-d495-40fb-8f7e-d339a1cd5c6d
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Step Key]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Bridge Steps' = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "Step Order", INTEGER,
+				    "Step", STRING,
+				    "Step Key", STRING,
+				    {
+				        {1, "Año anterior", "start"},
+				        {2, "Margen financiero", "nii"},
+				        {3, "Comisiones", "fees"},
+				        {4, "Costos", "opex"},
+				        {5, "Pérdida de crédito", "credit"},
+				        {6, "Impuesto", "tax"},
+				        {7, "Tipo de cambio", "fx"},
+				        {8, "Año actual", "end"}
+				    }
+				)
+

@@ -1,0 +1,2086 @@
+table _Measures
+	lineageTag: 24914dcb-a6b0-40de-aef1-f314359406c4
+
+	/// Ingresos totales del banco (margen financiero + comisiones) en USD, al tipo de cambio de cada año.
+	measure 'Total Revenue' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[total_revenue],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Resultados
+		lineageTag: d6ba5c23-b9d4-4394-a64f-2d2221e33286
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-FM"}
+
+	/// Resultado neto del banco en USD, al tipo de cambio de cada año.
+	measure 'Net Income' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[net_income],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		formatString: "US$"#,0.00;-"US$"#,0.00;"US$"#,0.00
+		displayFolder: Resultados
+		lineageTag: 4d0547ae-f749-48c7-9d32-e81921239bcf
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-FM"}
+
+	/// Resultado neto sobre ingresos totales.
+	measure 'Net Margin' =
+			
+			DIVIDE(
+			    [Net Income],
+			    [Total Revenue]
+			)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Resultados
+		lineageTag: 861f9b48-f56d-4521-9e1a-2bf9bfd56987
+
+		changedProperty = IsHidden
+
+	/// Costos operativos totales del banco en USD.
+	measure 'Total Operating Cost' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[total_operating_cost],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		displayFolder: Costos
+		lineageTag: 418eca80-8cfe-438d-bd5f-ccc9d4adeda6
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Costos operativos totales sobre ingresos totales. Más bajo es mejor.
+	measure Cost-to-Income =
+			
+			DIVIDE(
+			    [Total Operating Cost],
+			    [Total Revenue]
+			)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Resultados
+		lineageTag: e2c9a671-925f-4fea-b17b-982484d84ea7
+
+		changedProperty = IsHidden
+
+	/// Pérdida de crédito (cargo por incobrables) del período en USD.
+	measure 'Credit Loss' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[credit_loss],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Riesgo de crédito
+		lineageTag: 8043060a-96b1-426a-bc00-032bc6994398
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Margen financiero neto (intereses ganados menos pagados) en USD.
+	measure 'Net Interest Income' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[net_interest_income],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		displayFolder: Resultados
+		lineageTag: c271619e-4f59-4313-80d7-4cee5e2b8073
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Ingresos por comisiones en USD.
+	measure 'Fee Income' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[fee_income],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Resultados
+		lineageTag: a2227816-2735-4f86-a2b6-64cdbc80a31b
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Exposición promedio mensual con 30 o más días de atraso, en USD.
+	measure '30+ DPD Exposure' =
+			
+			AVERAGEX(
+			    VALUES('DimDate'[YearMonth]),
+			    CALCULATE(
+			        SUMX(
+			            'Credit Risk',
+			            VAR FX =
+			                RELATED('DimDate'[UYU per USD])
+			            RETURN
+			                IF(
+			                    'Credit Risk'[currency] = "USD",
+			                    'Credit Risk'[outstanding_balance],
+			                    DIVIDE('Credit Risk'[outstanding_balance], FX)
+			                )
+			        ),
+			        KEEPFILTERS('Credit Risk'[days_past_due] >= 30)
+			    )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Riesgo de crédito
+		lineageTag: bb459da2-9db1-46c8-821f-ec660bd5ff99
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-IO"}
+
+	/// Exposición con 30+ días de atraso sobre la exposición total.
+	measure '30+ DPD Exposure Rate' =
+			
+			VAR Monthly30PlusExposure =
+			    AVERAGEX(
+			        VALUES('DimDate'[YearMonth]),
+			        CALCULATE(
+			            SUMX(
+			                'Credit Risk',
+			                VAR FX =
+			                    RELATED('DimDate'[UYU per USD])
+			                RETURN
+			                    IF(
+			                        'Credit Risk'[currency] = "UYU",
+			                        DIVIDE('Credit Risk'[outstanding_balance], FX),
+			                        'Credit Risk'[outstanding_balance]
+			                    )
+			            ),
+			            KEEPFILTERS('Credit Risk'[days_past_due] >= 30)
+			        )
+			    )
+			
+			VAR MonthlyTotalExposure =
+			    AVERAGEX(
+			        VALUES('DimDate'[YearMonth]),
+			        CALCULATE(
+			            SUMX(
+			                'Credit Risk',
+			                VAR FX =
+			                    RELATED('DimDate'[UYU per USD])
+			                RETURN
+			                    IF(
+			                        'Credit Risk'[currency] = "UYU",
+			                        DIVIDE('Credit Risk'[outstanding_balance], FX),
+			                        'Credit Risk'[outstanding_balance]
+			                    )
+			            )
+			        )
+			    )
+			
+			RETURN
+			    DIVIDE(Monthly30PlusExposure, MonthlyTotalExposure)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Riesgo de crédito
+		lineageTag: cf9048da-8aca-4f17-adeb-44ed5ae7aff0
+
+		changedProperty = IsHidden
+
+	/// Exposición promedio mensual con 90 o más días de atraso, en USD.
+	measure '90+ DPD Exposure' =
+			
+			AVERAGEX(
+			    VALUES('DimDate'[YearMonth]),
+			    CALCULATE(
+			        SUMX(
+			            'Credit Risk',
+			            VAR FX =
+			                RELATED('DimDate'[UYU per USD])
+			            RETURN
+			                IF(
+			                    'Credit Risk'[currency] = "USD",
+			                    'Credit Risk'[outstanding_balance],
+			                    DIVIDE('Credit Risk'[outstanding_balance], FX)
+			                )
+			        ),
+			        KEEPFILTERS('Credit Risk'[days_past_due] >= 90)
+			    )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Riesgo de crédito
+		lineageTag: ebbf4a3a-3a0d-4fc3-9a3f-e96a1c59e6eb
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-IO"}
+
+	/// Exposición con 90+ días de atraso sobre la exposición total.
+	measure '90+ DPD Exposure Rate' =
+			
+			VAR Monthly90PlusExposure =
+			    AVERAGEX(
+			        VALUES('DimDate'[YearMonth]),
+			        CALCULATE(
+			            SUMX(
+			                'Credit Risk',
+			                VAR FX =
+			                    RELATED('DimDate'[UYU per USD])
+			                RETURN
+			                    IF(
+			                        'Credit Risk'[currency] = "UYU",
+			                        DIVIDE('Credit Risk'[outstanding_balance], FX),
+			                        'Credit Risk'[outstanding_balance]
+			                    )
+			            ),
+			            KEEPFILTERS('Credit Risk'[days_past_due] >= 90)
+			        )
+			    )
+			
+			VAR MonthlyTotalExposure =
+			    AVERAGEX(
+			        VALUES('DimDate'[YearMonth]),
+			        CALCULATE(
+			            SUMX(
+			                'Credit Risk',
+			                VAR FX =
+			                    RELATED('DimDate'[UYU per USD])
+			                RETURN
+			                    IF(
+			                        'Credit Risk'[currency] = "UYU",
+			                        DIVIDE('Credit Risk'[outstanding_balance], FX),
+			                        'Credit Risk'[outstanding_balance]
+			                    )
+			            )
+			        )
+			    )
+			
+			RETURN
+			    DIVIDE(Monthly90PlusExposure, MonthlyTotalExposure)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Riesgo de crédito
+		lineageTag: e48fe477-eb52-4a6f-80bc-3c8788f6c864
+
+		changedProperty = IsHidden
+
+	/// Clientes que cerraron su relación en el año seleccionado.
+	measure 'Closed Customers' =
+			
+			VAR SelectedYear =
+			    MAX('DimDate'[Year])
+			
+			RETURN
+			CALCULATE(
+			    DISTINCTCOUNT('Customer Accounts'[customer_id]),
+			    FILTER(
+			        ALL('Customer Accounts'[closing_year]),
+			        'Customer Accounts'[closing_year] = SelectedYear
+			    )
+			)
+		formatString: 0
+		displayFolder: Clientes y cartera
+		lineageTag: d9246861-e5b8-4834-ab88-137325f1dc1b
+
+		changedProperty = IsHidden
+
+	/// Resultado neto de las sucursales en USD.
+	measure 'Branch Net Income' =
+			
+			SUMX(
+			    'Branch Performance',
+			    DIVIDE(
+			        'Branch Performance'[net_income],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Sucursales
+		lineageTag: 8caf4097-c923-4b47-badd-39edf147d906
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-FM"}
+
+	/// Ingresos totales de las sucursales en USD.
+	measure 'Branch Total Revenue' =
+			
+			SUMX(
+			    'Branch Performance',
+			    DIVIDE(
+			        'Branch Performance'[total_revenue],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Sucursales
+		lineageTag: e17939ff-066b-433b-b4f0-022112b35b91
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-FM"}
+
+	/// Costos operativos totales de las sucursales en USD.
+	measure 'Branch Total Operating Cost' =
+			
+			SUMX(
+			    'Branch Performance',
+			    DIVIDE(
+			        'Branch Performance'[total_operating_cost],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Sucursales
+		lineageTag: 1e406d0d-49bf-4cb9-987e-ead8097b8f5b
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-FM"}
+
+	/// Impuesto a la renta del período en USD.
+	measure 'Income Tax Expense' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[income_tax_expense],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Resultados
+		lineageTag: 6b243939-42f9-45a2-af8b-7f55e6e9b4a0
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Costos de personal en USD.
+	measure 'Personnel Cost' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[personnel_cost],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		displayFolder: Costos
+		lineageTag: c1189ffe-3d77-48af-9499-f10b661cfae2
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Costos operativos generales en USD.
+	measure 'Operational Cost' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[operational_cost],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		displayFolder: Costos
+		lineageTag: 3403ef51-003d-43ec-9764-ee22112db45e
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Costos variables en USD.
+	measure 'Variable Cost' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[variable_cost],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		displayFolder: Costos
+		lineageTag: 68597bb3-10e0-4a4e-9f21-40ea237e6fd2
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Costos fijos en USD.
+	measure 'Fixed Cost' =
+			
+			SUMX(
+			    'Bank Performance',
+			    DIVIDE(
+			        'Bank Performance'[fixed_cost],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		displayFolder: Costos
+		lineageTag: e2b49f3b-ec7e-4900-a1e0-e9053f8ebee4
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Cantidad de sucursales con resultado neto positivo en el período.
+	measure 'Profitable Branches' =
+			
+			COUNTROWS(
+			    FILTER(
+			        VALUES('Branch Performance'[branch_id]),
+			        CALCULATE([Branch Net Income]) > 0
+			    )
+			)
+		formatString: 0
+		displayFolder: Sucursales
+		lineageTag: 4e5882ff-08c3-4e77-8689-c005a1d40972
+
+	/// Cantidad de sucursales con resultado neto negativo en el período.
+	measure 'Loss-Making Branches' =
+			
+			COUNTROWS(
+			    FILTER(
+			        VALUES('Branch Performance'[branch_id]),
+			        CALCULATE([Branch Net Income]) < 0
+			    )
+			)
+		formatString: 0
+		displayFolder: Sucursales
+		lineageTag: d97a308e-b31c-4bcb-8c2e-020009acb2e6
+
+	/// Proporción de sucursales rentables sobre el total con resultado.
+	measure 'Profitable Branch Rate' =
+			
+			DIVIDE(
+			    [Profitable Branches],
+			    [Profitable Branches] + [Loss-Making Branches]
+			)
+		displayFolder: Sucursales
+		lineageTag: b435c105-0831-4eb8-ad91-5c9c34180b00
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Proporción de sucursales rentables como texto (para etiquetas).
+	measure 'Profitable Branch Rate Label' =
+			
+			FORMAT(
+			    [Profitable Branch Rate],
+			    "0%"
+			)
+		displayFolder: Sucursales
+		lineageTag: ec90c4e0-7a6c-420a-9bcb-df2eb4c1cac0
+
+	/// Volumen transaccionado por los clientes en USD.
+	measure 'Transaction Volume' =
+			
+			SUMX(
+			    'Customer Monthly',
+			    VAR FX =
+			        RELATED('DimDate'[UYU per USD])
+			
+			    RETURN
+			        DIVIDE(
+			            'Customer Monthly'[transaction_volume_uyu],
+			            FX
+			        )
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: ed489ab0-c508-441f-a845-d1ace230318f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Deuda vigente promedio mensual de los clientes en USD.
+	measure 'Outstanding Debt' =
+			
+			AVERAGEX(
+			    VALUES('Customer Monthly'[year_month]),
+			
+			    VAR CurrentMonth =
+			        'Customer Monthly'[year_month]
+			
+			    VAR FX =
+			        LOOKUPVALUE('DimDate'[UYU per USD], 'DimDate'[Date], CurrentMonth)
+			
+			    RETURN
+			        DIVIDE(
+			            CALCULATE(
+			                SUM('Customer Monthly'[outstanding_balance_uyu])
+			            ),
+			            FX
+			        )
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: e6a6914b-4b86-4bcd-a350-c8034aa6604b
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Depósitos promedio mensuales de los clientes en USD.
+	measure 'Customer Deposits' =
+			
+			AVERAGEX(
+			    VALUES('Customer Monthly'[year_month]),
+			
+			    VAR CurrentMonth =
+			        'Customer Monthly'[year_month]
+			
+			    VAR FX =
+			        LOOKUPVALUE('DimDate'[UYU per USD], 'DimDate'[Date], CurrentMonth)
+			
+			    RETURN
+			        DIVIDE(
+			            CALCULATE(
+			                SUM('Customer Monthly'[average_deposits_uyu])
+			            ),
+			            FX
+			        )
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: 54fad710-e1ef-403f-af68-b4dc49da52cc
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Valor del ranking de clientes según la métrica elegida en el parámetro.
+	measure 'Customer Ranking Value' =
+			
+			SWITCH(
+			    SELECTEDVALUE(
+			        'Customer Ranking Metric'[Parameter Order],
+			        0
+			    ),
+			    0, [Transaction Volume],
+			    1, [Outstanding Debt],
+			    2, [Customer Deposits]
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: c5003cc5-0d43-4391-af1a-79db7e078264
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Clientes según profundidad de relación (básica, vinculada, profunda, integral).
+	measure 'Relationship Customers' =
+			
+			VAR SelectedDepth =
+			    SELECTEDVALUE('DimRelationshipDepth'[Depth])
+			
+			VAR StartMonth =
+			    CALCULATE(
+			        MIN('Customer Monthly'[year_month]),
+			        REMOVEFILTERS('Customer Accounts'[customer_id]),
+			        REMOVEFILTERS('Customer Accounts'[customer_name])
+			    )
+			
+			VAR EndMonth =
+			    CALCULATE(
+			        MAX('Customer Monthly'[year_month]),
+			        REMOVEFILTERS('Customer Accounts'[customer_id]),
+			        REMOVEFILTERS('Customer Accounts'[customer_name])
+			    )
+			
+			VAR EndCustomers =
+			    CALCULATETABLE(
+			        VALUES('Customer Monthly'[customer_id]),
+			        'Customer Monthly'[year_month] = EndMonth
+			    )
+			
+			VAR CustomerStats =
+			    ADDCOLUMNS(
+			        EndCustomers,
+			
+			        "__AvgAccounts",
+			            CALCULATE(
+			                AVERAGE('Customer Monthly'[active_accounts]),
+			                'Customer Monthly'[year_month] >= StartMonth,
+			                'Customer Monthly'[year_month] <= EndMonth
+			            ),
+			
+			        "__MonthsObserved",
+			            CALCULATE(
+			                DISTINCTCOUNT('Customer Monthly'[year_month]),
+			                'Customer Monthly'[year_month] >= StartMonth,
+			                'Customer Monthly'[year_month] <= EndMonth
+			            ),
+			
+			        "__CreditMonths",
+			            CALCULATE(
+			                DISTINCTCOUNT('Customer Monthly'[year_month]),
+			                'Customer Monthly'[year_month] >= StartMonth,
+			                'Customer Monthly'[year_month] <= EndMonth,
+			                'Customer Monthly'[active_loans] > 0
+			            ),
+			
+			        "__ActivityMonths",
+			            CALCULATE(
+			                DISTINCTCOUNT('Customer Monthly'[year_month]),
+			                'Customer Monthly'[year_month] >= StartMonth,
+			                'Customer Monthly'[year_month] <= EndMonth,
+			                'Customer Monthly'[transaction_count] > 0
+			            ),
+			
+			        "__HasCard",
+			            VAR CustomerID = 'Customer Monthly'[customer_id]
+			            RETURN
+			                IF(
+			                    LOOKUPVALUE(
+			                        'Customer Accounts'[has_active_card],
+			                        'Customer Accounts'[customer_id], CustomerID
+			                    ) = 1,
+			                    1,
+			                    0
+			                )
+			    )
+			
+			VAR ScoredCustomers =
+			    ADDCOLUMNS(
+			        CustomerStats,
+			        "__Score",
+			            IF([__AvgAccounts] >= 2, 1, 0)
+			            + [__HasCard]
+			            + IF(
+			                DIVIDE([__CreditMonths], [__MonthsObserved], 0) >= 0.5,
+			                1,
+			                0
+			            )
+			            + IF(
+			                DIVIDE([__ActivityMonths], [__MonthsObserved], 0) >= 0.5,
+			                1,
+			                0
+			            )
+			    )
+			
+			RETURN
+			IF(
+			    ISBLANK(SelectedDepth),
+			    COUNTROWS(ScoredCustomers),
+			    COUNTROWS(
+			        FILTER(
+			            ScoredCustomers,
+			            SWITCH(
+			                SelectedDepth,
+			                "Básica", [__Score] <= 1,
+			                "Vinculada", [__Score] = 2,
+			                "Profunda", [__Score] = 3,
+			                "Integral", [__Score] = 4,
+			                FALSE()
+			            )
+			        )
+			    )
+			)
+		formatString: 0
+		displayFolder: Clientes y cartera
+		lineageTag: 21e0ad15-1fc1-424b-8a56-f59c4b17b8df
+
+	/// Total de la métrica de cartera elegida.
+	measure 'Portfolio Total' =
+			
+			VAR SelectedMetric =
+			    SELECTEDVALUE('Portfolio Metric'[Metric])
+			
+			VAR VisibleMonths =
+			    VALUES('Customer Monthly'[year_month])
+			
+			RETURN
+			SWITCH(
+			    SelectedMetric,
+			
+			    "Depósitos",
+			        AVERAGEX(
+			            VisibleMonths,
+			            VAR CurrentMonth = 'Customer Monthly'[year_month]
+			            VAR FX =
+			                LOOKUPVALUE('DimDate'[UYU per USD], 'DimDate'[Date], CurrentMonth)
+			            RETURN
+			                DIVIDE(
+			                    CALCULATE(
+			                        SUM('Customer Monthly'[average_deposits_uyu])
+			                    ),
+			                    FX
+			                )
+			        ),
+			
+			    "Deuda vigente",
+			        AVERAGEX(
+			            VisibleMonths,
+			            VAR CurrentMonth = 'Customer Monthly'[year_month]
+			            VAR FX =
+			                LOOKUPVALUE('DimDate'[UYU per USD], 'DimDate'[Date], CurrentMonth)
+			            RETURN
+			                DIVIDE(
+			                    CALCULATE(
+			                        SUM('Customer Monthly'[outstanding_balance_uyu])
+			                    ),
+			                    FX
+			                )
+			        ),
+			
+			    "Volumen transaccionado",
+			        SUMX(
+			            'Customer Monthly',
+			            DIVIDE(
+			                'Customer Monthly'[transaction_volume_uyu],
+			                RELATED('DimDate'[UYU per USD])
+			            )
+			        ),
+			
+			    "Transacciones",
+			        SUM('Customer Monthly'[transaction_count]),
+			
+			    "Cuentas activas",
+			        AVERAGEX(
+			            VisibleMonths,
+			            CALCULATE(
+			                SUM('Customer Monthly'[active_accounts])
+			            )
+			        ),
+			
+			    "Préstamos activos",
+			        AVERAGEX(
+			            VisibleMonths,
+			            CALCULATE(
+			                SUM('Customer Monthly'[active_loans])
+			            )
+			        )
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: d7c460ff-786e-4d6b-9c84-e3802e939520
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Promedio por cliente de la métrica de cartera elegida.
+	measure 'Portfolio Average per Customer' =
+			
+			VAR SelectedMetric =
+			    SELECTEDVALUE('Portfolio Metric'[Metric])
+			
+			VAR WindowCustomers =
+			    VALUES('Customer Monthly'[customer_id])
+			
+			RETURN
+			AVERAGEX(
+			    WindowCustomers,
+			    SWITCH(
+			        SelectedMetric,
+			
+			        "Depósitos",
+			            CALCULATE(
+			                AVERAGEX(
+			                    'Customer Monthly',
+			                    DIVIDE(
+			                        'Customer Monthly'[average_deposits_uyu],
+			                        RELATED('DimDate'[UYU per USD])
+			                    )
+			                )
+			            ),
+			
+			        "Deuda vigente",
+			            CALCULATE(
+			                AVERAGEX(
+			                    'Customer Monthly',
+			                    DIVIDE(
+			                        'Customer Monthly'[outstanding_balance_uyu],
+			                        RELATED('DimDate'[UYU per USD])
+			                    )
+			                )
+			            ),
+			
+			        "Volumen transaccionado",
+			            CALCULATE(
+			                SUMX(
+			                    'Customer Monthly',
+			                    DIVIDE(
+			                        'Customer Monthly'[transaction_volume_uyu],
+			                        RELATED('DimDate'[UYU per USD])
+			                    )
+			                )
+			            ),
+			
+			        "Transacciones",
+			            CALCULATE(
+			                SUM('Customer Monthly'[transaction_count])
+			            ),
+			
+			        "Cuentas activas",
+			            CALCULATE(
+			                AVERAGE('Customer Monthly'[active_accounts])
+			            ),
+			
+			        "Préstamos activos",
+			            CALCULATE(
+			                AVERAGE('Customer Monthly'[active_loans])
+			            )
+			    )
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: 7e0f2db2-b9c5-4b92-bba1-1bb4aa447507
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Mediana por cliente de la métrica de cartera elegida.
+	measure 'Portfolio Median per Customer' =
+			
+			VAR SelectedMetric =
+			    SELECTEDVALUE('Portfolio Metric'[Metric])
+			
+			VAR WindowCustomers =
+			    VALUES('Customer Monthly'[customer_id])
+			
+			RETURN
+			MEDIANX(
+			    WindowCustomers,
+			    SWITCH(
+			        SelectedMetric,
+			
+			        "Depósitos",
+			            CALCULATE(
+			                AVERAGEX(
+			                    'Customer Monthly',
+			                    DIVIDE(
+			                        'Customer Monthly'[average_deposits_uyu],
+			                        RELATED('DimDate'[UYU per USD])
+			                    )
+			                )
+			            ),
+			
+			        "Deuda vigente",
+			            CALCULATE(
+			                AVERAGEX(
+			                    'Customer Monthly',
+			                    DIVIDE(
+			                        'Customer Monthly'[outstanding_balance_uyu],
+			                        RELATED('DimDate'[UYU per USD])
+			                    )
+			                )
+			            ),
+			
+			        "Volumen transaccionado",
+			            CALCULATE(
+			                SUMX(
+			                    'Customer Monthly',
+			                    DIVIDE(
+			                        'Customer Monthly'[transaction_volume_uyu],
+			                        RELATED('DimDate'[UYU per USD])
+			                    )
+			                )
+			            ),
+			
+			        "Transacciones",
+			            CALCULATE(
+			                SUM('Customer Monthly'[transaction_count])
+			            ),
+			
+			        "Cuentas activas",
+			            CALCULATE(
+			                AVERAGE('Customer Monthly'[active_accounts])
+			            ),
+			
+			        "Préstamos activos",
+			            CALCULATE(
+			                AVERAGE('Customer Monthly'[active_loans])
+			            )
+			    )
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: 6eb4647c-4fc4-4c1a-bf2b-1490c7b9285b
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Desvío estándar por cliente de la métrica de cartera elegida.
+	measure 'Portfolio Std Dev per Customer' =
+			
+			VAR SelectedMetric =
+			    SELECTEDVALUE('Portfolio Metric'[Metric])
+			
+			VAR WindowCustomers =
+			    VALUES('Customer Monthly'[customer_id])
+			
+			RETURN
+			STDEVX.P(
+			    WindowCustomers,
+			    SWITCH(
+			        SelectedMetric,
+			
+			        "Depósitos",
+			            CALCULATE(
+			                AVERAGEX(
+			                    'Customer Monthly',
+			                    DIVIDE(
+			                        'Customer Monthly'[average_deposits_uyu],
+			                        RELATED('DimDate'[UYU per USD])
+			                    )
+			                )
+			            ),
+			
+			        "Deuda vigente",
+			            CALCULATE(
+			                AVERAGEX(
+			                    'Customer Monthly',
+			                    DIVIDE(
+			                        'Customer Monthly'[outstanding_balance_uyu],
+			                        RELATED('DimDate'[UYU per USD])
+			                    )
+			                )
+			            ),
+			
+			        "Volumen transaccionado",
+			            CALCULATE(
+			                SUMX(
+			                    'Customer Monthly',
+			                    DIVIDE(
+			                        'Customer Monthly'[transaction_volume_uyu],
+			                        RELATED('DimDate'[UYU per USD])
+			                    )
+			                )
+			            ),
+			
+			        "Transacciones",
+			            CALCULATE(
+			                SUM('Customer Monthly'[transaction_count])
+			            ),
+			
+			        "Cuentas activas",
+			            CALCULATE(
+			                AVERAGE('Customer Monthly'[active_accounts])
+			            ),
+			
+			        "Préstamos activos",
+			            CALCULATE(
+			                AVERAGE('Customer Monthly'[active_loans])
+			            )
+			    )
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: 02a8d814-16cd-4bfe-a701-11feeea8ec3a
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Desvío estándar sobre promedio: concentración de la métrica entre clientes.
+	measure 'Portfolio Coefficient of Variation' =
+			
+			DIVIDE(
+			    [Portfolio Std Dev per Customer],
+			    [Portfolio Average per Customer]
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: e3cd933f-550b-44cf-8675-92daf9925746
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Título dinámico del ranking de clientes.
+	measure 'Customer Ranking Title' =
+			
+			SWITCH(
+			    SELECTEDVALUE(
+			        'Customer Ranking Metric'[Parameter Order],
+			        0
+			    ),
+			    0, "Top 10 clientes por volumen transaccionado",
+			    1, "Top 10 clientes por deuda vigente",
+			    2, "Top 10 clientes por depósitos"
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: 95799bd7-a1a9-4b0c-9272-9d3b840aef42
+
+	/// Depósitos promedio mensuales del período en USD.
+	measure 'Period Deposits' =
+			
+			AVERAGEX(
+			    VALUES('Customer Monthly'[year_month]),
+			
+			    VAR CurrentMonth =
+			        'Customer Monthly'[year_month]
+			
+			    VAR FX =
+			        LOOKUPVALUE('DimDate'[UYU per USD], 'DimDate'[Date], CurrentMonth)
+			
+			    RETURN
+			        DIVIDE(
+			            CALCULATE(
+			                SUM('Customer Monthly'[average_deposits_uyu])
+			            ),
+			            FX
+			        )
+			)
+		formatString: "US$"#,0.00;-"US$"#,0.00;"US$"#,0.00
+		displayFolder: Clientes y cartera
+		lineageTag: 78f87bef-4358-44fb-b4ea-40a2fc18a614
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-IO"}
+
+	/// Saldo de préstamos promedio mensual del período en USD.
+	measure 'Period Loan Balance' =
+			
+			AVERAGEX(
+			    VALUES('Customer Monthly'[year_month]),
+			
+			    VAR CurrentMonth =
+			        'Customer Monthly'[year_month]
+			
+			    VAR FX =
+			        LOOKUPVALUE('DimDate'[UYU per USD], 'DimDate'[Date], CurrentMonth)
+			
+			    RETURN
+			        DIVIDE(
+			            CALCULATE(
+			                SUM('Customer Monthly'[outstanding_balance_uyu])
+			            ),
+			            FX
+			        )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Clientes y cartera
+		lineageTag: 55e79074-1245-4359-882b-c5d779819a21
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-ZW"}
+
+	/// Promedio mensual de cuentas activas.
+	measure 'Active Accounts' =
+			
+			AVERAGEX(
+			    VALUES('Customer Monthly'[year_month]),
+			    CALCULATE(
+			        SUM('Customer Monthly'[active_accounts])
+			    )
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: 7422248d-fdb0-4a56-879c-b98e630ac8dd
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Exposición crediticia vigente al último mes del período en USD.
+	measure 'Total Credit Exposure' =
+			
+			VAR LatestMonth =
+			    CALCULATE(
+			        MAX('Credit Risk'[year_month]),
+			        REMOVEFILTERS(
+			            'Credit Risk'[delinquency_status],
+			            'Credit Risk'[Delinquency Status Label]
+			        )
+			    )
+			
+			RETURN
+			CALCULATE(
+			    SUMX(
+			        'Credit Risk',
+			        VAR FX =
+			            RELATED('DimDate'[UYU per USD])
+			        RETURN
+			            IF(
+			                'Credit Risk'[currency] = "USD",
+			                'Credit Risk'[outstanding_balance],
+			                DIVIDE(
+			                    'Credit Risk'[outstanding_balance],
+			                    FX
+			                )
+			            )
+			    ),
+			    'Credit Risk'[year_month] = LatestMonth
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Riesgo de crédito
+		lineageTag: c5c74bc9-988b-4010-a6f7-c24204369b6b
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-VG"}
+
+	/// Pagos no realizados sobre pagos programados.
+	measure 'Payment Shortfall Rate' =
+			
+			VAR TotalShortfall =
+			    SUMX(
+			        'Credit Risk',
+			        VAR FX =
+			            RELATED('DimDate'[UYU per USD])
+			        RETURN
+			            IF(
+			                'Credit Risk'[currency] = "USD",
+			                'Credit Risk'[payment_shortfall],
+			                DIVIDE(
+			                    'Credit Risk'[payment_shortfall],
+			                    FX
+			                )
+			            )
+			    )
+			
+			VAR TotalScheduled =
+			    SUMX(
+			        'Credit Risk',
+			        VAR FX =
+			            RELATED('DimDate'[UYU per USD])
+			        RETURN
+			            IF(
+			                'Credit Risk'[currency] = "USD",
+			                'Credit Risk'[scheduled_payment],
+			                DIVIDE(
+			                    'Credit Risk'[scheduled_payment],
+			                    FX
+			                )
+			            )
+			    )
+			
+			RETURN
+			    DIVIDE(
+			        TotalShortfall,
+			        TotalScheduled
+			    )
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Riesgo de crédito
+		lineageTag: bb195bde-8693-43fb-ba59-197f81888cb5
+
+	/// Título dinámico del gráfico de mora por segmento.
+	measure 'DPD Segment Title' =
+			
+			VAR SelectedOption =
+			    SELECTEDVALUE(
+			        'DPD Exposure Selector'[DPD Exposure Selector Order]
+			    )
+			
+			RETURN
+			SWITCH(
+			    SelectedOption,
+			    0, "Exposición 30+ DPD por segmento de cliente",
+			    1, "Exposición 90+ DPD por segmento de cliente",
+			    "Exposición en mora por segmento de cliente"
+			)
+		displayFolder: Riesgo de crédito
+		lineageTag: af735d6c-fc96-47a4-9522-0b64517f69ee
+
+	/// Título dinámico del gráfico de mora por cohorte.
+	measure 'Cohort Risk Title' =
+			
+			VAR SelectedDPD =
+			    SELECTEDVALUE(
+			        'DPD Rate Switch'[DPD],
+			        "90+"
+			    )
+			
+			RETURN
+			    "Exposición y mora "
+			        & SelectedDPD
+			        & " DPD por cohorte de originación"
+		displayFolder: Riesgo de crédito
+		lineageTag: 589eb387-79cc-49b1-b785-b70fa020b025
+
+	/// Tasa de mora 30+ o 90+ según el selector.
+	measure 'Selected DPD Rate' =
+			
+			SWITCH(
+			    SELECTEDVALUE('DPD Rate Switch'[DPD], "90+"),
+			    "30+", [30+ DPD Exposure Rate],
+			    "90+", [90+ DPD Exposure Rate]
+			)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Riesgo de crédito
+		lineageTag: 965c192a-d1fd-461a-91a3-c5b2d74b44f2
+
+	/// Cantidad de transacciones completadas.
+	measure 'Completed Transactions' =
+			
+			SUM(
+			    'Transactions and Channels'[completed_transaction_count]
+			)
+		formatString: 0
+		displayFolder: Transacciones y canales
+		lineageTag: 71ffe510-13aa-416c-8ff3-71ec0e92e491
+
+	/// Monto de transacciones completadas en USD (cada moneda convertida al tipo de cambio de su año).
+	measure 'Completed Transaction Volume' =
+			
+			SUMX(
+			    'Transactions and Channels',
+			    VAR Volume = 'Transactions and Channels'[completed_transaction_volume]
+			    RETURN
+			        IF(
+			            'Transactions and Channels'[currency] = "USD",
+			            Volume,
+			            DIVIDE(Volume, RELATED('DimDate'[UYU per USD]))
+			        )
+			)
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Transacciones y canales
+		lineageTag: 5801a095-22d4-4be2-8863-523e8936a0b3
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-IO"}
+
+	/// Participación del canal en las transacciones completadas.
+	measure 'Channel Share' =
+			
+			VAR SelectedChannelTransactions =
+			    [Completed Transactions]
+			
+			VAR TotalTransactions =
+			    CALCULATE(
+			        [Completed Transactions],
+			        REMOVEFILTERS(
+			            'Transactions and Channels'[channel],
+			            'Transactions and Channels'[Channel Label]
+			        )
+			    )
+			
+			RETURN
+			    DIVIDE(
+			        SelectedChannelTransactions,
+			        TotalTransactions
+			    )
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Transacciones y canales
+		lineageTag: f2ab4831-553f-4651-91f2-56cdb1a3fc4e
+
+	/// Transacciones fallidas sobre transacciones intentadas.
+	measure 'Failed Transaction Rate' =
+			
+			DIVIDE(
+			    SUM('Transactions and Channels'[failed_transaction_count]),
+			    SUM('Transactions and Channels'[attempted_transaction_count])
+			)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Transacciones y canales
+		lineageTag: 4465fe4c-eddb-4615-a551-7ca25598615f
+
+	/// Promedio mensual de clientes con al menos una cuenta activa.
+	measure 'Average Monthly Active Customers' =
+			
+			AVERAGEX(
+			    VALUES('Customer Monthly'[year_month]),
+			    CALCULATE(
+			        DISTINCTCOUNT('Customer Monthly'[customer_id]),
+			        'Customer Monthly'[active_accounts] > 0
+			    )
+			)
+		displayFolder: Clientes y cartera
+		lineageTag: 3f95fa7e-bd76-4f40-bea2-99824ccbe33c
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Resultado neto de sucursal sobre sus ingresos.
+	measure 'Branch Net Margin' =
+			
+			DIVIDE(
+			    [Branch Net Income],
+			    [Branch Total Revenue]
+			)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Sucursales
+		lineageTag: 8099d667-02ec-4dc6-a781-2abeb05a153e
+
+	/// Costos de personal de las sucursales en USD.
+	measure 'Branch Personnel Cost' =
+			
+			SUMX(
+			    'Branch Performance',
+			    DIVIDE(
+			        'Branch Performance'[personnel_cost],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		displayFolder: Sucursales
+		lineageTag: efa5ad61-2bc5-418c-a8e4-a38cbab814c9
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Costos variables de las sucursales en USD.
+	measure 'Branch Variable Cost' =
+			
+			SUMX(
+			    'Branch Performance',
+			    DIVIDE(
+			        'Branch Performance'[variable_cost],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		displayFolder: Sucursales
+		lineageTag: 22ff710f-028b-41f8-a2ce-8551caca7ec3
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Costos fijos de las sucursales en USD.
+	measure 'Branch Fixed Cost' =
+			
+			SUMX(
+			    'Branch Performance',
+			    DIVIDE(
+			        'Branch Performance'[fixed_cost],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		displayFolder: Sucursales
+		lineageTag: 7ed80e49-2d73-483d-9635-a989de826d34
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Costos operativos generales de las sucursales en USD.
+	measure 'Branch Operational Cost' =
+			
+			SUMX(
+			    'Branch Performance',
+			    DIVIDE(
+			        'Branch Performance'[operational_cost],
+			        RELATED('DimDate'[UYU per USD])
+			    )
+			)
+		displayFolder: Sucursales
+		lineageTag: 58a9b2e6-a534-4d57-9d75-c56ca61c0c3f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Clientes con respuesta positiva sobre clientes expuestos.
+	measure 'Positive Response Rate' =
+			
+			DIVIDE(
+			    SUM('Campaign Performance'[positive_responders]),
+			    SUM('Campaign Performance'[exposed_customers])
+			)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Mercado y campañas
+		lineageTag: 512862cf-2f78-4e93-8815-f0ec2f62466b
+
+	/// Cuota de mercado de BTYT en el último año del contexto.
+	measure 'BTYT Market Share' =
+			
+			VAR LatestYear =
+			    MAX('Market Performance'[year])
+			RETURN
+			    CALCULATE(
+			        SUM('Market Performance'[market_weight]),
+			        'Market Performance'[year] = LatestYear,
+			        'Market Performance'[is_btyt] = 1,
+			        REMOVEFILTERS('Market Performance'[bank_type]),
+			        REMOVEFILTERS('Market Performance'[Bank Type ES])
+			    )
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Mercado y campañas
+		lineageTag: b70511bd-4eed-41d5-a543-959a924af03d
+
+	/// Posición de BTYT en el ranking de cuota de mercado del último año.
+	measure 'BTYT Market Rank' =
+			
+			VAR LatestYear =
+			    CALCULATE(
+			        MAX('Market Performance'[year]),
+			        REMOVEFILTERS('Market Performance'[bank_type]),
+			        REMOVEFILTERS('Market Performance'[Bank Type ES])
+			    )
+			
+			VAR BTYTBank =
+			    CALCULATE(
+			        SELECTEDVALUE('Market Performance'[bank_name]),
+			        'Market Performance'[is_btyt] = 1,
+			        'Market Performance'[year] = LatestYear,
+			        REMOVEFILTERS('Market Performance'[bank_type]),
+			        REMOVEFILTERS('Market Performance'[Bank Type ES])
+			    )
+			
+			RETURN
+			RANKX(
+			    ALL('Market Performance'[bank_name]),
+			    CALCULATE(
+			        SUM('Market Performance'[market_weight]),
+			        'Market Performance'[year] = LatestYear,
+			        REMOVEFILTERS('Market Performance'[bank_type]),
+			        REMOVEFILTERS('Market Performance'[Bank Type ES])
+			    ),
+			    CALCULATE(
+			        SUM('Market Performance'[market_weight]),
+			        'Market Performance'[bank_name] = BTYTBank,
+			        'Market Performance'[year] = LatestYear,
+			        REMOVEFILTERS('Market Performance'[bank_type]),
+			        REMOVEFILTERS('Market Performance'[Bank Type ES])
+			    ),
+			    DESC,
+			    DENSE
+			)
+		formatString: 0
+		displayFolder: Mercado y campañas
+		lineageTag: 3f2addf4-c875-4d9d-af62-decc9200304f
+
+	/// Clientes expuestos sobre clientes seleccionados por las campañas.
+	measure 'Campaign Coverage Rate' =
+			
+			DIVIDE(
+			    SUM('Campaign Performance'[exposed_customers]),
+			    SUM('Campaign Performance'[selected_customers])
+			)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Mercado y campañas
+		lineageTag: 62e21db3-e55f-4727-a45e-c099522752b0
+
+	/// Cuota de mercado de cada banco en el último año del contexto.
+	measure 'Market Share Latest Year' =
+			
+			VAR LatestYear =
+			    CALCULATE(
+			        MAX('Market Performance'[year]),
+			        REMOVEFILTERS('Market Performance'[bank_name])
+			    )
+			RETURN
+			    CALCULATE(
+			        SUM('Market Performance'[market_weight]),
+			        'Market Performance'[year] = LatestYear
+			    )
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Mercado y campañas
+		lineageTag: b88ba20b-4d9a-474f-bf88-e6dc4019a58d
+
+	/// Cuota de mercado de BTYT por año.
+	measure 'BTYT Market Share by Year' =
+			
+			CALCULATE(
+			    SUM('Market Performance'[market_weight]),
+			    'Market Performance'[is_btyt] = 1,
+			    REMOVEFILTERS('Market Performance'[bank_type]),
+			    REMOVEFILTERS('Market Performance'[Bank Type ES])
+			)
+		formatString: 0.0\ %;-0.0\ %;0.0\ %
+		displayFolder: Mercado y campañas
+		lineageTag: e0c23f2d-7ac8-4db8-a4a8-c62aa57f5d3d
+
+	/// Costos operativos de sucursal sobre sus ingresos.
+	measure 'Branch Cost-to-Income' =
+			
+			DIVIDE(
+			    [Branch Total Operating Cost],
+			    [Branch Total Revenue]
+			)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Sucursales
+		lineageTag: 2bffc5a9-6db9-4d40-8cd7-a253588f0358
+
+	/// Año analizado: el último con datos dentro del filtro.
+	measure 'Exec Current Year' =
+			
+			VAR LastMonth =
+			    CALCULATE(MAX('Bank Performance'[year_month]))
+			RETURN
+			    IF(NOT ISBLANK(LastMonth), YEAR(LastMonth))
+		formatString: 0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: e2507b4c-72a3-4914-a548-9f99a762895e
+
+	/// Año anterior al analizado.
+	measure 'Exec Previous Year' =
+			
+			[Exec Current Year] - 1
+		formatString: 0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 5a8c72a2-5f00-49d0-8605-a255b102e71b
+
+	/// Ingresos del año analizado.
+	measure 'Exec Revenue' =
+			
+			VAR Y = [Exec Current Year]
+			RETURN
+			    CALCULATE(
+			        [Total Revenue],
+			        REMOVEFILTERS('DimDate'),
+			        'DimDate'[Year] = Y
+			    )
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: c94db8c9-58c4-4e8f-999b-34c7f4fd22d1
+
+	/// Ingresos del año anterior al analizado (grupo de cálculo: Año anterior).
+	measure 'Exec Revenue PY' =
+			
+			CALCULATE([Exec Revenue], 'Comparación temporal'[Comparación] = "Año anterior")
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 0cf56820-7649-4501-8197-bb32a3d055e4
+
+	/// Variación % de ingresos frente al año anterior (grupo de cálculo: Variación %).
+	measure 'Exec Revenue YoY %' =
+			
+			CALCULATE([Exec Revenue], 'Comparación temporal'[Comparación] = "Variación %")
+		formatString: +0.0\ %;-0.0\ %;0.0\ %
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: cc1e5126-1dac-4329-84b2-3d8f15233dfa
+
+	/// Resultado neto del año analizado.
+	measure 'Exec Net Income' =
+			
+			VAR Y = [Exec Current Year]
+			RETURN
+			    CALCULATE(
+			        [Net Income],
+			        REMOVEFILTERS('DimDate'),
+			        'DimDate'[Year] = Y
+			    )
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: e8f42479-9669-4d02-b7d8-70ddc9eb97f1
+
+	/// Resultado neto del año anterior al analizado (grupo de cálculo: Año anterior).
+	measure 'Exec Net Income PY' =
+			
+			CALCULATE([Exec Net Income], 'Comparación temporal'[Comparación] = "Año anterior")
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 7a905e36-6430-435b-a6f4-bf4601c8cb7c
+
+	/// Variación % de resultado neto frente al año anterior (grupo de cálculo: Variación %).
+	measure 'Exec Net Income YoY %' =
+			
+			CALCULATE([Exec Net Income], 'Comparación temporal'[Comparación] = "Variación %")
+		formatString: +0.0\ %;-0.0\ %;0.0\ %
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 329bb1d0-ffef-4f6e-a938-434fc4d5010e
+
+	/// Pérdida de crédito del año analizado.
+	measure 'Exec Credit Loss' =
+			
+			VAR Y = [Exec Current Year]
+			RETURN
+			    CALCULATE(
+			        [Credit Loss],
+			        REMOVEFILTERS('DimDate'),
+			        'DimDate'[Year] = Y
+			    )
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 9e9dd9ad-09c0-4c11-9de1-1930aee0fd19
+
+	/// Pérdida de crédito del año anterior al analizado (grupo de cálculo: Año anterior).
+	measure 'Exec Credit Loss PY' =
+			
+			CALCULATE([Exec Credit Loss], 'Comparación temporal'[Comparación] = "Año anterior")
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: f38e8339-35ef-4f48-983c-81a79cc6f76b
+
+	/// Variación % de pérdida de crédito frente al año anterior (grupo de cálculo: Variación %).
+	measure 'Exec Credit Loss YoY %' =
+			
+			CALCULATE([Exec Credit Loss], 'Comparación temporal'[Comparación] = "Variación %")
+		formatString: +0.0\ %;-0.0\ %;0.0\ %
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: eb4a63b1-58a4-44af-8c48-19dbac4457c3
+
+	/// Costos / ingresos del año analizado.
+	measure 'Exec Cost-to-Income' =
+			
+			VAR Y = [Exec Current Year]
+			RETURN
+			    CALCULATE(
+			        [Cost-to-Income],
+			        REMOVEFILTERS('DimDate'),
+			        'DimDate'[Year] = Y
+			    )
+		formatString: 0.0\ %;-0.0\ %;0.0\ %
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 613ec171-01b3-4387-92cf-7c030c64a478
+
+	/// Costos / ingresos del año anterior al analizado (grupo de cálculo: Año anterior).
+	measure 'Exec Cost-to-Income PY' =
+			
+			CALCULATE([Exec Cost-to-Income], 'Comparación temporal'[Comparación] = "Año anterior")
+		formatString: 0.0\ %;-0.0\ %;0.0\ %
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: f0064d52-7abc-4117-b8bd-7500e7cc08b7
+
+	/// Variación de costos / ingresos frente al año anterior, en puntos porcentuales.
+	measure 'Exec Cost-to-Income Change (pp)' =
+			
+			CALCULATE([Exec Cost-to-Income], 'Comparación temporal'[Comparación] = "Variación") * 100
+		formatString: +0.0\ \p\p;-0.0\ \p\p;0.0\ \p\p
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 4366a9bd-1ddc-456e-a267-21c2edcc90ab
+
+	/// Margen neto del año analizado.
+	measure 'Exec Net Margin' =
+			
+			VAR Y = [Exec Current Year]
+			RETURN
+			    CALCULATE(
+			        [Net Margin],
+			        REMOVEFILTERS('DimDate'),
+			        'DimDate'[Year] = Y
+			    )
+		formatString: 0.0\ %;-0.0\ %;0.0\ %
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: dcb001f0-a8e1-4ba5-88e5-cbd70a3e959c
+
+	/// Margen neto del año anterior al analizado (grupo de cálculo: Año anterior).
+	measure 'Exec Net Margin PY' =
+			
+			CALCULATE([Exec Net Margin], 'Comparación temporal'[Comparación] = "Año anterior")
+		formatString: 0.0\ %;-0.0\ %;0.0\ %
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: bf15ee5c-b207-4283-aaa5-5cc446a5bbfd
+
+	/// Variación de margen neto frente al año anterior, en puntos porcentuales.
+	measure 'Exec Net Margin Change (pp)' =
+			
+			CALCULATE([Exec Net Margin], 'Comparación temporal'[Comparación] = "Variación") * 100
+		formatString: +0.0\ \p\p;-0.0\ \p\p;0.0\ \p\p
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 4c167593-379d-4377-aa28-fd3703606449
+
+	/// Cuota de mercado del año analizado.
+	measure 'Exec Market Share' =
+			
+			VAR Y = [Exec Current Year]
+			RETURN
+			    CALCULATE(
+			        [BTYT Market Share by Year],
+			        REMOVEFILTERS('DimDate'),
+			        'DimDate'[Year] = Y
+			    )
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: ca9fe56c-09c6-428c-959a-953da8fc3be5
+
+	/// Cuota de mercado del año anterior al analizado (grupo de cálculo: Año anterior).
+	measure 'Exec Market Share PY' =
+			
+			CALCULATE([Exec Market Share], 'Comparación temporal'[Comparación] = "Año anterior")
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 335e3695-20e5-4a92-a1e5-671064df9e5f
+
+	/// Variación de cuota de mercado frente al año anterior, en puntos porcentuales.
+	measure 'Exec Market Share Change (pp)' =
+			
+			CALCULATE([Exec Market Share], 'Comparación temporal'[Comparación] = "Variación") * 100
+		formatString: +0.00\ \p\p;-0.00\ \p\p;0.00\ \p\p
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: b3bf37c8-df2f-4277-8b61-f87f35c4d6c9
+
+	/// Posición de BTYT por cuota de mercado en el año analizado.
+	measure 'Exec Market Rank' =
+			
+			VAR Y = [Exec Current Year]
+			VAR BTYTWeight =
+			    CALCULATE(
+			        SUM('Market Performance'[market_weight]),
+			        REMOVEFILTERS('Market Performance'),
+			        REMOVEFILTERS('DimDate'),
+			        'DimDate'[Year] = Y,
+			        'Market Performance'[is_btyt] = 1
+			    )
+			VAR Banks =
+			    ADDCOLUMNS(
+			        CALCULATETABLE(
+			            VALUES('Market Performance'[bank_name]),
+			            REMOVEFILTERS('Market Performance'),
+			            REMOVEFILTERS('DimDate'),
+			        'DimDate'[Year] = Y
+			        ),
+			        "@Weight",
+			            CALCULATE(
+			                SUM('Market Performance'[market_weight]),
+			                ALLEXCEPT('Market Performance', 'Market Performance'[bank_name]),
+			                REMOVEFILTERS('DimDate'),
+			        'DimDate'[Year] = Y
+			            )
+			    )
+			RETURN
+			    IF(NOT ISBLANK(BTYTWeight), COUNTROWS(FILTER(Banks, [@Weight] > BTYTWeight)) + 1)
+		formatString: 0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: e05a1290-89ca-42cb-b032-995e691bb15e
+
+	/// Cantidad de bancos del sistema en el año analizado.
+	measure 'Exec Bank Count' =
+			
+			VAR Y = [Exec Current Year]
+			RETURN
+			    COUNTROWS(
+			        CALCULATETABLE(
+			            VALUES('Market Performance'[bank_name]),
+			            REMOVEFILTERS('Market Performance'),
+			            REMOVEFILTERS('DimDate'),
+			        'DimDate'[Year] = Y
+			        )
+			    )
+		formatString: 0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 00fe6c63-3151-4c1a-ace6-3187a4fb5bd4
+
+	/// Cuota de mercado máxima de BTYT en la serie.
+	measure 'Exec Market Share Peak' =
+			
+			MAXX(
+			    CALCULATETABLE(
+			        VALUES('DimDate'[Year]),
+			        REMOVEFILTERS('DimDate')
+			    ),
+			    [BTYT Market Share by Year]
+			)
+		formatString: 0.00\ %;-0.00\ %;0.00\ %
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 8b71a077-0b6f-4716-b778-5df74221011e
+
+	/// Año de la cuota de mercado máxima de BTYT.
+	measure 'Exec Market Share Peak Year' =
+			
+			VAR Years =
+			    ADDCOLUMNS(
+			        CALCULATETABLE(
+			        VALUES('DimDate'[Year]),
+			        REMOVEFILTERS('DimDate')
+			    ),
+			        "@Share", [BTYT Market Share by Year]
+			    )
+			RETURN
+			    MAXX(TOPN(1, FILTER(Years, NOT ISBLANK([@Share])), [@Share], DESC), 'DimDate'[Year])
+		formatString: 0
+		displayFolder: Resumen Ejecutivo\Indicadores
+		lineageTag: 5a02ad91-b966-48df-8017-923a7598f5f9
+
+	/// Color de la variación de ingresos: verde si mejora, rojo si empeora.
+	measure 'Exec Color Revenue' =
+			
+			VAR Delta = [Exec Revenue YoY %]
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        ISBLANK(Delta) || Delta = 0, "#8A95A3",
+			        Delta > 0, "#2E7D32",
+			        "#C0392B"
+			    )
+		displayFolder: Resumen Ejecutivo\Colores
+		lineageTag: 5809a485-fcdd-4aac-bca0-54e346fd75d5
+
+	/// Color de la variación de resultado neto: verde si mejora, rojo si empeora.
+	measure 'Exec Color Net Income' =
+			
+			VAR Delta = [Exec Net Income YoY %]
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        ISBLANK(Delta) || Delta = 0, "#8A95A3",
+			        Delta > 0, "#2E7D32",
+			        "#C0392B"
+			    )
+		displayFolder: Resumen Ejecutivo\Colores
+		lineageTag: 4d70b7db-3f35-45f7-bf9b-1d9a0aa384c5
+
+	/// Color de la variación de costos / ingresos: verde si mejora, rojo si empeora.
+	measure 'Exec Color Cost-to-Income' =
+			
+			VAR Delta = [Exec Cost-to-Income Change (pp)]
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        ISBLANK(Delta) || Delta = 0, "#8A95A3",
+			        Delta > 0, "#C0392B",
+			        "#2E7D32"
+			    )
+		displayFolder: Resumen Ejecutivo\Colores
+		lineageTag: 63959aa4-8731-4c34-ba75-d68a811410ec
+
+	/// Color de la variación de margen neto: verde si mejora, rojo si empeora.
+	measure 'Exec Color Net Margin' =
+			
+			VAR Delta = [Exec Net Margin Change (pp)]
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        ISBLANK(Delta) || Delta = 0, "#8A95A3",
+			        Delta > 0, "#2E7D32",
+			        "#C0392B"
+			    )
+		displayFolder: Resumen Ejecutivo\Colores
+		lineageTag: d5749c5a-8d5f-43ba-9caa-d15e3a391c6d
+
+	/// Color de la variación de pérdida de crédito: verde si mejora, rojo si empeora.
+	measure 'Exec Color Credit Loss' =
+			
+			VAR Delta = [Exec Credit Loss YoY %]
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        ISBLANK(Delta) || Delta = 0, "#8A95A3",
+			        Delta > 0, "#C0392B",
+			        "#2E7D32"
+			    )
+		displayFolder: Resumen Ejecutivo\Colores
+		lineageTag: 47b85163-0bbb-471b-a705-f601e7aa001a
+
+	/// Color de la variación de cuota de mercado: verde si mejora, rojo si empeora.
+	measure 'Exec Color Market Share' =
+			
+			VAR Delta = [Exec Market Share Change (pp)]
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        ISBLANK(Delta) || Delta = 0, "#8A95A3",
+			        Delta > 0, "#2E7D32",
+			        "#C0392B"
+			    )
+		displayFolder: Resumen Ejecutivo\Colores
+		lineageTag: 22eea9f0-d26e-4e3f-8214-bc5708a44228
+
+	/// Mes con mayor pérdida de crédito del año analizado.
+	measure 'Exec Credit Loss Peak Month' =
+			
+			VAR Y = [Exec Current Year]
+			VAR Months =
+			    ADDCOLUMNS(
+			        CALCULATETABLE(
+			            VALUES('Bank Performance'[year_month]),
+			            REMOVEFILTERS('DimDate'),
+			            'DimDate'[Year] = Y
+			        ),
+			        "@Loss", CALCULATE(SUM('Bank Performance'[credit_loss]), REMOVEFILTERS('DimDate'))
+			    )
+			RETURN
+			    MAXX(TOPN(1, Months, [@Loss], DESC), 'Bank Performance'[year_month])
+		formatString: mmmm yyyy
+		displayFolder: Resumen Ejecutivo\Textos
+		lineageTag: 1858f895-6940-4044-9789-3a888373b421
+
+	/// 1 si la pérdida de crédito del mes supera el doble de la mediana de los 12 meses previos.
+	measure 'Credit Loss Anomaly Flag' =
+			
+			VAR CurMonth = MAX('Bank Performance'[year_month])
+			VAR CurValue = SUM('Bank Performance'[credit_loss])
+			VAR Window =
+			    CALCULATETABLE(
+			        VALUES('Bank Performance'[year_month]),
+			        REMOVEFILTERS('DimDate'),
+			        'Bank Performance'[year_month] >= EDATE(CurMonth, -12),
+			        'Bank Performance'[year_month] < CurMonth
+			    )
+			VAR Baseline =
+			    MEDIANX(
+			        Window,
+			        CALCULATE(SUM('Bank Performance'[credit_loss]), REMOVEFILTERS('DimDate'))
+			    )
+			RETURN
+			    IF(
+			        HASONEVALUE('Bank Performance'[year_month]),
+			        IF(COUNTROWS(Window) = 12 && Baseline > 0 && CurValue > 2 * Baseline, 1, 0)
+			    )
+		formatString: 0
+		displayFolder: Resumen Ejecutivo\Gráficos
+		lineageTag: dddb6617-4b5e-4daf-b921-b48da6750549
+
+	/// Color de barra: rojo en meses anómalos de pérdida de crédito.
+	measure 'Credit Loss Bar Color' =
+			
+			IF([Credit Loss Anomaly Flag] = 1, "#C0392B", "#A9B8C9")
+		displayFolder: Resumen Ejecutivo\Gráficos
+		lineageTag: 8d1ad674-83d8-4a50-9ac0-6670ea5a939c
+
+	/// Aviso cuando el último mes observado tiene pérdida de crédito 0 (probable efecto de fin de período).
+	measure 'Credit Loss Data Note' =
+			
+			VAR LastMonth =
+			    CALCULATE(MAX('Bank Performance'[year_month]), REMOVEFILTERS('DimDate'))
+			VAR LastValue =
+			    CALCULATE(
+			        SUM('Bank Performance'[credit_loss]),
+			        REMOVEFILTERS('DimDate'),
+			        'Bank Performance'[year_month] = LastMonth
+			    )
+			RETURN
+			    IF(
+			        LastValue = 0,
+			        "Atención: en " & LOWER(FORMAT(LastMonth, "mmmm \d\e yyyy", "es-UY"))
+			            & ", el último mes observado, la pérdida de crédito es exactamente 0. "
+			            & "Probablemente es un efecto del fin del período (ningún préstamo llega a castigarse ese mes) "
+			            & "y no una mejora real: el resultado neto de ese mes está sobrestimado."
+			    )
+		displayFolder: Resumen Ejecutivo\Textos
+		lineageTag: 9b1dc28c-6cb2-4157-95e4-07b5fb0641fe
+
+	/// Puente del resultado neto: cada partida a tipo de cambio del año anterior y el efecto cambiario aparte.
+	measure 'Bridge Value' =
+			
+			VAR Y = [Exec Current Year]
+			VAR FXCur = CALCULATE(MAX('DimDate'[UYU per USD]), REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y)
+			VAR FXPrev = CALCULATE(MAX('DimDate'[UYU per USD]), REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y - 1)
+			VAR K = DIVIDE(FXCur, FXPrev)
+			VAR NICur = CALCULATE([Net Income], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y)
+			VAR NIPrev = CALCULATE([Net Income], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y - 1)
+			VAR NIICur = CALCULATE([Net Interest Income], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y)
+			VAR NIIPrev = CALCULATE([Net Interest Income], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y - 1)
+			VAR FeeCur = CALCULATE([Fee Income], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y)
+			VAR FeePrev = CALCULATE([Fee Income], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y - 1)
+			VAR OpexCur = CALCULATE([Total Operating Cost], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y)
+			VAR OpexPrev = CALCULATE([Total Operating Cost], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y - 1)
+			VAR CLCur = CALCULATE([Credit Loss], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y)
+			VAR CLPrev = CALCULATE([Credit Loss], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y - 1)
+			VAR TaxCur = CALCULATE([Income Tax Expense], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y)
+			VAR TaxPrev = CALCULATE([Income Tax Expense], REMOVEFILTERS('DimDate'), 'DimDate'[Year] = Y - 1)
+			VAR Step = SELECTEDVALUE('Bridge Steps'[Step Key])
+			RETURN
+			    SWITCH(
+			        Step,
+			        "start", NIPrev,
+			        "nii", NIICur * K - NIIPrev,
+			        "fees", FeeCur * K - FeePrev,
+			        "opex", -(OpexCur * K - OpexPrev),
+			        "credit", -(CLCur * K - CLPrev),
+			        "tax", -(TaxCur * K - TaxPrev),
+			        "fx", NICur - NICur * K,
+			        NICur
+			    )
+		formatString: "US$"#,0;-"US$"#,0;"US$"#,0
+		displayFolder: Resumen Ejecutivo\Gráficos
+		lineageTag: ce27b092-f674-45dc-b4cf-fe0ff9bbfd65
+
+	/// Titular automático: ingresos y resultado del año analizado frente al anterior.
+	measure 'Exec Headline Results' =
+			
+			VAR Y = [Exec Current Year]
+			VAR Rev = [Exec Revenue YoY %]
+			VAR NI = [Exec Net Income YoY %]
+			RETURN
+			    IF(
+			        NOT ISBLANK(Rev) && NOT ISBLANK(NI),
+			        "En " & Y & ", los ingresos "
+			            & IF(Rev >= 0, "crecieron ", "cayeron ")
+			            & FORMAT(ABS(Rev), "0.0 %", "es-UY")
+			            & " y el resultado neto "
+			            & IF(NI >= 0, "creció ", "cayó ")
+			            & FORMAT(ABS(NI), "0.0 %", "es-UY") & "."
+			    )
+		displayFolder: Resumen Ejecutivo\Textos
+		lineageTag: ea754f6f-5acf-42df-afd6-bf6b7a4db9e6
+
+	/// Titular automático: pérdida de crédito y evolución de la cuota de mercado.
+	measure 'Exec Headline Drivers' =
+			
+			VAR CL = [Exec Credit Loss YoY %]
+			VAR PeakMonth = [Exec Credit Loss Peak Month]
+			VAR ShareNow = [Exec Market Share]
+			VAR SharePeak = [Exec Market Share Peak]
+			VAR PeakYear = [Exec Market Share Peak Year]
+			RETURN
+			    IF(
+			        NOT ISBLANK(CL),
+			        "La pérdida de crédito "
+			            & IF(CL >= 0, "aumentó ", "bajó ")
+			            & FORMAT(ABS(CL), "0.0 %", "es-UY")
+			            & " (máximo mensual en " & LOWER(FORMAT(PeakMonth, "mmmm", "es-UY")) & ")"
+			            & " y la cuota de mercado de BTYT pasó de "
+			            & FORMAT(SharePeak, "0.00 %", "es-UY") & " en " & PeakYear
+			            & " a " & FORMAT(ShareNow, "0.00 %", "es-UY") & "."
+			    )
+		displayFolder: Resumen Ejecutivo\Textos
+		lineageTag: afe0881e-2034-465e-a135-29cb98f6b5bf
+
+	/// Clientes expuestos a campañas.
+	measure 'Exposed Customers' =
+			
+			SUM('Campaign Performance'[exposed_customers])
+		formatString: #,0
+		displayFolder: Mercado y campañas
+		lineageTag: c8a3db40-74ef-433e-a3a1-cfadb986b34e
+
+	/// Puente: resultado neto del año anterior y del año analizado, en millones de USD.
+	measure 'Bridge Total' =
+			
+			VAR K = SELECTEDVALUE('Bridge Steps'[Step Key])
+			RETURN
+			    IF(K IN {"start", "end"}, DIVIDE([Bridge Value], 1e6))
+		formatString: #,0.0
+		displayFolder: Resumen Ejecutivo\Gráficos
+		lineageTag: 287bb819-3206-4029-a1f3-17ecfba2a3bf
+
+	/// Puente: base invisible que eleva cada variación hasta el nivel acumulado, en millones de USD.
+	measure 'Bridge Base' =
+			
+			VAR K = SELECTEDVALUE('Bridge Steps'[Step Key])
+			VAR O = SELECTEDVALUE('Bridge Steps'[Step Order])
+			VAR CumPrev =
+			    SUMX(FILTER(ALL('Bridge Steps'), 'Bridge Steps'[Step Order] < O), [Bridge Value])
+			VAR CumNext = CumPrev + [Bridge Value]
+			RETURN
+			    IF(NOT ISBLANK(K) && NOT (K IN {"start", "end"}), DIVIDE(MIN(CumPrev, CumNext), 1e6))
+		formatString: #,0.0
+		displayFolder: Resumen Ejecutivo\Gráficos
+		lineageTag: c210b1a0-106b-4e19-b1ad-a27e6a44aa11
+
+	/// Puente: partidas que aumentan el resultado neto, en millones de USD.
+	measure 'Bridge Increase' =
+			
+			VAR K = SELECTEDVALUE('Bridge Steps'[Step Key])
+			VAR V = [Bridge Value]
+			RETURN
+			    IF(NOT ISBLANK(K) && NOT (K IN {"start", "end"}) && V > 0, DIVIDE(V, 1e6))
+		formatString: +#,0.0
+		displayFolder: Resumen Ejecutivo\Gráficos
+		lineageTag: 87904e45-7c3b-4f69-8901-9add963fe18e
+
+	/// Puente: partidas que reducen el resultado neto (se muestran con signo menos), en millones de USD.
+	measure 'Bridge Decrease' =
+			
+			VAR K = SELECTEDVALUE('Bridge Steps'[Step Key])
+			VAR V = [Bridge Value]
+			RETURN
+			    IF(NOT ISBLANK(K) && NOT (K IN {"start", "end"}) && V < 0, DIVIDE(-V, 1e6))
+		formatString: -#,0.0
+		displayFolder: Resumen Ejecutivo\Gráficos
+		lineageTag: 1b1c2b00-4c61-4327-9791-6d40db077229
+
+	/// Color de barra: rojo si la sucursal tiene resultado negativo, azul si es positivo.
+	measure 'Branch Net Income Color' =
+			
+			IF([Branch Net Income] < 0, "#F85149", "#5B9CF5")
+		displayFolder: Sucursales
+		lineageTag: 4cdff50e-8413-4b8f-b4cb-6f0cb44dda60
+
+	/// Transacciones completadas por móvil o web sobre el total completado.
+	measure 'Digital Channel Share' =
+			
+			DIVIDE(
+			    CALCULATE([Completed Transactions], 'Transactions and Channels'[channel] IN {"MOBILE", "WEB"}) + 0,
+			    [Completed Transactions]
+			)
+		formatString: 0.0\ %;-0.0\ %;0.0\ %
+		displayFolder: Transacciones y canales
+		lineageTag: 17dc8e30-a1e7-402c-9774-c9164069617c
+
+	/// Puente: inicio del eje, algo por debajo del nivel más bajo, para que se vean las variaciones.
+	measure 'Bridge Axis Start' =
+			
+			VAR StepLows =
+			    ADDCOLUMNS(ALL('Bridge Steps'), "@Low", COALESCE([Bridge Base], [Bridge Total]))
+			RETURN
+			    FLOOR(MINX(StepLows, [@Low]) * 0.8, 10)
+		formatString: #,0
+		displayFolder: Resumen Ejecutivo\Gráficos
+		lineageTag: 3e8b30b9-3f3b-43d1-9e9e-fcc9dc07c0fc
+
+	/// Puente: todas las variaciones en una línea (subtítulo del gráfico), en millones de USD.
+	measure 'Bridge Summary' =
+			
+			CONCATENATEX(
+			    FILTER(ALL('Bridge Steps'), NOT ('Bridge Steps'[Step Key] IN {"start", "end"})),
+			    'Bridge Steps'[Step] & " " & FORMAT(DIVIDE([Bridge Value], 1e6), "+0.0;-0.0;0.0", "es-UY"),
+			    "  ·  ",
+			    'Bridge Steps'[Step Order], ASC
+			)
+		displayFolder: Resumen Ejecutivo\Textos
+		lineageTag: 39f6564f-5d74-4343-b703-586c8ec91c57
+
+	partition _Measures = m
+		mode: import
+		source =
+				let
+				  Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i44FAA==", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [Column1 = _t]),
+				    #"Removed Columns" = Table.RemoveColumns(Source,{"Column1"})
+				in
+				  #"Removed Columns"
+
+	changedProperty = IsHidden
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

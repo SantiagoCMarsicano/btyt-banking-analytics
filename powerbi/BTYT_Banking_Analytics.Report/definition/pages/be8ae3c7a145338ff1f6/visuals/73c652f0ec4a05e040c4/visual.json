@@ -1,0 +1,60 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "73c652f0ec4a05e040c4",
+  "position": {
+    "x": 1662,
+    "y": 32,
+    "z": 3000,
+    "height": 62,
+    "width": 210,
+    "tabOrder": 3000
+  },
+  "visual": {
+    "visualType": "slicer",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Market Performance"
+                    }
+                  },
+                  "Property": "Bank Type ES"
+                }
+              },
+              "queryRef": "Market Performance.Bank Type ES",
+              "nativeQueryRef": "Bank Type ES",
+              "active": true,
+              "displayName": "Tipo de banco"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "data": [
+        {
+          "properties": {
+            "mode": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Dropdown'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "general": [
+        {
+          "properties": {}
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}
