@@ -127,3 +127,6 @@ data/interim/transactions/transaction_staging/
 
 # Antigua carpeta global de datos, sustituida por World Builder
 /data/
+
+# Carpeta global obsoleta, sustituida por World Builder
+/data/
